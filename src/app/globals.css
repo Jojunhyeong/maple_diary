@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+/* ── Light mode (default) ── */
+:root {
+  --bg-app:     #f4f5f7;
+  --bg-card:    #ffffff;
+  --bg-surface: #eceef2;
+  --bg-input:   #f9fafb;
+  --border:     #e2e4e9;
+  --border-str: #d1d5db;
+  --text-1:     #111317;
+  --text-2:     #4b5563;
+  --text-3:     #9ca3af;
+  --nav-bg:     #ffffff;
+  --nav-border: #e2e4e9;
+}
+
+/* ── Dark mode ── */
+.dark {
+  --bg-app:     #111317;
+  --bg-card:    #1e2128;
+  --bg-surface: #2a2f3a;
+  --bg-input:   #1e2128;
+  --border:     #2e3138;
+  --border-str: #3a3f4a;
+  --text-1:     #f4f4f5;
+  --text-2:     #a1a1aa;
+  --text-3:     #71717a;
+  --nav-bg:     #1a1d23;
+  --nav-border: #2e3138;
+}
+
+/* ── Tailwind 4: CSS 변수를 유틸리티 색상으로 등록 ── */
+@theme inline {
+  --color-app:      var(--bg-app);
+  --color-card:     var(--bg-card);
+  --color-surface:  var(--bg-surface);
+  --color-field:    var(--bg-input);
+  --color-line:     var(--border);
+  --color-line-str: var(--border-str);
+  --color-t1:       var(--text-1);
+  --color-t2:       var(--text-2);
+  --color-t3:       var(--text-3);
+  --color-nav:      var(--nav-bg);
+  --color-nav-line: var(--nav-border);
+}
+
+body {
+  background: var(--bg-app);
+  color: var(--text-1);
+  font-family: -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
