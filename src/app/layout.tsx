@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/shared/ui/ThemeProvider";
+import { SessionProvider } from "@/shared/ui/SessionProvider";
 
 export const metadata: Metadata = {
   title: "Maple Diary",
@@ -17,7 +18,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko" className="h-full">
       <body className="min-h-full antialiased bg-app">
-        <ThemeProvider>{children}</ThemeProvider>
+        <SessionProvider>
+          <ThemeProvider>{children}</ThemeProvider>
+        </SessionProvider>
       </body>
     </html>
   );

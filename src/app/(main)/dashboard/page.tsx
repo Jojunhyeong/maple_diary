@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { useRecordModalStore } from '@/shared/lib/stores/useRecordModalStore';
+import { useMigrateOnLogin } from '@/shared/lib/hooks/useMigrateOnLogin';
 import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { useDashboardStore } from '@/shared/lib/stores/useDashboardStore';
@@ -66,7 +68,10 @@ export default function DashboardPage() {
   const router = useRouter();
   const { open: openRecordModal } = useRecordModalStore();
   const initialized = useRef(false);
+  useMigrateOnLogin();
 
+  const { data: session } = useSession();
+  const isLoggedIn = !!session?.user?.id;
   const { initializeLocal, localOwnerId } = useAuthStore();
   const { records, loadRecords, loading } = useRecordStore();
   const { todayRevenue, weeklyRevenue, monthlyRevenue, recentRecords, sevenDayStats } =
@@ -85,8 +90,8 @@ export default function DashboardPage() {
   }, [initializeLocal, router]);
 
   useEffect(() => {
-    if (localOwnerId) loadRecords(localOwnerId);
-  }, [localOwnerId, loadRecords]);
+    if (localOwnerId) loadRecords(localOwnerId, isLoggedIn);
+  }, [localOwnerId, loadRecords, isLoggedIn]);
 
   const today = useMemo(() => todayRevenue(records), [todayRevenue, records]);
   const weekly = useMemo(() => weeklyRevenue(records), [weeklyRevenue, records]);

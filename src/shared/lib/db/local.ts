@@ -195,6 +195,21 @@ export const getGoalByMonth = async (
 };
 
 /**
+ * 특정 로컬 오너의 모든 목표 조회
+ */
+export const getAllGoalsByOwner = async (localOwnerId: string): Promise<Goal[]> => {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([STORES.GOALS], 'readonly');
+    const store = tx.objectStore(STORES.GOALS);
+    const index = store.index('local_owner_id');
+    const request = index.getAll(localOwnerId);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+  });
+};
+
+/**
  * 백업 생성
  */
 export const createBackup = async (

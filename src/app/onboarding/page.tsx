@@ -22,15 +22,15 @@ export default function OnboardingWelcomePage() {
         <div className="flex flex-col gap-2 w-full text-sm text-t3">
           <div className="flex items-center gap-2">
             <span className="text-amber-400">✓</span>
-            <span>로그인 없이 바로 사용</span>
+            <span>로그인 없이 바로 사용 가능</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-amber-400">✓</span>
-            <span>데이터는 내 기기에 저장</span>
+            <span>카카오 로그인 시 서버에 저장 · 기기 간 동기화</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-amber-400">✓</span>
-            <span>수익·조각·소재비 자동 계산</span>
+            <span>수익 · 조각 · 소재비 자동 계산 및 분석</span>
           </div>
         </div>
 

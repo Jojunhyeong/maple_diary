@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { Card } from '@/shared/ui/Card';
@@ -39,6 +40,8 @@ function groupByDate(records: RecordWithCalculations[]): DayGroup[] {
 }
 
 export default function RecordsPage() {
+  const { data: session } = useSession();
+  const isLoggedIn = !!session?.user?.id;
   const { localOwnerId } = useAuthStore();
   const { records, loadRecords, deleteRecord, loading } = useRecordStore();
   const [filter, setFilter] = useState<Filter>('month');
@@ -47,8 +50,8 @@ export default function RecordsPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    if (localOwnerId) loadRecords(localOwnerId);
-  }, [localOwnerId, loadRecords]);
+    if (localOwnerId) loadRecords(localOwnerId, isLoggedIn);
+  }, [localOwnerId, loadRecords, isLoggedIn]);
 
   const changeMonth = (delta: number) => {
     const [y, m] = selectedMonth.split('-').map(Number);
@@ -97,7 +100,7 @@ export default function RecordsPage() {
           <button
             key={f}
             onClick={() => { setFilter(f); setPage(0); }}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer ${
               filter === f
                 ? 'bg-amber-500 text-white'
                 : 'bg-card text-t2 border border-line'
@@ -111,12 +114,12 @@ export default function RecordsPage() {
       {/* 월 선택기 */}
       {filter === 'pick' && (
         <div className="flex items-center justify-between bg-card rounded-xl px-4 py-2.5 border border-line">
-          <button onClick={() => changeMonth(-1)} className="text-t2 px-2 py-1 text-lg">‹</button>
+          <button onClick={() => changeMonth(-1)} className="text-t2 px-2 py-1 text-lg cursor-pointer">‹</button>
           <span className="text-sm font-semibold text-t1">{selectedMonth.replace('-', '년 ')}월</span>
           <button
             onClick={() => changeMonth(1)}
             disabled={selectedMonth >= toYearMonth(new Date())}
-            className="text-t2 px-2 py-1 text-lg disabled:opacity-30"
+            className="text-t2 px-2 py-1 text-lg disabled:opacity-30 cursor-pointer"
           >›</button>
         </div>
       )}
@@ -160,7 +163,7 @@ export default function RecordsPage() {
             <div className="flex gap-3">
               <Button variant="secondary" fullWidth onClick={() => setConfirmDelete(null)}>취소</Button>
               <Button variant="danger" fullWidth onClick={async () => {
-                await deleteRecord(confirmDelete);
+                await deleteRecord(confirmDelete, isLoggedIn);
                 setConfirmDelete(null);
               }}>삭제</Button>
             </div>
@@ -178,7 +181,7 @@ function DayGroupCard({ group, onDelete }: { group: DayGroup; onDelete: (id: str
   return (
     <Card>
       {/* 날짜 행 (항상 표시) */}
-      <button className="w-full flex items-center justify-between" onClick={() => setExpanded((v) => !v)}>
+      <button className="w-full flex items-center justify-between cursor-pointer" onClick={() => setExpanded((v) => !v)}>
         <div className="text-left">
           <p className="text-sm font-medium text-t1">{formatDateKorean(group.date)}</p>
           <p className="text-xs text-t3">
@@ -207,7 +210,7 @@ function DayGroupCard({ group, onDelete }: { group: DayGroup; onDelete: (id: str
             <div key={r.id} className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-t2">{i + 1}회차 · {formatTime(r.time_minutes)}</p>
-                <button onClick={() => onDelete(r.id)} className="text-xs text-red-400 font-medium">삭제</button>
+                <button onClick={() => onDelete(r.id)} className="text-xs text-red-400 font-medium cursor-pointer">삭제</button>
               </div>
               <div className="grid grid-cols-2 gap-1 text-xs pl-1">
                 <span className="text-t3">메소</span>

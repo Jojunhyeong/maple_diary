@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
 import { Card } from '@/shared/ui/Card';
@@ -25,6 +26,8 @@ export function RecordModal() {
   const [shardPriceEditing, setShardPriceEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const { data: session } = useSession();
+  const isLoggedIn = !!session?.user?.id;
   const { localOwnerId } = useAuthStore();
   const { settings, updateSettings } = useUserStore();
   const { addRecord } = useRecordStore();
@@ -99,6 +102,7 @@ export function RecordModal() {
         },
         localOwnerId,
         shardPrice,
+        isLoggedIn,
       );
       close();
     } catch (err) {
@@ -124,7 +128,7 @@ export function RecordModal() {
         {/* 헤더 */}
         <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-line flex-shrink-0">
           <h2 className="text-base font-bold text-t1">오늘 기록</h2>
-          <button onClick={close} className="text-t3 text-sm font-medium">닫기</button>
+          <button onClick={close} className="text-t3 text-sm font-medium cursor-pointer">닫기</button>
         </div>
 
         {/* 스크롤 영역 */}
@@ -198,11 +202,11 @@ export function RecordModal() {
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-sm font-medium text-t2">솔에르다 조각 시세</label>
               {!shardPriceEditing ? (
-                <button onClick={() => setShardPriceEditing(true)} className="text-xs text-amber-400 font-medium">
+                <button onClick={() => setShardPriceEditing(true)} className="text-xs text-amber-400 font-medium cursor-pointer">
                   수정
                 </button>
               ) : (
-                <button onClick={handleShardPriceSave} className="text-xs text-green-400 font-medium">
+                <button onClick={handleShardPriceSave} className="text-xs text-green-400 font-medium cursor-pointer">
                   저장
                 </button>
               )}
