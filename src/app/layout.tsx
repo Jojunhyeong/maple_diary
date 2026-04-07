@@ -6,6 +6,9 @@ import { SessionProvider } from "@/shared/ui/SessionProvider";
 export const metadata: Metadata = {
   title: "Maple Diary",
   description: "메이플스토리 재획 수익 추적 대시보드",
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 export const viewport: Viewport = {
