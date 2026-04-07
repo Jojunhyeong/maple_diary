@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/../auth';
 import { supabaseAdmin } from '@/shared/lib/supabase';
+import type { Record as DiaryRecord } from '@/shared/types';
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
 
   // records 마이그레이션
   if (records?.length > 0) {
-    const rows = records.map((r: Record) => ({
+    const rows = records.map((r: DiaryRecord) => ({
       id: r.id,
       user_id: userId,
       date: r.date,
