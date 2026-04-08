@@ -22,12 +22,14 @@ export async function POST(req: NextRequest) {
   }
 
   const { records, goals } = (await req.json()) as MigratePayload;
+  const safeRecords = Array.isArray(records) ? records : [];
+  const safeGoals = Array.isArray(goals) ? goals : [];
   const db = supabaseAdmin();
   const userId = session.user.id;
 
   // records 마이그레이션
-  if (records?.length > 0) {
-    const rows = records.map((r) => ({
+  if (safeRecords.length > 0) {
+    const rows = safeRecords.map((r) => ({
       id: r.id,
       user_id: userId,
       date: r.date,
@@ -57,8 +59,8 @@ export async function POST(req: NextRequest) {
   }
 
   // goals 마이그레이션
-  if (goals?.length > 0) {
-    const rows = goals.map((g) => ({
+  if (safeGoals.length > 0) {
+    const rows = safeGoals.map((g) => ({
       id: g.id,
       user_id: userId,
       month: g.month,
@@ -77,5 +79,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, migratedRecords: records?.length ?? 0 });
+  return NextResponse.json({ ok: true, migratedRecords: safeRecords.length });
 }
