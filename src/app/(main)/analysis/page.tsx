@@ -2,17 +2,6 @@
 
 import { useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Tooltip,
-  type ChartData,
-  type ChartOptions,
-} from 'chart.js';
-import { Line } from 'react-chartjs-2';
 import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { Card } from '@/shared/ui/Card';
@@ -20,14 +9,6 @@ import { calculateWeeklyStats } from '@/shared/lib/utils/calculations';
 import { formatDateKorean, formatMeso, formatTime } from '@/shared/lib/utils/formatters';
 import type { RecordWithCalculations } from '@/shared/types';
 import type { WeekStats } from '@/shared/lib/utils/calculations';
-
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip);
-
-type SessionTrendPoint = {
-  id: string;
-  label: string;
-  value: number;
-};
 
 type WeekdayStats = {
   label: string;
@@ -62,7 +43,6 @@ export default function AnalysisPage() {
   const weeks = useMemo(() => calculateWeeklyStats(records, 4), [records]);
   const thisWeek = weeks[0];
   const lastWeek = weeks[1];
-  const sessionTrend = useMemo(() => buildSessionTrend(records, 14), [records]);
   const weekdayStats = useMemo(() => buildWeekdayStats(records), [records]);
   const topRecords = useMemo(() => buildTopRecords(records, 3), [records]);
   const monthlyReport = useMemo(() => buildMonthlyReport(records), [records]);
@@ -121,19 +101,6 @@ export default function AnalysisPage() {
             <p className="mt-1 text-xs text-t3">이번 달 기록이 없습니다</p>
           )}
         </div>
-      </Card>
-
-      <Card>
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-t1">시간당 순수익 추세</p>
-            <p className="text-[11px] text-t3">최근 {sessionTrend.length}회 기준</p>
-          </div>
-          <p className="text-xs text-t3">
-            최고 {formatMeso(Math.max(...sessionTrend.map((p) => p.value), 0))}
-          </p>
-        </div>
-        <SessionTrendChart data={sessionTrend} />
       </Card>
 
       {/* 이번 주 통계 */}
@@ -227,67 +194,6 @@ function ReportItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SessionTrendChart({ data }: { data: SessionTrendPoint[] }) {
-  if (data.length === 0) {
-    return (
-      <div className="flex h-44 items-center justify-center rounded-xl bg-surface/40 text-xs text-t3">
-        추세를 계산할 기록이 부족합니다
-      </div>
-    );
-  }
-
-  const chartData: ChartData<'line'> = {
-    labels: data.map((d) => d.label),
-    datasets: [
-      {
-        data: data.map((d) => d.value),
-        borderColor: '#f59e0b',
-        backgroundColor: 'rgba(245, 158, 11, 0.18)',
-        pointRadius: 2,
-        pointHoverRadius: 3,
-        tension: 0.32,
-        fill: true,
-      },
-    ],
-  };
-
-  const options: ChartOptions<'line'> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: (ctx) => `${formatMeso(Number(ctx.raw ?? 0))}/h`,
-        },
-      },
-    },
-    scales: {
-      x: {
-        grid: { display: false },
-        border: { display: false },
-        ticks: { color: '#9d846e', font: { size: 10 } },
-      },
-      y: {
-        beginAtZero: true,
-        grid: { color: 'rgba(148, 163, 184, 0.12)' },
-        border: { display: false },
-        ticks: {
-          color: '#9d846e',
-          font: { size: 10 },
-          callback: (v) => `${formatMeso(Number(v))}`,
-        },
-      },
-    },
-  };
-
-  return (
-    <div className="h-44">
-      <Line data={chartData} options={options} />
-    </div>
-  );
-}
-
 function StatItem({ label, value, compare }: {
   label: string;
   value: string;
@@ -312,17 +218,6 @@ function StatItem({ label, value, compare }: {
       )}
     </div>
   );
-}
-
-function buildSessionTrend(records: RecordWithCalculations[], limit: number): SessionTrendPoint[] {
-  return [...records]
-    .slice(0, limit)
-    .reverse()
-    .map((r, i) => ({
-      id: r.id,
-      label: `${i + 1}`,
-      value: r.net_per_hour,
-    }));
 }
 
 function buildWeekdayStats(records: RecordWithCalculations[]): WeekdayStats[] {
