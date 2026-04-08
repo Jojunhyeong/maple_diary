@@ -9,8 +9,11 @@ import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 
 interface CharacterInfo {
   character_name: string;
+  character_world?: string | null;
   character_class: string;
   character_level: number;
+  character_exp_rate?: number | string | null;
+  character_combat_power?: number | null;
   character_image: string;
 }
 
@@ -57,8 +60,11 @@ export default function OnboardingCharacterPage() {
     // 프로필 저장
     const profile = {
       character_name: character.character_name,
+      character_world: character.character_world ?? null,
       character_class: character.character_class,
       character_level: character.character_level,
+      character_exp_rate: character.character_exp_rate ?? null,
+      character_combat_power: character.character_combat_power ?? null,
       image_url: character.character_image,
       profile_set_at: new Date().toISOString(),
     };

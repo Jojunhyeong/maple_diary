@@ -21,20 +21,21 @@ export function Button({
   return (
     <button
       className={clsx(
-        'inline-flex items-center justify-center rounded-xl font-semibold transition-all active:scale-95 cursor-pointer',
+        'inline-flex items-center justify-center rounded-xl font-semibold tracking-[-0.01em] transition-all duration-200 cursor-pointer',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-app',
         {
-          'bg-amber-500 text-white hover:bg-amber-400': variant === 'primary',
-          'bg-surface text-t1 hover:brightness-95 border border-line': variant === 'secondary',
-          'bg-transparent text-t2 hover:text-t1': variant === 'ghost',
-          'bg-red-500 text-white hover:bg-red-600': variant === 'danger',
+          'maple-btn-primary bg-[linear-gradient(135deg,#f59e0b,#dc6a0b)] text-white shadow-[0_12px_24px_rgba(217,119,6,0.32)] hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0': variant === 'primary',
+          'bg-surface/90 text-t1 border border-line hover:bg-surface hover:-translate-y-0.5 active:translate-y-0': variant === 'secondary',
+          'bg-transparent text-t2 hover:bg-surface/70 hover:text-t1': variant === 'ghost',
+          'bg-red-500 text-white shadow-[0_10px_20px_rgba(239,68,68,0.25)] hover:-translate-y-0.5 hover:bg-red-600 active:translate-y-0': variant === 'danger',
         },
         {
           'h-9 px-4 text-sm': size === 'sm',
-          'h-12 px-6 text-base': size === 'md',
-          'h-14 px-8 text-lg': size === 'lg',
+          'h-12 px-6 text-[15px]': size === 'md',
+          'h-14 px-8 text-[17px]': size === 'lg',
         },
         { 'w-full': fullWidth },
-        { 'opacity-40 cursor-not-allowed active:scale-100': disabled },
+        { 'opacity-45 cursor-not-allowed hover:translate-y-0': disabled },
         className,
       )}
       disabled={disabled}

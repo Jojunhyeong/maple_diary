@@ -1,4 +1,5 @@
 import { Record, RecordWithCalculations, GoalProgress } from "@/shared/types";
+import { formatDate } from "@/shared/lib/utils/formatters";
 
 /**
  * 조각 환산 가치 계산
@@ -189,11 +190,10 @@ export interface WeekStats {
   startDate: string;
   endDate: string;
   count: number;       // 세션 수
+  activeDays: number;
   totalNetRevenue: number;
-  avgNetRevenue: number;    // 회당 순수익
-  avgTimeMinutes: number;   // 회당 사냥시간
+  avgDailyNetRevenue: number; // 날짜당 순수익
   avgNetPerHour: number;    // 시간당 순수익
-  avgShards: number;        // 회당 조각
 }
 
 function getMondayOf(date: Date): Date {
@@ -219,9 +219,9 @@ export const calculateWeeklyStats = (
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
 
-    const startDate = monday.toISOString().split('T')[0];
-    const endDate = sunday.toISOString().split('T')[0];
-    const todayStr = today.toISOString().split('T')[0];
+    const startDate = formatDate(monday);
+    const endDate = formatDate(sunday);
+    const todayStr = formatDate(today);
 
     const clampedEnd = endDate > todayStr ? todayStr : endDate;
     const wr = records.filter((r) => r.date >= startDate && r.date <= clampedEnd);
@@ -229,16 +229,23 @@ export const calculateWeeklyStats = (
     const count = wr.length;
     const totalNetRevenue = wr.reduce((s, r) => s + r.net_revenue, 0);
     const totalTime = wr.reduce((s, r) => s + r.time_minutes, 0);
-    const totalShards = wr.reduce((s, r) => s + r.shard_count, 0);
+    const activeDays = new Set(wr.map((r) => r.date)).size;
 
-    const avgNetRevenue = count > 0 ? Math.floor(totalNetRevenue / count) : 0;
-    const avgTimeMinutes = count > 0 ? Math.floor(totalTime / count) : 0;
+    const avgDailyNetRevenue = activeDays > 0 ? Math.floor(totalNetRevenue / activeDays) : 0;
     const avgNetPerHour = totalTime > 0 ? Math.floor((totalNetRevenue / totalTime) * 60) : 0;
-    const avgShards = count > 0 ? Math.floor(totalShards / count) : 0;
 
     const weekLabel = i === 0 ? '이번 주' : i === 1 ? '저번 주' : `${i}주 전`;
 
-    result.push({ weekLabel, startDate, endDate: clampedEnd, count, totalNetRevenue, avgNetRevenue, avgTimeMinutes, avgNetPerHour, avgShards });
+    result.push({
+      weekLabel,
+      startDate,
+      endDate: clampedEnd,
+      count,
+      activeDays,
+      totalNetRevenue,
+      avgDailyNetRevenue,
+      avgNetPerHour,
+    });
   }
 
   return result;

@@ -45,8 +45,11 @@ export default function SettingsPage() {
   };
 
   return (
-    <main className="flex flex-col gap-5 px-4 pt-6 pb-4">
-      <h1 className="text-xl font-bold text-t1">설정</h1>
+    <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4">
+      <div>
+        <h1 className="maple-title text-2xl font-bold text-t1">설정</h1>
+        <p className="mt-1 text-xs text-t3">메이플 다이어리 계정/테마/데이터를 관리합니다</p>
+      </div>
 
       {/* 계정 */}
       <Card>
@@ -95,7 +98,7 @@ export default function SettingsPage() {
 
       {/* 캐릭터 */}
       {profile && (
-        <Card>
+        <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.14),rgba(245,158,11,0.03)_60%,transparent)]">
           <p className="text-sm font-semibold text-t2 mb-3">캐릭터</p>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center text-lg">
@@ -115,16 +118,16 @@ export default function SettingsPage() {
         <div className="flex gap-3">
           <button
             onClick={() => handleThemeToggle(false)}
-            className={`flex-1 py-3 rounded-xl text-sm font-medium border transition-colors cursor-pointer ${
-              !dark ? 'bg-amber-500 text-white border-amber-500' : 'bg-surface text-t2 border-line'
+            className={`flex-1 rounded-xl border py-3 text-sm font-semibold transition-all cursor-pointer ${
+              !dark ? 'border-amber-500 bg-amber-500 text-white shadow-[0_10px_18px_rgba(245,158,11,0.25)]' : 'border-line bg-surface text-t2 hover:bg-surface/70'
             }`}
           >
             ☀️ 라이트
           </button>
           <button
             onClick={() => handleThemeToggle(true)}
-            className={`flex-1 py-3 rounded-xl text-sm font-medium border transition-colors cursor-pointer ${
-              dark ? 'bg-amber-500 text-white border-amber-500' : 'bg-surface text-t2 border-line'
+            className={`flex-1 rounded-xl border py-3 text-sm font-semibold transition-all cursor-pointer ${
+              dark ? 'border-amber-500 bg-amber-500 text-white shadow-[0_10px_18px_rgba(245,158,11,0.25)]' : 'border-line bg-surface text-t2 hover:bg-surface/70'
             }`}
           >
             🌙 다크

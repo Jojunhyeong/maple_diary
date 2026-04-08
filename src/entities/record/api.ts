@@ -1,5 +1,11 @@
 // Record entity API
-import { Record, RecordWithCalculations } from './model';
+import { Record } from './model';
+
+type RecordFilters = {
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+};
 
 export const recordApi = {
   // 기록 생성
@@ -8,7 +14,7 @@ export const recordApi = {
   },
 
   // 기록 조회
-  getRecords: async (userId: string, filters?: any) => {
+  getRecords: async (userId: string, filters?: RecordFilters) => {
     // Implementation will be added
   },
 

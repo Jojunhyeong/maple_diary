@@ -6,7 +6,7 @@ import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { Card } from '@/shared/ui/Card';
 import { Button } from '@/shared/ui/Button';
-import { formatMeso, formatDateKorean, formatTime } from '@/shared/lib/utils/formatters';
+import { formatDate, formatMeso, formatDateKorean, formatTime } from '@/shared/lib/utils/formatters';
 import type { RecordWithCalculations } from '@/shared/types';
 
 type Filter = 'week' | 'month' | 'pick' | 'all';
@@ -62,12 +62,12 @@ export default function RecordsPage() {
 
   const filtered = useMemo(() => {
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = formatDate(today);
 
     if (filter === 'week') {
       const mon = new Date(today);
       mon.setDate(today.getDate() - today.getDay() + 1);
-      const monStr = mon.toISOString().split('T')[0];
+      const monStr = formatDate(mon);
       return records.filter((r) => r.date >= monStr && r.date <= todayStr);
     }
     if (filter === 'month') {
@@ -89,21 +89,25 @@ export default function RecordsPage() {
   const hasMore = groups.length > paginatedGroups.length;
 
   const totalRevenue = filtered.reduce((s, r) => s + r.net_revenue, 0);
+  const totalMinutes = filtered.reduce((s, r) => s + r.time_minutes, 0);
 
   return (
-    <main className="flex flex-col gap-4 px-4 pt-6 pb-4">
-      <h1 className="text-xl font-bold text-t1">기록 목록</h1>
+    <main className="maple-fade-up flex flex-col gap-4 px-4 pt-6 pb-4">
+      <div>
+        <h1 className="maple-title text-2xl font-bold text-t1">기록 목록</h1>
+        <p className="mt-1 text-xs text-t3">메이플 재획 기록을 기간별로 정리해보세요</p>
+      </div>
 
       {/* 필터 탭 */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex flex-wrap gap-2">
         {(['week', 'month', 'pick', 'all'] as Filter[]).map((f) => (
           <button
             key={f}
             onClick={() => { setFilter(f); setPage(0); }}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer ${
+            className={`cursor-pointer rounded-full border px-4 py-2 text-sm font-semibold transition-all ${
               filter === f
-                ? 'bg-amber-500 text-white'
-                : 'bg-card text-t2 border border-line'
+                ? 'border-amber-500 bg-amber-500 text-white shadow-[0_10px_18px_rgba(245,158,11,0.25)]'
+                : 'border-line bg-card text-t2 hover:bg-surface'
             }`}
           >
             {f === 'week' ? '이번 주' : f === 'month' ? '이번 달' : f === 'pick' ? '월 선택' : '전체'}
@@ -113,13 +117,13 @@ export default function RecordsPage() {
 
       {/* 월 선택기 */}
       {filter === 'pick' && (
-        <div className="flex items-center justify-between bg-card rounded-xl px-4 py-2.5 border border-line">
-          <button onClick={() => changeMonth(-1)} className="text-t2 px-2 py-1 text-lg cursor-pointer">‹</button>
+        <div className="flex items-center justify-between rounded-xl border border-line bg-card px-4 py-2.5 shadow-[var(--shadow-sm)]">
+          <button onClick={() => changeMonth(-1)} className="cursor-pointer px-2 py-1 text-lg text-t2 transition-colors hover:text-t1">‹</button>
           <span className="text-sm font-semibold text-t1">{selectedMonth.replace('-', '년 ')}월</span>
           <button
             onClick={() => changeMonth(1)}
             disabled={selectedMonth >= toYearMonth(new Date())}
-            className="text-t2 px-2 py-1 text-lg disabled:opacity-30 cursor-pointer"
+            className="cursor-pointer px-2 py-1 text-lg text-t2 transition-colors hover:text-t1 disabled:opacity-30"
           >›</button>
         </div>
       )}
@@ -127,17 +131,29 @@ export default function RecordsPage() {
       {/* 요약 */}
       {filtered.length > 0 && (
         <Card variant="highlight">
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <span className="text-t3">일수</span>
-            <span className="text-t1 text-right">{groups.length}일</span>
-            <span className="text-t3">총 순수익</span>
-            <span className="text-t1 text-right font-bold">{formatMeso(totalRevenue)}</span>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div>
+              <p className="text-[11px] text-t3">일수</p>
+              <p className="mt-1 text-base font-bold text-t1">{groups.length}일</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-t3">총 시간</p>
+              <p className="mt-1 text-base font-bold text-t1">{formatTime(totalMinutes)}</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-t3">총 순수익</p>
+              <p className="mt-1 text-base font-bold text-t1">{formatMeso(totalRevenue)}</p>
+            </div>
           </div>
         </Card>
       )}
 
       {loading && <p className="text-sm text-t3 text-center py-8">불러오는 중...</p>}
-      {!loading && groups.length === 0 && <p className="text-sm text-t3 text-center py-8">기록이 없습니다</p>}
+      {!loading && groups.length === 0 && (
+        <Card className="py-10 text-center">
+          <p className="text-sm text-t3">조건에 맞는 기록이 없습니다</p>
+        </Card>
+      )}
 
       <div className="flex flex-col gap-3">
         {paginatedGroups.map((group) => (
@@ -156,7 +172,7 @@ export default function RecordsPage() {
       )}
 
       {confirmDelete && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
           <Card className="w-full max-w-sm">
             <p className="text-t1 font-semibold mb-2">기록 삭제</p>
             <p className="text-t3 text-sm mb-6">이 기록을 삭제하시겠습니까?</p>
@@ -179,14 +195,14 @@ function DayGroupCard({ group, onDelete }: { group: DayGroup; onDelete: (id: str
   const multi = group.records.length > 1;
 
   return (
-    <Card>
+    <Card className="p-3.5">
       {/* 날짜 행 (항상 표시) */}
-      <button className="w-full flex items-center justify-between cursor-pointer" onClick={() => setExpanded((v) => !v)}>
+      <button className="flex w-full cursor-pointer items-center justify-between rounded-xl px-1 py-1.5 text-left transition-colors hover:bg-surface/40" onClick={() => setExpanded((v) => !v)}>
         <div className="text-left">
           <p className="text-sm font-medium text-t1">{formatDateKorean(group.date)}</p>
           <p className="text-xs text-t3">
             {formatTime(group.totalTimeMinutes)}
-            {multi && <span className="ml-1.5 text-amber-500">기록 {group.records.length}회</span>}
+            {multi && <span className="ml-1.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">기록 {group.records.length}회</span>}
           </p>
         </div>
         <div className="text-right flex items-center gap-2">
@@ -205,12 +221,12 @@ function DayGroupCard({ group, onDelete }: { group: DayGroup; onDelete: (id: str
 
       {/* 다중 기록 상세 */}
       {expanded && multi && (
-        <div className="mt-3 pt-3 border-t border-line flex flex-col gap-3">
+        <div className="mt-3 flex flex-col gap-3 border-t border-line pt-3">
           {group.records.map((r, i) => (
             <div key={r.id} className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-t2">{i + 1}회차 · {formatTime(r.time_minutes)}</p>
-                <button onClick={() => onDelete(r.id)} className="text-xs text-red-400 font-medium cursor-pointer">삭제</button>
+                <button onClick={() => onDelete(r.id)} className="cursor-pointer text-xs font-medium text-red-400">삭제</button>
               </div>
               <div className="grid grid-cols-2 gap-1 text-xs pl-1">
                 <span className="text-t3">메소</span>

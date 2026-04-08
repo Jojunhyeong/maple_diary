@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/../auth';
 import { supabaseAdmin } from '@/shared/lib/supabase';
-import type { Record as DiaryRecord } from '@/shared/types';
+import type { Goal, Record as DiaryRecord, RecordWithCalculations } from '@/shared/types';
+
+type MigratableRecord = DiaryRecord & Partial<
+  Pick<
+    RecordWithCalculations,
+    'shard_value' | 'total_revenue' | 'net_revenue' | 'meso_per_hour' | 'net_per_hour' | 'shard_per_hour'
+  >
+>;
+
+interface MigratePayload {
+  records?: MigratableRecord[];
+  goals?: Goal[];
+}
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -9,13 +21,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { records, goals } = await req.json();
+  const { records, goals } = (await req.json()) as MigratePayload;
   const db = supabaseAdmin();
   const userId = session.user.id;
 
   // records 마이그레이션
   if (records?.length > 0) {
-    const rows = records.map((r: DiaryRecord) => ({
+    const rows = records.map((r) => ({
       id: r.id,
       user_id: userId,
       date: r.date,
@@ -23,12 +35,12 @@ export async function POST(req: NextRequest) {
       meso: r.meso,
       shard_count: r.shard_count ?? 0,
       material_cost: r.material_cost ?? 0,
-      shard_value: (r as any).shard_value ?? 0,
-      total_revenue: (r as any).total_revenue ?? 0,
-      net_revenue: (r as any).net_revenue ?? 0,
-      meso_per_hour: (r as any).meso_per_hour ?? 0,
-      net_per_hour: (r as any).net_per_hour ?? 0,
-      shard_per_hour: (r as any).shard_per_hour ?? 0,
+      shard_value: r.shard_value ?? 0,
+      total_revenue: r.total_revenue ?? 0,
+      net_revenue: r.net_revenue ?? 0,
+      meso_per_hour: r.meso_per_hour ?? 0,
+      net_per_hour: r.net_per_hour ?? 0,
+      shard_per_hour: r.shard_per_hour ?? 0,
       memo: r.memo ?? null,
       created_at: r.created_at,
       updated_at: r.updated_at,
@@ -46,7 +58,7 @@ export async function POST(req: NextRequest) {
 
   // goals 마이그레이션
   if (goals?.length > 0) {
-    const rows = goals.map((g: any) => ({
+    const rows = goals.map((g) => ({
       id: g.id,
       user_id: userId,
       month: g.month,

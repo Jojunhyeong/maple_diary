@@ -9,10 +9,10 @@ export function Card({ variant = 'default', className, children, ...props }: Car
   return (
     <div
       className={clsx(
-        'rounded-2xl p-4',
+        'maple-panel rounded-2xl p-4 backdrop-blur-sm',
         {
-          'bg-card border border-line': variant === 'default',
-          'bg-amber-500/10 border border-amber-500/40': variant === 'highlight',
+          'bg-card/95 border border-line shadow-[var(--shadow-sm)]': variant === 'default',
+          'maple-panel-highlight bg-[linear-gradient(130deg,rgba(217,119,6,0.16),rgba(217,119,6,0.05)_55%,transparent)] border border-amber-600/30 shadow-[0_10px_24px_rgba(217,119,6,0.18)]': variant === 'highlight',
         },
         className,
       )}
