@@ -20,9 +20,11 @@ import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { useGoalStore } from '@/shared/lib/stores/useGoalStore';
 import { useDashboardStore } from '@/shared/lib/stores/useDashboardStore';
+import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import { Card } from '@/shared/ui/Card';
 import { Button } from '@/shared/ui/Button';
 import { formatMeso, formatDateKorean, formatTime } from '@/shared/lib/utils/formatters';
+import { filterRecordsByCharacter } from '@/shared/lib/utils/characterFilter';
 import type { RecordWithCalculations } from '@/shared/types';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
@@ -111,6 +113,7 @@ export default function DashboardPage() {
   const { todayRevenue, recentRecords, sevenDayStats } =
     useDashboardStore();
   const currentMonth = useMemo(() => getCurrentMonth(new Date()), []);
+  const activeCharacterId = useActiveCharacterId();
 
   useEffect(() => {
     if (initialized.current) return;
@@ -126,22 +129,26 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!localOwnerId) return;
-    loadRecords(localOwnerId, isLoggedIn);
+    loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
     loadGoal(localOwnerId, currentMonth, isLoggedIn);
-  }, [localOwnerId, loadRecords, loadGoal, currentMonth, isLoggedIn]);
+  }, [localOwnerId, loadRecords, loadGoal, currentMonth, isLoggedIn, activeCharacterId]);
 
-  const today = useMemo(() => todayRevenue(records), [todayRevenue, records]);
-  const recent = useMemo(() => recentRecords(records, 9), [recentRecords, records]);
+  const visibleRecords = useMemo(
+    () => filterRecordsByCharacter(records, activeCharacterId),
+    [records, activeCharacterId],
+  );
+  const today = useMemo(() => todayRevenue(visibleRecords), [todayRevenue, visibleRecords]);
+  const recent = useMemo(() => recentRecords(visibleRecords, 9), [recentRecords, visibleRecords]);
   const recentGroups = useMemo(() => groupByDate(recent).slice(0, 3), [recent]);
-  const chartData = useMemo(() => sevenDayStats(records), [sevenDayStats, records]);
+  const chartData = useMemo(() => sevenDayStats(visibleRecords), [sevenDayStats, visibleRecords]);
   const monthNetRevenue = useMemo(() => {
-    return records
+    return visibleRecords
       .filter((r) => r.date.startsWith(currentMonth))
       .reduce((sum, r) => sum + r.net_revenue, 0);
-  }, [records, currentMonth]);
+  }, [visibleRecords, currentMonth]);
   const monthActiveDays = useMemo(() => {
-    return new Set(records.filter((r) => r.date.startsWith(currentMonth)).map((r) => r.date)).size;
-  }, [records, currentMonth]);
+    return new Set(visibleRecords.filter((r) => r.date.startsWith(currentMonth)).map((r) => r.date)).size;
+  }, [visibleRecords, currentMonth]);
 
   const goalProgressText = useMemo(() => {
     if (!currentGoal?.meso_goal || currentGoal.meso_goal <= 0) return '목표 미설정';
@@ -155,7 +162,7 @@ export default function DashboardPage() {
     } catch {
       return null;
     }
-  }, []);
+  }, [activeCharacterId]);
 
   return (
     <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4">
@@ -178,7 +185,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 gap-2.5">
           <div className="rounded-xl bg-card/80 p-3">
             <p className="text-[11px] text-t3">총 기록</p>
-            <p className="mt-1 text-lg font-bold text-t1">{records.length}회</p>
+            <p className="mt-1 text-lg font-bold text-t1">{visibleRecords.length}회</p>
           </div>
           <div className="rounded-xl bg-card/80 p-3">
             <p className="text-[11px] text-t3">최근 7일 평균</p>

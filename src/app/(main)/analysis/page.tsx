@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
+import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import { Card } from '@/shared/ui/Card';
+import { ScopeTabs, type ScopeTabValue } from '@/shared/ui/ScopeTabs';
 import { calculateWeeklyStats } from '@/shared/lib/utils/calculations';
 import { formatDateKorean, formatMeso, formatTime } from '@/shared/lib/utils/formatters';
+import { filterRecordsByCharacter } from '@/shared/lib/utils/characterFilter';
 import type { RecordWithCalculations } from '@/shared/types';
 import type { WeekStats } from '@/shared/lib/utils/calculations';
 
@@ -33,26 +36,50 @@ type MonthlyReport = {
 export default function AnalysisPage() {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
-  const { localOwnerId } = useAuthStore();
+  const { localOwnerId, initializeLocal } = useAuthStore();
   const { records, loadRecords } = useRecordStore();
+  const activeCharacterId = useActiveCharacterId();
+  const [scope, setScope] = useState<ScopeTabValue>('all');
 
   useEffect(() => {
-    if (localOwnerId) loadRecords(localOwnerId, isLoggedIn);
-  }, [localOwnerId, loadRecords, isLoggedIn]);
+    initializeLocal();
+  }, [initializeLocal]);
 
-  const weeks = useMemo(() => calculateWeeklyStats(records, 4), [records]);
+  useEffect(() => {
+    if (localOwnerId) loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
+  }, [localOwnerId, loadRecords, isLoggedIn, activeCharacterId]);
+
+  const visibleRecords = useMemo(
+    () => {
+      if (scope === 'all') return records;
+      if (!activeCharacterId) return [];
+      return filterRecordsByCharacter(records, activeCharacterId);
+    },
+    [records, activeCharacterId, scope],
+  );
+  const weeks = useMemo(() => calculateWeeklyStats(visibleRecords, 4), [visibleRecords]);
   const thisWeek = weeks[0];
   const lastWeek = weeks[1];
-  const weekdayStats = useMemo(() => buildWeekdayStats(records), [records]);
-  const topRecords = useMemo(() => buildTopRecords(records, 3), [records]);
-  const monthlyReport = useMemo(() => buildMonthlyReport(records), [records]);
+  const weekdayStats = useMemo(() => buildWeekdayStats(visibleRecords), [visibleRecords]);
+  const topRecords = useMemo(() => buildTopRecords(visibleRecords, 3), [visibleRecords]);
+  const monthlyReport = useMemo(() => buildMonthlyReport(visibleRecords), [visibleRecords]);
 
-  if (records.length === 0) {
+  if (visibleRecords.length === 0) {
     return (
       <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4">
-        <h1 className="maple-title text-2xl font-bold text-t1">수익 분석</h1>
+        <div>
+          <h1 className="maple-title text-2xl font-bold text-t1">수익 분석</h1>
+          <p className="mt-1 text-xs text-t3">메이플 재획 페이스를 주간 단위로 비교합니다</p>
+        </div>
+        <ScopeTabs value={scope} onChange={setScope} />
         <Card className="py-12 text-center">
-          <p className="text-sm text-t3">분석할 기록이 없습니다</p>
+          <p className="text-sm text-t3">
+            {scope === 'all'
+              ? '분석할 기록이 없습니다'
+              : activeCharacterId
+                ? '현재 캐릭터의 기록이 없습니다'
+                : '현재 캐릭터가 선택되지 않았습니다'}
+          </p>
         </Card>
       </main>
     );
@@ -64,6 +91,14 @@ export default function AnalysisPage() {
         <h1 className="maple-title text-2xl font-bold text-t1">수익 분석</h1>
         <p className="mt-1 text-xs text-t3">메이플 재획 페이스를 주간 단위로 비교합니다</p>
       </div>
+
+      <ScopeTabs value={scope} onChange={setScope} />
+
+      {scope === 'character' && activeCharacterId && (
+        <p className="text-xs text-t3">
+          현재 캐릭터 기준으로 보고 있어요
+        </p>
+      )}
 
       <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.2),rgba(245,158,11,0.05)_55%,transparent)]">
         <div className="mb-4 flex items-center justify-between">

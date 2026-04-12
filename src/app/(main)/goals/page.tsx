@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { useGoalStore } from '@/shared/lib/stores/useGoalStore';
+import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import { Card } from '@/shared/ui/Card';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
@@ -20,6 +21,7 @@ export default function GoalsPage() {
   const { localOwnerId, initializeLocal } = useAuthStore();
   const { records, loadRecords } = useRecordStore();
   const { currentGoal, loadGoal, saveGoal, error: goalError, clearError } = useGoalStore();
+  const activeCharacterId = useActiveCharacterId();
 
   const [editing, setEditing] = useState(false);
   const [mesoGoalMan, setMesoGoalMan] = useState('');  // 만 단위
@@ -35,10 +37,10 @@ export default function GoalsPage() {
 
   useEffect(() => {
     if (localOwnerId) {
-      loadRecords(localOwnerId, isLoggedIn);
+      loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
       loadGoal(localOwnerId, currentMonth, isLoggedIn);
     }
-  }, [localOwnerId, loadRecords, loadGoal, currentMonth, isLoggedIn]);
+  }, [localOwnerId, loadRecords, loadGoal, currentMonth, isLoggedIn, activeCharacterId]);
 
   const today = useMemo(() => new Date(), []);
   const monthStart = useMemo(
@@ -120,7 +122,7 @@ export default function GoalsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="maple-title text-2xl font-bold text-t1">목표</h1>
-          <p className="mt-1 text-xs text-t3">🍁 메이플 목표 </p>
+          <p className="mt-1 text-xs text-t3">🍁 전체 캐릭터 합산 목표</p>
         </div>
         <Button variant="ghost" size="sm" onClick={openEdit}>
           {currentGoal ? '수정' : '+ 목표 설정'}

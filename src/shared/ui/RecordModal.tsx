@@ -10,6 +10,7 @@ import { useUserStore } from '@/shared/lib/stores/useUserStore';
 import { useRecordModalStore } from '@/shared/lib/stores/useRecordModalStore';
 import { enrichRecordWithCalculations } from '@/shared/lib/utils/calculations';
 import { formatMeso, formatDate, fromManInput, toManDisplay } from '@/shared/lib/utils/formatters';
+import { readActiveCharacterId } from '@/shared/lib/character-storage';
 
 const MINUTES_PER_SOJAE = 30;
 
@@ -123,6 +124,7 @@ export function RecordModal() {
     if (!localOwnerId || !timeMinutes || !meso) return;
     setSaving(true);
     try {
+      const characterId = readActiveCharacterId();
       if (shardPrice !== settings.shard_price) {
         await updateSettings({ shard_price: shardPrice });
       }
@@ -134,6 +136,7 @@ export function RecordModal() {
           shard_count: parseInt(shardCount) || 0,
           material_cost: materialCost,
           memo: memo.trim() || undefined,
+          character_id: characterId ?? undefined,
           sync_status: 'local',
         },
         localOwnerId,

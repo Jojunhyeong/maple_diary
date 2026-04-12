@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
+import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import { Card } from '@/shared/ui/Card';
 import { Button } from '@/shared/ui/Button';
 import { formatDate, formatMeso, formatDateKorean, formatTime } from '@/shared/lib/utils/formatters';
+import { filterRecordsByCharacter } from '@/shared/lib/utils/characterFilter';
 import type { RecordWithCalculations } from '@/shared/types';
 
 type Filter = 'week' | 'month' | 'pick' | 'all';
@@ -48,10 +50,11 @@ export default function RecordsPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => toYearMonth(new Date()));
   const [page, setPage] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const activeCharacterId = useActiveCharacterId();
 
   useEffect(() => {
-    if (localOwnerId) loadRecords(localOwnerId, isLoggedIn);
-  }, [localOwnerId, loadRecords, isLoggedIn]);
+    if (localOwnerId) loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
+  }, [localOwnerId, loadRecords, isLoggedIn, activeCharacterId]);
 
   const changeMonth = (delta: number) => {
     const [y, m] = selectedMonth.split('-').map(Number);
@@ -61,6 +64,7 @@ export default function RecordsPage() {
   };
 
   const filtered = useMemo(() => {
+    const scopedRecords = filterRecordsByCharacter(records, activeCharacterId);
     const today = new Date();
     const todayStr = formatDate(today);
 
@@ -68,21 +72,21 @@ export default function RecordsPage() {
       const mon = new Date(today);
       mon.setDate(today.getDate() - today.getDay() + 1);
       const monStr = formatDate(mon);
-      return records.filter((r) => r.date >= monStr && r.date <= todayStr);
+      return scopedRecords.filter((r) => r.date >= monStr && r.date <= todayStr);
     }
     if (filter === 'month') {
       const firstStr = `${toYearMonth(today)}-01`;
-      return records.filter((r) => r.date >= firstStr && r.date <= todayStr);
+      return scopedRecords.filter((r) => r.date >= firstStr && r.date <= todayStr);
     }
     if (filter === 'pick') {
       const [y, m] = selectedMonth.split('-').map(Number);
       const firstStr = `${selectedMonth}-01`;
       const lastDate = new Date(y, m, 0).getDate();
       const lastStr = `${selectedMonth}-${String(lastDate).padStart(2, '0')}`;
-      return records.filter((r) => r.date >= firstStr && r.date <= lastStr);
+      return scopedRecords.filter((r) => r.date >= firstStr && r.date <= lastStr);
     }
-    return records;
-  }, [records, filter, selectedMonth]);
+    return scopedRecords;
+  }, [records, filter, selectedMonth, activeCharacterId]);
 
   const groups = useMemo(() => groupByDate(filtered), [filtered]);
   const paginatedGroups = groups.slice(0, (page + 1) * PAGE_SIZE);
