@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/../auth";
 import { supabaseAdmin } from "@/shared/lib/supabase";
 import type { CharacterProfile } from "@/shared/types";
-import type { LocalCharacterProfile } from "@/shared/lib/character-storage";
+import { isUuidLike, type LocalCharacterProfile } from "@/shared/lib/character-storage";
 
 interface MigratePayload {
   profile?: LocalCharacterProfile | null;
@@ -17,7 +17,7 @@ function normalizeCharacter(
   const now = new Date().toISOString();
 
   return {
-    id: character.id || crypto.randomUUID(),
+    id: isUuidLike(character.id) ? character.id : crypto.randomUUID(),
     character_name: character.character_name || "Unknown",
     character_ocid: character.character_ocid,
     class: character.character_class || "Unknown",

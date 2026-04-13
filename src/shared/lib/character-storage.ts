@@ -20,6 +20,23 @@ export interface LocalCharacterProfile {
   is_active?: boolean;
 }
 
+export function isUuidLike(value: string | null | undefined): value is string {
+  if (!value) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+export function normalizeLocalCharacterProfile(profile: LocalCharacterProfile): LocalCharacterProfile & { id: string } {
+  const id = isUuidLike(profile.id) ? profile.id : crypto.randomUUID();
+  return {
+    ...profile,
+    id,
+  };
+}
+
+export function normalizeLocalCharacterProfiles(characters: LocalCharacterProfile[]): Array<LocalCharacterProfile & { id: string }> {
+  return characters.map((character) => normalizeLocalCharacterProfile(character));
+}
+
 export function readLegacyProfile(): LocalCharacterProfile | null {
   if (typeof window === "undefined") return null;
 
@@ -86,18 +103,20 @@ export function clearCharacterSelection() {
 export function seedLocalCharactersFromProfile(profile: LocalCharacterProfile) {
   if (typeof window === "undefined") return;
 
+  const normalizedProfile = normalizeLocalCharacterProfile(profile);
   const characters = readLocalCharacters();
   const exists = characters.some((character) =>
-    (profile.character_ocid && character.character_ocid === profile.character_ocid) ||
-    character.character_name === profile.character_name
+    (normalizedProfile.character_ocid && character.character_ocid === normalizedProfile.character_ocid) ||
+    character.character_name === normalizedProfile.character_name
   );
 
   if (exists) {
-    writeLocalCharacters(characters, readActiveCharacterId() || profile.character_ocid || null);
+    const existingActive = readActiveCharacterId();
+    writeLocalCharacters(characters, existingActive && isUuidLike(existingActive) ? existingActive : characters[0]?.id || null);
     return;
   }
 
-  const nextCharacters = [...characters, profile];
-  const activeId = profile.character_ocid || profile.id || profile.character_name;
+  const nextCharacters = [...characters, normalizedProfile];
+  const activeId = normalizedProfile.id || null;
   writeLocalCharacters(nextCharacters, activeId);
 }

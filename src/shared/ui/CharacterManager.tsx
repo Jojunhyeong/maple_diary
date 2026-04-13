@@ -11,15 +11,19 @@ import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
 import {
   backfillRecordsCharacterId,
   deleteRecordsByCharacterId,
+  migrateRecordsCharacterId,
 } from '@/shared/lib/db/local';
 import {
   CHARACTER_STORAGE_KEYS,
   clearCharacterSelection,
+  isUuidLike,
+  normalizeLocalCharacterProfiles,
   readActiveCharacterId,
   readLocalCharacters,
   writeLocalCharacters,
   type LocalCharacterProfile,
 } from '@/shared/lib/character-storage';
+import { migrateBossChecklistCharacterId } from '@/shared/lib/boss-checklist';
 
 type ManagedCharacter = LocalCharacterProfile & {
   id: string;
@@ -31,13 +35,13 @@ type CharacterManagerProps = {
 };
 
 function getCharacterKey(character: Partial<ManagedCharacter>) {
-  return character.id || character.character_ocid || character.character_name || '';
+  return character.id || '';
 }
 
 function toLocalCharacter(character: Record<string, unknown>): ManagedCharacter {
   const name = typeof character.character_name === 'string' ? character.character_name : 'Unknown';
   return {
-    id: typeof character.id === 'string' ? character.id : getCharacterKey(character),
+    id: typeof character.id === 'string' && isUuidLike(character.id) ? character.id : crypto.randomUUID(),
     character_name: name,
     character_ocid: typeof character.character_ocid === 'string' || character.character_ocid === null ? character.character_ocid : null,
     character_world: typeof character.character_world === 'string' || character.character_world === null ? character.character_world : null,
@@ -157,14 +161,15 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
           const loaded: ManagedCharacter[] = Array.isArray(data.characters)
             ? data.characters.map(toLocalCharacter)
             : [];
-          const explicitActive =
-            data.activeCharacter?.id ||
-            data.activeCharacter?.character_ocid ||
-            data.activeCharacter?.character_name ||
-            readActiveCharacterId() ||
-            null;
+          const explicitActive = data.activeCharacter?.id || null;
           const fallbackActive = loaded.find((character) => character.is_active) || loaded[0] || null;
-          const activeKey = explicitActive || (fallbackActive ? getCharacterKey(fallbackActive) : null);
+          const storedActive = readActiveCharacterId();
+          const activeKey =
+            (explicitActive && loaded.some((character) => getCharacterKey(character) === explicitActive) ? explicitActive : null) ||
+            (storedActive && isUuidLike(storedActive) && loaded.some((character) => getCharacterKey(character) === storedActive)
+              ? storedActive
+              : null) ||
+            (fallbackActive ? getCharacterKey(fallbackActive) : null);
 
           setCharacters(loaded);
           setActiveCharacterId(activeKey);
@@ -175,19 +180,43 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
             if (nextActive) syncLegacyProfile(nextActive);
           }
         } else {
-          const loaded: ManagedCharacter[] = readLocalCharacters().map((character) => ({
+          const rawCharacters = readLocalCharacters();
+          const normalizedCharacters: ManagedCharacter[] = normalizeLocalCharacterProfiles(rawCharacters).map((character) => ({
             ...character,
-            id: character.id || character.character_ocid || character.character_name,
+            id: character.id,
             is_active: character.is_active ?? false,
           }));
-          const fallbackActive = loaded.find((character) => character.is_active) || loaded[0] || null;
-          const activeKey = readActiveCharacterId() || (fallbackActive ? getCharacterKey(fallbackActive) : null);
+          const idMap = new Map<string, string>();
+          rawCharacters.forEach((character, index) => {
+            const rawKey = character.id || character.character_ocid || character.character_name || '';
+            const nextKey = normalizedCharacters[index]?.id || '';
+            if (rawKey && nextKey && rawKey !== nextKey) {
+              idMap.set(rawKey, nextKey);
+            }
+          });
+          const fallbackActive = normalizedCharacters.find((character) => character.is_active) || normalizedCharacters[0] || null;
+          const storedActive = readActiveCharacterId();
+          const remappedActive = storedActive ? idMap.get(storedActive) || storedActive : null;
+          const activeKey =
+            (remappedActive && normalizedCharacters.some((character) => getCharacterKey(character) === remappedActive)
+              ? remappedActive
+              : null) ||
+            (fallbackActive ? getCharacterKey(fallbackActive) : null);
 
-          setCharacters(loaded);
+          if (localOwnerId && idMap.size > 0) {
+            for (const [fromId, toId] of idMap.entries()) {
+              await Promise.all([
+                migrateRecordsCharacterId(localOwnerId, fromId, toId),
+                Promise.resolve(migrateBossChecklistCharacterId(fromId, toId)),
+              ]);
+            }
+          }
+
+          setCharacters(normalizedCharacters);
           setActiveCharacterId(activeKey);
-          if (loaded.length > 0) {
-            writeLocalCharacters(loaded, activeKey);
-            const nextActive = loaded.find((character) => getCharacterKey(character) === activeKey) || loaded[0];
+          if (normalizedCharacters.length > 0) {
+            writeLocalCharacters(normalizedCharacters, activeKey);
+            const nextActive = normalizedCharacters.find((character) => getCharacterKey(character) === activeKey) || normalizedCharacters[0];
             if (nextActive) syncLegacyProfile(nextActive);
           }
         }
@@ -199,7 +228,7 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
     };
 
     load();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, localOwnerId]);
 
   useEffect(() => {
     if (drawerPhase === 'closed') return;
@@ -304,7 +333,7 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
       const latest = await fetchMapleCharacter(trimmed);
       const previousActive = activeCharacter || characters[0] || null;
       const nextCharacter: ManagedCharacter = {
-        id: latest.ocid || latest.character_name,
+        id: crypto.randomUUID(),
         character_name: latest.character_name,
         character_ocid: latest.ocid ?? null,
         character_world: latest.character_world ?? null,
@@ -330,6 +359,11 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           throw new Error(data.error || '캐릭터 저장에 실패했습니다');
+        }
+
+        const data = await res.json().catch(() => ({}));
+        if (data?.characterId && typeof data.characterId === 'string') {
+          nextCharacter.id = data.characterId;
         }
       } else if (localOwnerId && previousActive) {
         await backfillRecordsCharacterId(localOwnerId, getCharacterKey(previousActive));

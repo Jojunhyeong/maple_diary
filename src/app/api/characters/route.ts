@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/../auth";
 import { supabaseAdmin } from "@/shared/lib/supabase";
-import type { LocalCharacterProfile } from "@/shared/lib/character-storage";
+import { isUuidLike, type LocalCharacterProfile } from "@/shared/lib/character-storage";
 
 function normalizeInput(input: LocalCharacterProfile) {
   return {
-    id: input.id || crypto.randomUUID(),
+    id: isUuidLike(input.id) ? input.id : crypto.randomUUID(),
     character_name: input.character_name || "Unknown",
     character_ocid: input.character_ocid ?? null,
     class: input.character_class || "Unknown",

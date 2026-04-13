@@ -3,17 +3,22 @@
 import { useEffect, useState } from 'react';
 import {
   CHARACTER_CHANGE_EVENT,
+  isUuidLike,
   readActiveCharacterId,
 } from '@/shared/lib/character-storage';
 
 export function useActiveCharacterId() {
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
-    return readActiveCharacterId();
+    const activeId = readActiveCharacterId();
+    return isUuidLike(activeId) ? activeId : null;
   });
 
   useEffect(() => {
-    const sync = () => setActiveCharacterId(readActiveCharacterId());
+    const sync = () => {
+      const activeId = readActiveCharacterId();
+      setActiveCharacterId(isUuidLike(activeId) ? activeId : null);
+    };
 
     sync();
     window.addEventListener('storage', sync);

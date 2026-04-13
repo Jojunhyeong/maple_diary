@@ -177,6 +177,22 @@ export function readBossChecklistState(characterId: string | null, weekKey: stri
   }
 }
 
+export function migrateBossChecklistCharacterId(fromCharacterId: string, toCharacterId: string) {
+  if (typeof window === 'undefined' || !fromCharacterId || !toCharacterId || fromCharacterId === toCharacterId) return;
+
+  const fromPrefix = `${BOSS_STORAGE_PREFIX}:${fromCharacterId}:`;
+  const toPrefix = `${BOSS_STORAGE_PREFIX}:${toCharacterId}:`;
+
+  for (const key of Object.keys(localStorage)) {
+    if (!key.startsWith(fromPrefix)) continue;
+    const nextKey = `${toPrefix}${key.slice(fromPrefix.length)}`;
+    const value = localStorage.getItem(key);
+    if (value !== null) {
+      localStorage.setItem(nextKey, value);
+    }
+  }
+}
+
 export function listStoredBossWeekKeys(characterId: string | null = null) {
   if (typeof window === 'undefined') return [];
   const scope = characterId ?? 'global';
