@@ -237,7 +237,9 @@ export function RecordModal() {
               inputMode="numeric"
             />
             {meso > 0 && (
-              <p className="text-xs text-t3 mt-1.5 ml-1">= {formatMeso(meso)} ({parseInt(mesoMan || '0').toLocaleString('ko-KR')}만)</p>
+              <p className="text-xs text-t3 mt-1.5 ml-1">
+                = {formatMeso(meso)} ({parseInt(mesoMan || '0').toLocaleString('ko-KR')}만)
+              </p>
             )}
           </div>
 

@@ -1,14 +1,12 @@
 import { BottomNav } from '@/shared/ui/BottomNav';
-import { CharacterSidebarCard } from '@/shared/ui/CharacterSidebarCard';
+import { CharacterSidebarSlot } from '@/shared/ui/CharacterSidebarSlot';
 import { RecordModal } from '@/shared/ui/RecordModal';
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col pb-[104px]">
       <div className="relative flex-1">
-        <aside className="fixed top-[18vh] left-[calc(50%-564px)] hidden w-[340px] xl:block">
-          <CharacterSidebarCard />
-        </aside>
+        <CharacterSidebarSlot />
         <div className="mx-auto flex w-full max-w-[400px] flex-col">
           {children}
         </div>

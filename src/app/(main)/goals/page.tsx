@@ -10,6 +10,7 @@ import { Card } from '@/shared/ui/Card';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
 import { formatDate, formatMeso, fromManInput, toManDisplay } from '@/shared/lib/utils/formatters';
+import { useBossRevenueSummary } from '@/shared/lib/hooks/useBossRevenueSummary';
 
 function getCurrentMonth(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -64,6 +65,8 @@ export default function GoalsPage() {
 
   const goalStartStr = useMemo(() => formatDate(goalStartDate), [goalStartDate]);
   const todayStr = useMemo(() => formatDate(today), [today]);
+  const bossWeeklySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'weekly');
+  const bossMonthlySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'monthly');
 
   const scopedRecords = useMemo(() => {
     return records.filter((r) => r.date >= goalStartStr && r.date <= todayStr);
@@ -71,6 +74,9 @@ export default function GoalsPage() {
 
   const totalMeso = scopedRecords.reduce((s, r) => s + r.net_revenue, 0);
   const totalShards = scopedRecords.reduce((s, r) => s + r.shard_count, 0);
+  const huntingMeso = totalMeso;
+  const bossMeso = bossWeeklySummary.totalRevenue + bossMonthlySummary.totalRevenue;
+  const totalCombinedMeso = huntingMeso + bossMeso;
   const msPerDay = 1000 * 60 * 60 * 24;
   const daysElapsed = Math.max(1, Math.floor((today.getTime() - goalStartDate.getTime()) / msPerDay) + 1);
   const totalGoalDays = Math.max(1, Math.floor((monthEnd.getTime() - goalStartDate.getTime()) / msPerDay) + 1);
@@ -122,7 +128,7 @@ export default function GoalsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="maple-title text-2xl font-bold text-t1">목표</h1>
-          <p className="mt-1 text-xs text-t3">🍁 전체 캐릭터 합산 목표</p>
+          <p className="mt-1 text-xs text-t3">🍁 사냥(월~일) + 보스(목~수 / 월간 검마) 합산 목표</p>
         </div>
         <Button variant="ghost" size="sm" onClick={openEdit}>
           {currentGoal ? '수정' : '+ 목표 설정'}
@@ -184,12 +190,17 @@ export default function GoalsPage() {
           {currentGoal.meso_goal && (
             <GoalProgressCard
               label="메소 목표"
-              current={totalMeso}
+              current={totalCombinedMeso}
               goal={currentGoal.meso_goal}
               format={formatMeso}
               daysElapsed={daysElapsed}
               totalGoalDays={totalGoalDays}
               goalStartStr={goalStartStr}
+              subtitle="사냥 + 주간 보스 + 월간 보스"
+              breakdown={{
+                hunting: huntingMeso,
+                boss: bossMeso,
+              }}
             />
           )}
           {currentGoal.shard_goal && (
@@ -210,7 +221,7 @@ export default function GoalsPage() {
 }
 
 function GoalProgressCard({
-  label, current, goal, format, daysElapsed, totalGoalDays, goalStartStr,
+  label, current, goal, format, daysElapsed, totalGoalDays, goalStartStr, subtitle, breakdown,
 }: {
   label: string;
   current: number;
@@ -219,11 +230,18 @@ function GoalProgressCard({
   daysElapsed: number;
   totalGoalDays: number;
   goalStartStr: string;
+  subtitle?: string;
+  breakdown?: {
+    hunting: number;
+    boss: number;
+  };
 }) {
   const pct = Math.min((current / goal) * 100, 100);
   const remaining = Math.max(goal - current, 0);
   const dailyAvg = daysElapsed > 0 ? current / daysElapsed : 0;
   const onTrack = dailyAvg * totalGoalDays >= goal;
+  const huntingPortion = breakdown && current > 0 ? (breakdown.hunting / current) * pct : 0;
+  const bossPortion = breakdown && current > 0 ? (breakdown.boss / current) * pct : 0;
 
   let expectedDate: string | null = null;
   if (remaining > 0 && dailyAvg > 0) {
@@ -234,33 +252,46 @@ function GoalProgressCard({
 
   return (
     <Card>
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-semibold text-t2">{label}</p>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-t2">{label}</p>
+          {subtitle && <p className="text-[11px] text-t3">{subtitle}</p>}
+        </div>
         <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${onTrack ? 'bg-green-500/15 text-green-500' : 'bg-amber-500/15 text-amber-500'}`}>
           {onTrack ? '✓ 달성 예정' : '⚡ 분발 필요'}
         </span>
       </div>
 
-      <div className="flex justify-between text-xs text-t3 mb-1">
-        <span>{format(current)}</span>
-        <span>{format(goal)}</span>
+      <div className="mb-3 h-3 w-full rounded-full bg-surface p-0.5">
+        <div className="flex h-full w-full overflow-hidden rounded-full">
+          {breakdown ? (
+            <>
+              <div
+                className="h-full bg-[linear-gradient(135deg,#fb923c,#f97316)] transition-all"
+                style={{ width: `${huntingPortion}%` }}
+              />
+              <div
+                className="h-full bg-[linear-gradient(135deg,#34d399,#22c55e)] transition-all"
+                style={{ width: `${bossPortion}%` }}
+              />
+            </>
+          ) : (
+            <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${pct}%` }} />
+          )}
+        </div>
       </div>
 
-      <div className="mb-3 h-2 w-full rounded-full bg-surface">
-        <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${pct}%` }} />
+      <div className="mb-1 text-right text-xs font-semibold text-t2">
+        {pct.toFixed(1)}%
       </div>
 
-      <div className="flex justify-between text-xs text-t3">
-        <span>{pct.toFixed(1)}% 달성</span>
-        {remaining > 0 ? (
-          <span>남은 목표: {format(remaining)}</span>
-        ) : (
-          <span className="text-amber-400 font-semibold">🎉 달성!</span>
-        )}
+      <div className="flex items-center justify-between gap-2 text-xs text-t3">
+        <span>{breakdown ? `사냥 ${format(breakdown.hunting)} · 보스 ${format(breakdown.boss)}` : `${format(current)} / ${format(goal)}`}</span>
+        {remaining > 0 ? <span>남은 {format(remaining)}</span> : <span className="font-semibold text-amber-400">🎉 달성!</span>}
       </div>
 
       {expectedDate && remaining > 0 && (
-        <p className="text-xs text-t3 mt-2">
+        <p className="mt-2 text-xs text-t3">
           목표 설정일({goalStartStr}) 기준 달성 예상: {expectedDate}
         </p>
       )}

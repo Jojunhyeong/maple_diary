@@ -1,7 +1,7 @@
 import { Record, Goal } from "@/shared/types";
 
 const DB_NAME = "maple_diary";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 const STORES = {
   RECORDS: "records",

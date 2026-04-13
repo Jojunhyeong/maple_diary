@@ -8,7 +8,10 @@ import { Card } from '@/shared/ui/Card';
 import { Input } from '@/shared/ui/Input';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
-import { backfillRecordsCharacterId, deleteRecordsByCharacterId } from '@/shared/lib/db/local';
+import {
+  backfillRecordsCharacterId,
+  deleteRecordsByCharacterId,
+} from '@/shared/lib/db/local';
 import {
   CHARACTER_STORAGE_KEYS,
   clearCharacterSelection,
