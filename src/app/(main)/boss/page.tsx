@@ -16,6 +16,7 @@ import {
   getBossMonthKey,
   getBossPreviousWeekKey,
   getBossWeekKey,
+  filterBossChecklistStateByCycle,
   mergeBossChecklistStates,
   readBossChecklistState,
   splitBossChecklistState,
@@ -344,6 +345,12 @@ export default function BossPage() {
       return;
     }
 
+    const stateToSave = isWeeklyLocked && !isMonthlyLocked
+      ? filterBossChecklistStateByCycle(state, 'monthly')
+      : !isWeeklyLocked && isMonthlyLocked
+        ? filterBossChecklistStateByCycle(state, 'weekly')
+        : state;
+
     setIsSaving(true);
     setSaveMessage('');
     try {
@@ -352,7 +359,7 @@ export default function BossPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ weekKey, monthKey, characterId: activeCharacterId, state }),
+        body: JSON.stringify({ weekKey, monthKey, characterId: activeCharacterId, state: stateToSave }),
       });
 
       if (res.status === 409) {
