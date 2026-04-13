@@ -42,12 +42,17 @@ export type BossRevenueSnapshot = {
 export type BossRevenueRow = {
   character_id?: string | null;
   week_key: string;
-  cycle_type: BossCycleType;
+  cycle_type?: BossCycleType;
   total_revenue: number;
   selected_bosses: number;
   selected_clears: number;
   by_category: Record<BossCategoryKey, number>;
-  state?: ChecklistState;
+  state?: ChecklistState & {
+    __bossMeta?: {
+      cycleType?: BossCycleType;
+      characterId?: string | null;
+    };
+  };
 };
 
 export const BOSS_STORAGE_PREFIX = 'maple_diary:boss-checklist:v1';
@@ -296,8 +301,10 @@ export function summarizeBossRevenueRows(
   const uniqueWeekKeys = new Set<string>();
 
   for (const row of rows) {
-    if (cycleType && row.cycle_type !== cycleType) continue;
-    if (characterId !== undefined && characterId !== null && row.character_id !== characterId) continue;
+    const rowCycleType = row.cycle_type ?? row.state?.__bossMeta?.cycleType;
+    const rowCharacterId = row.character_id ?? row.state?.__bossMeta?.characterId ?? null;
+    if (cycleType && rowCycleType !== cycleType) continue;
+    if (characterId !== undefined && characterId !== null && rowCharacterId !== characterId) continue;
     merged.totalRevenue += row.total_revenue ?? 0;
     merged.selectedBosses += row.selected_bosses ?? 0;
     merged.selectedClears += row.selected_clears ?? 0;

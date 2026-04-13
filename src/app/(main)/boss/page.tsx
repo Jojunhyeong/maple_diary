@@ -362,7 +362,13 @@ export default function BossPage() {
       }
 
       if (!res.ok) {
-        throw new Error('boss revenue save failed');
+        const payload = (await res.json().catch(() => null)) as
+          | { error?: string; dbError?: { code?: string; message?: string; hint?: string; details?: string } }
+          | null;
+        const detail = payload?.dbError
+          ? [payload.dbError.message, payload.dbError.hint, payload.dbError.details].filter(Boolean).join(' | ')
+          : payload?.error;
+        throw new Error(detail || 'boss revenue save failed');
       }
 
       const data = (await res.json()) as { savedCycles?: Array<'weekly' | 'monthly'> };
@@ -379,8 +385,8 @@ export default function BossPage() {
       } else {
         setSaveMessage('저장된 내용이 없어요');
       }
-    } catch {
-      setSaveMessage('저장에 실패했어요');
+    } catch (error) {
+      setSaveMessage(error instanceof Error ? error.message : '저장에 실패했어요');
     } finally {
       setIsSaving(false);
     }
