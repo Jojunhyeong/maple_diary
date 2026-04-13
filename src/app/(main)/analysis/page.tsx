@@ -44,10 +44,11 @@ export default function AnalysisPage() {
   const [scope, setScope] = useState<ScopeTabValue>('all');
   const today = useMemo(() => new Date(), []);
   const monthStart = useMemo(() => new Date(today.getFullYear(), today.getMonth(), 1), [today]);
+  const bossWeekStart = useMemo(() => getBossThursday(today), [today]);
   const bossCharacterId = scope === 'character' ? (activeCharacterId ?? '') : null;
   const bossMonthWeeklySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'weekly', bossCharacterId);
   const bossMonthMonthlySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'monthly', bossCharacterId);
-  const bossWeekSummary = useBossRevenueSummary(getBossThursday(today), today, isLoggedIn, 'weekly', bossCharacterId);
+  const bossWeekSummary = useBossRevenueSummary(bossWeekStart, today, isLoggedIn, 'weekly', bossCharacterId);
   const bossMonthSummary = useMemo(
     () => ({
       totalRevenue: bossMonthWeeklySummary.totalRevenue + bossMonthMonthlySummary.totalRevenue,
