@@ -194,6 +194,30 @@ export const backfillRecordsCharacterId = async (
 };
 
 /**
+ * 특정 캐릭터 ID를 다른 값으로 일괄 변경
+ */
+export const migrateRecordsCharacterId = async (
+  localOwnerId: string,
+  fromCharacterId: string,
+  toCharacterId: string,
+): Promise<number> => {
+  const records = await getRecordsByOwner(localOwnerId);
+  const targetRecords = records.filter((record) => record.character_id === fromCharacterId);
+
+  for (const record of targetRecords) {
+    await saveRecord(
+      {
+        ...record,
+        character_id: toCharacterId,
+      },
+      localOwnerId,
+    );
+  }
+
+  return targetRecords.length;
+};
+
+/**
  * 목표 저장
  */
 export const saveGoal = async (

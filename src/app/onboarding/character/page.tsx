@@ -61,6 +61,7 @@ export default function OnboardingCharacterPage() {
 
     // 프로필 저장
     const profile = {
+      id: crypto.randomUUID(),
       character_name: character.character_name,
       character_ocid: character.ocid ?? null,
       character_world: character.character_world ?? null,
@@ -72,7 +73,6 @@ export default function OnboardingCharacterPage() {
       profile_set_at: new Date().toISOString(),
     };
     localStorage.setItem('maple_diary:user_profile', JSON.stringify(profile));
-    localStorage.setItem('maple_diary:active_character_id', character.ocid || character.character_name);
     seedLocalCharactersFromProfile({
       ...profile,
       profile_set_at: profile.profile_set_at,
