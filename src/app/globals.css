@@ -157,6 +157,22 @@ body::after {
   animation: mapleFadeUp 0.45s ease-out both;
 }
 
+.maple-drawer-enter {
+  animation: mapleDrawerEnter 420ms cubic-bezier(0.18, 0.9, 0.2, 1) both;
+}
+
+.maple-drawer-exit {
+  animation: mapleDrawerExit 320ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.maple-drawer-backdrop-enter {
+  animation: mapleBackdropEnter 420ms ease-out both;
+}
+
+.maple-drawer-backdrop-exit {
+  animation: mapleBackdropExit 320ms ease-out both;
+}
+
 @keyframes mapleFadeUp {
   from {
     opacity: 0;
@@ -166,6 +182,38 @@ body::after {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes mapleDrawerEnter {
+  from {
+    opacity: 0;
+    transform: translate3d(-110%, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes mapleDrawerExit {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(-110%, 0, 0);
+  }
+}
+
+@keyframes mapleBackdropEnter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mapleBackdropExit {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 @keyframes mapleDriftA {
@@ -187,7 +235,11 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   body::before,
   body::after,
-  .maple-fade-up {
+  .maple-fade-up,
+  .maple-drawer-enter,
+  .maple-drawer-exit,
+  .maple-drawer-backdrop-enter,
+  .maple-drawer-backdrop-exit {
     animation: none !important;
   }
 }

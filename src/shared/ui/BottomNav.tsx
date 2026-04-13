@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 const NAV_ITEMS = [
   { href: '/dashboard', label: '대시보드', icon: <HomeIcon /> },
   { href: '/records', label: '기록', icon: <ListIcon /> },
+  { href: '/boss', label: '보스', icon: <BossIcon /> },
   { href: '/analysis', label: '분석', icon: <ChartIcon /> },
   { href: '/goals', label: '목표', icon: <TargetIcon /> },
 ];
@@ -83,6 +84,18 @@ function ChartIcon() {
         <path d="M4 19.2h16" />
         <path d="M7 16.5v-4.1M12 16.5V8M17 16.5V10.2" />
         <path d="M6 7.5l3.7-2.3 3.3 2.1 5-3.2" />
+      </svg>
+    </NavIcon>
+  );
+}
+
+function BossIcon() {
+  return (
+    <NavIcon>
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4.5 8.5l2.8 3 3.2-4 2.2 4.1 2.8-3.1 3.5 5.7H5.2z" />
+        <path d="M6 16h12" />
+        <path d="M7.5 16l1.3 3.5h6.4L16.5 16" />
       </svg>
     </NavIcon>
   );

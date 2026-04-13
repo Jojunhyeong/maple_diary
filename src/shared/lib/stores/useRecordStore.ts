@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { Record, RecordWithCalculations } from "@/shared/types";
-import { saveRecord, getRecordsByOwner, deleteRecord as deleteLocalRecord } from "@/shared/lib/db/local";
+import {
+  saveRecord,
+  getRecordsByOwner,
+  deleteRecord as deleteLocalRecord,
+  backfillRecordsCharacterId,
+} from "@/shared/lib/db/local";
 import { enrichRecordWithCalculations } from "@/shared/lib/utils/calculations";
 
 interface RecordStore {
@@ -8,7 +13,7 @@ interface RecordStore {
   loading: boolean;
   error: string | null;
 
-  loadRecords: (localOwnerId: string, isLoggedIn?: boolean) => Promise<void>;
+  loadRecords: (localOwnerId: string, isLoggedIn?: boolean, activeCharacterId?: string | null) => Promise<void>;
   addRecord: (
     record: Omit<Record, "id" | "created_at" | "updated_at">,
     localOwnerId: string,
@@ -28,7 +33,7 @@ export const useRecordStore = create<RecordStore>((set) => ({
   loading: false,
   error: null,
 
-  loadRecords: async (localOwnerId, isLoggedIn = false) => {
+  loadRecords: async (localOwnerId, isLoggedIn = false, activeCharacterId = null) => {
     set({ loading: true });
     try {
       const shardPrice = getShardPrice();
@@ -38,12 +43,28 @@ export const useRecordStore = create<RecordStore>((set) => ({
         const res = await fetch('/api/records');
         if (!res.ok) throw new Error('서버에서 기록을 불러오지 못했습니다');
         const rawRecords = await res.json();
-        const enriched = rawRecords.map((r: Record) => enrichRecordWithCalculations(r, shardPrice));
+        const normalizedRecords = normalizeLegacyRecords(rawRecords, activeCharacterId);
+
+        const hasLegacyRecords = rawRecords.some((r: Record) => !r.character_id);
+        if (hasLegacyRecords && activeCharacterId) {
+          await fetch('/api/records/backfill-character', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ characterId: activeCharacterId }),
+          });
+        }
+
+        const enriched = normalizedRecords.map((r: Record) => enrichRecordWithCalculations(r, shardPrice));
         set({ records: enriched, loading: false, error: null });
       } else {
         // 로컬에서 로드
         const rawRecords = await getRecordsByOwner(localOwnerId);
-        const enriched = rawRecords.map((r) => enrichRecordWithCalculations(r, shardPrice));
+        const normalizedRecords = normalizeLegacyRecords(rawRecords, activeCharacterId);
+        const hasLegacyRecords = rawRecords.some((r) => !r.character_id);
+        if (hasLegacyRecords && activeCharacterId) {
+          await backfillRecordsCharacterId(localOwnerId, activeCharacterId);
+        }
+        const enriched = normalizedRecords.map((r) => enrichRecordWithCalculations(r, shardPrice));
         set({ records: enriched, loading: false, error: null });
       }
     } catch (error) {
@@ -75,6 +96,7 @@ export const useRecordStore = create<RecordStore>((set) => ({
             shard_count: newRecord.shard_count,
             material_cost: newRecord.material_cost,
             memo: newRecord.memo,
+            character_id: newRecord.character_id ?? null,
             shard_value: Math.floor(newRecord.shard_count * shardPrice),
             total_revenue: Math.floor(newRecord.meso + newRecord.shard_count * shardPrice),
             net_revenue: Math.floor(newRecord.meso + newRecord.shard_count * shardPrice - newRecord.material_cost),
@@ -114,3 +136,8 @@ export const useRecordStore = create<RecordStore>((set) => ({
 
   clearError: () => set({ error: null }),
 }));
+
+function normalizeLegacyRecords<T extends Record>(records: T[], characterId: string | null) {
+  if (!characterId) return records;
+  return records.map((record) => (record.character_id ? record : { ...record, character_id: characterId }));
+}

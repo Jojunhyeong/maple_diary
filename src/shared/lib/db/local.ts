@@ -1,7 +1,7 @@
 import { Record, Goal } from "@/shared/types";
 
 const DB_NAME = "maple_diary";
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 
 const STORES = {
   RECORDS: "records",
@@ -29,8 +29,14 @@ export const initDB = async (): Promise<IDBDatabase> => {
           keyPath: "id",
         });
         recordStore.createIndex("local_owner_id", "local_owner_id");
+        recordStore.createIndex("character_id", "character_id");
         recordStore.createIndex("date", "date");
         recordStore.createIndex("created_at", "created_at");
+      } else {
+        const recordStore = (event.target as IDBOpenDBRequest).transaction?.objectStore(STORES.RECORDS);
+        if (recordStore && !recordStore.indexNames.contains("character_id")) {
+          recordStore.createIndex("character_id", "character_id");
+        }
       }
 
       // Goals 스토어
@@ -145,6 +151,46 @@ export const deleteRecord = async (recordId: string): Promise<void> => {
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve();
   });
+};
+
+/**
+ * 특정 캐릭터의 기록 전체 삭제
+ */
+export const deleteRecordsByCharacterId = async (
+  localOwnerId: string,
+  characterId: string,
+): Promise<number> => {
+  const records = await getRecordsByOwner(localOwnerId);
+  const targetRecords = records.filter((record) => record.character_id === characterId);
+
+  for (const record of targetRecords) {
+    await deleteRecord(record.id);
+  }
+
+  return targetRecords.length;
+};
+
+/**
+ * 캐릭터 ID가 없는 기존 기록을 특정 캐릭터로 백필
+ */
+export const backfillRecordsCharacterId = async (
+  localOwnerId: string,
+  characterId: string
+): Promise<number> => {
+  const records = await getRecordsByOwner(localOwnerId);
+  const legacyRecords = records.filter((record) => !record.character_id);
+
+  for (const record of legacyRecords) {
+    await saveRecord(
+      {
+        ...record,
+        character_id: characterId,
+      },
+      localOwnerId,
+    );
+  }
+
+  return legacyRecords.length;
 };
 
 /**

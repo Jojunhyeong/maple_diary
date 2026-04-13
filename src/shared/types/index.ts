@@ -15,6 +15,24 @@ export interface UserProfile {
   profile_set_at: string;
 }
 
+export interface CharacterProfile {
+  id: string;
+  user_id?: string;
+  local_owner_id?: string;
+  character_name: string;
+  character_ocid?: string | null;
+  class: string;
+  level: number;
+  image_url?: string | null;
+  character_world?: string | null;
+  character_exp_rate?: number | string | null;
+  character_combat_power?: number | null;
+  is_active?: boolean;
+  source?: "legacy_profile" | "manual" | "api";
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UserSettings {
   shard_price: number;
   shard_price_updated_at?: string;
@@ -42,6 +60,7 @@ export type SyncStatus = "local" | "pending" | "synced" | "error";
 export interface Record {
   id: string;  // UUID
   local_owner_id?: string;
+  character_id?: string;
   user_id?: string;  // 서버 저장 시
   date: string;      // YYYY-MM-DD
   time_minutes: number;

@@ -21,6 +21,46 @@
 
 ### 데이터베이스 초기화 SQL
 
+### 실행용 SQL
+이 블록만 복사해서 Supabase SQL Editor에 붙여넣으면 된다.
+
+```sql
+CREATE TABLE public.characters (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+
+  character_name VARCHAR(50) NOT NULL,
+  character_ocid VARCHAR(255),
+  class VARCHAR(50),
+  level INT,
+  image_url TEXT,
+  character_world TEXT,
+  character_exp_rate NUMERIC,
+  character_combat_power BIGINT,
+
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+  CONSTRAINT valid_level CHECK (level >= 1 AND level <= 300)
+);
+
+CREATE INDEX idx_characters_user_id ON public.characters(user_id);
+CREATE INDEX idx_characters_user_active ON public.characters(user_id, is_active);
+CREATE INDEX idx_characters_user_ocid ON public.characters(user_id, character_ocid);
+
+NOTIFY pgrst, 'reload schema';
+```
+
+실행 순서:
+1. `public.users`가 이미 있으면 그대로 둔다.
+2. 위 `public.characters` SQL만 실행한다.
+3. `NOTIFY pgrst, 'reload schema';`까지 같이 실행한다.
+4. Supabase Table Editor를 새로고침하거나 잠깐 기다린다.
+
+> 참고: 현재 프로젝트는 서버에서 `service role`로 DB를 쓰고 있어서, 이 단계에서는 `characters` 테이블에 RLS 정책을 넣지 않았다.  
+> 나중에 클라이언트에서 Supabase를 직접 읽게 되면, 그때 `auth_id` 같은 연결 컬럼을 먼저 추가한 뒤 RLS를 다시 설계하면 된다.
+
 #### 1. Users 테이블
 ```sql
 -- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -68,6 +108,101 @@ CREATE POLICY users_insert_own ON public.users FOR INSERT
 
 CREATE POLICY users_delete_own ON public.users FOR DELETE
   USING (auth.uid() = auth_id);
+```
+
+#### 1-2. Characters 테이블
+```sql
+CREATE TABLE public.characters (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+
+  character_name VARCHAR(50) NOT NULL,
+  character_ocid VARCHAR(255),
+  class VARCHAR(50),
+  level INT,
+  image_url TEXT,
+  character_world TEXT,
+  character_exp_rate NUMERIC,
+  character_combat_power BIGINT,
+
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+  CONSTRAINT valid_level CHECK (level >= 1 AND level <= 300)
+);
+
+CREATE INDEX idx_characters_user_id ON public.characters(user_id);
+CREATE INDEX idx_characters_user_active ON public.characters(user_id, is_active);
+CREATE INDEX idx_characters_user_ocid ON public.characters(user_id, character_ocid);
+
+ALTER TABLE public.characters ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY characters_select_own ON public.characters FOR SELECT
+  USING (user_id = (SELECT id FROM public.users WHERE auth_id = auth.uid()));
+
+CREATE POLICY characters_insert_own ON public.characters FOR INSERT
+  WITH CHECK (user_id = (SELECT id FROM public.users WHERE auth_id = auth.uid()));
+
+CREATE POLICY characters_update_own ON public.characters FOR UPDATE
+  USING (user_id = (SELECT id FROM public.users WHERE auth_id = auth.uid()));
+
+CREATE POLICY characters_delete_own ON public.characters FOR DELETE
+  USING (user_id = (SELECT id FROM public.users WHERE auth_id = auth.uid()));
+
+-- schema cache 갱신용
+NOTIFY pgrst, 'reload schema';
+```
+
+### 실행 순서
+1. `public.users`가 이미 있으면 그대로 둔다.
+2. `public.characters`만 위 SQL로 추가한다.
+3. 마지막 `NOTIFY pgrst, 'reload schema';`까지 실행한다.
+4. Supabase Table Editor를 새로고침하거나 잠깐 기다린다.
+
+### 테이블만 빠르게 추가할 때
+아래 SQL만 따로 실행해도 된다.
+
+```sql
+CREATE TABLE public.characters (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+
+  character_name VARCHAR(50) NOT NULL,
+  character_ocid VARCHAR(255),
+  class VARCHAR(50),
+  level INT,
+  image_url TEXT,
+  character_world TEXT,
+  character_exp_rate NUMERIC,
+  character_combat_power BIGINT,
+
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+  CONSTRAINT valid_level CHECK (level >= 1 AND level <= 300)
+);
+
+CREATE INDEX idx_characters_user_id ON public.characters(user_id);
+CREATE INDEX idx_characters_user_active ON public.characters(user_id, is_active);
+CREATE INDEX idx_characters_user_ocid ON public.characters(user_id, character_ocid);
+
+ALTER TABLE public.characters ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY characters_select_own ON public.characters FOR SELECT
+  USING (user_id = (SELECT id FROM public.users WHERE auth_id = auth.uid()));
+
+CREATE POLICY characters_insert_own ON public.characters FOR INSERT
+  WITH CHECK (user_id = (SELECT id FROM public.users WHERE auth_id = auth.uid()));
+
+CREATE POLICY characters_update_own ON public.characters FOR UPDATE
+  USING (user_id = (SELECT id FROM public.users WHERE auth_id = auth.uid()));
+
+CREATE POLICY characters_delete_own ON public.characters FOR DELETE
+  USING (user_id = (SELECT id FROM public.users WHERE auth_id = auth.uid()));
+
+NOTIFY pgrst, 'reload schema';
 ```
 
 #### 2. Records 테이블
@@ -1057,4 +1192,3 @@ export const useRecords = (startDate?: string, endDate?: string) => {
   });
 };
 ```
-

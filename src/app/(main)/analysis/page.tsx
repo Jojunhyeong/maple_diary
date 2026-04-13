@@ -1,12 +1,17 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
+import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import { Card } from '@/shared/ui/Card';
+import { ScopeTabs, type ScopeTabValue } from '@/shared/ui/ScopeTabs';
 import { calculateWeeklyStats } from '@/shared/lib/utils/calculations';
 import { formatDateKorean, formatMeso, formatTime } from '@/shared/lib/utils/formatters';
+import { filterRecordsByCharacter } from '@/shared/lib/utils/characterFilter';
+import { getBossThursday } from '@/shared/lib/boss-checklist';
+import { useBossRevenueSummary } from '@/shared/lib/hooks/useBossRevenueSummary';
 import type { RecordWithCalculations } from '@/shared/types';
 import type { WeekStats } from '@/shared/lib/utils/calculations';
 
@@ -33,26 +38,80 @@ type MonthlyReport = {
 export default function AnalysisPage() {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
-  const { localOwnerId } = useAuthStore();
+  const { localOwnerId, initializeLocal } = useAuthStore();
   const { records, loadRecords } = useRecordStore();
+  const activeCharacterId = useActiveCharacterId();
+  const [scope, setScope] = useState<ScopeTabValue>('all');
+  const today = useMemo(() => new Date(), []);
+  const monthStart = useMemo(() => new Date(today.getFullYear(), today.getMonth(), 1), [today]);
+  const bossCharacterId = scope === 'character' ? (activeCharacterId ?? '') : null;
+  const bossMonthWeeklySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'weekly', bossCharacterId);
+  const bossMonthMonthlySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'monthly', bossCharacterId);
+  const bossWeekSummary = useBossRevenueSummary(getBossThursday(today), today, isLoggedIn, 'weekly', bossCharacterId);
+  const bossMonthSummary = useMemo(
+    () => ({
+      totalRevenue: bossMonthWeeklySummary.totalRevenue + bossMonthMonthlySummary.totalRevenue,
+      selectedBosses: bossMonthWeeklySummary.selectedBosses + bossMonthMonthlySummary.selectedBosses,
+      selectedClears: bossMonthWeeklySummary.selectedClears + bossMonthMonthlySummary.selectedClears,
+      byCategory: {
+        general: bossMonthWeeklySummary.byCategory.general + bossMonthMonthlySummary.byCategory.general,
+        subboss: bossMonthWeeklySummary.byCategory.subboss + bossMonthMonthlySummary.byCategory.subboss,
+        grandis: bossMonthWeeklySummary.byCategory.grandis + bossMonthMonthlySummary.byCategory.grandis,
+      },
+    }),
+    [bossMonthWeeklySummary, bossMonthMonthlySummary],
+  );
 
   useEffect(() => {
-    if (localOwnerId) loadRecords(localOwnerId, isLoggedIn);
-  }, [localOwnerId, loadRecords, isLoggedIn]);
+    initializeLocal();
+  }, [initializeLocal]);
 
-  const weeks = useMemo(() => calculateWeeklyStats(records, 4), [records]);
-  const thisWeek = weeks[0];
-  const lastWeek = weeks[1];
-  const weekdayStats = useMemo(() => buildWeekdayStats(records), [records]);
-  const topRecords = useMemo(() => buildTopRecords(records, 3), [records]);
-  const monthlyReport = useMemo(() => buildMonthlyReport(records), [records]);
+  useEffect(() => {
+    if (localOwnerId) loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
+  }, [localOwnerId, loadRecords, isLoggedIn, activeCharacterId]);
 
-  if (records.length === 0) {
+  const visibleRecords = useMemo(
+    () => {
+      if (scope === 'all') return records;
+      if (!activeCharacterId) return [];
+      return filterRecordsByCharacter(records, activeCharacterId);
+    },
+    [records, activeCharacterId, scope],
+  );
+  const hasAnyData = visibleRecords.length > 0 || bossMonthSummary.totalRevenue > 0 || bossWeekSummary.totalRevenue > 0;
+  const weeks = useMemo(() => calculateWeeklyStats(visibleRecords, 4), [visibleRecords]);
+  const emptyWeek = {
+    weekLabel: '이번 주',
+    startDate: '',
+    endDate: '',
+    count: 0,
+    activeDays: 0,
+    totalNetRevenue: 0,
+    avgDailyNetRevenue: 0,
+    avgNetPerHour: 0,
+  } satisfies WeekStats;
+  const thisWeek = weeks[0] ?? emptyWeek;
+  const lastWeek = weeks[1] ?? emptyWeek;
+  const weekdayStats = useMemo(() => buildWeekdayStats(visibleRecords), [visibleRecords]);
+  const topRecords = useMemo(() => buildTopRecords(visibleRecords, 3), [visibleRecords]);
+  const monthlyReport = useMemo(() => buildMonthlyReport(visibleRecords), [visibleRecords]);
+
+  if (!hasAnyData) {
     return (
       <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4">
-        <h1 className="maple-title text-2xl font-bold text-t1">수익 분석</h1>
+        <div>
+          <h1 className="maple-title text-2xl font-bold text-t1">수익 분석</h1>
+          <p className="mt-1 text-xs text-t3">사냥은 월~일, 보스는 목~수 기준으로 함께 비교합니다</p>
+        </div>
+        <ScopeTabs value={scope} onChange={setScope} />
         <Card className="py-12 text-center">
-          <p className="text-sm text-t3">분석할 기록이 없습니다</p>
+          <p className="text-sm text-t3">
+            {scope === 'all'
+              ? '분석할 기록과 보스 수익이 없습니다'
+              : activeCharacterId
+                ? '현재 캐릭터의 기록과 보스 수익이 없습니다'
+                : '현재 캐릭터가 선택되지 않았습니다'}
+          </p>
         </Card>
       </main>
     );
@@ -62,8 +121,16 @@ export default function AnalysisPage() {
     <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4">
       <div>
         <h1 className="maple-title text-2xl font-bold text-t1">수익 분석</h1>
-        <p className="mt-1 text-xs text-t3">메이플 재획 페이스를 주간 단위로 비교합니다</p>
+        <p className="mt-1 text-xs text-t3">사냥은 월~일, 보스는 목~수와 월간 검마를 따로 합쳐서 봅니다</p>
       </div>
+
+      <ScopeTabs value={scope} onChange={setScope} />
+
+      {scope === 'character' && activeCharacterId && (
+        <p className="text-xs text-t3">
+          현재 캐릭터 기준으로 보고 있어요
+        </p>
+      )}
 
       <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.2),rgba(245,158,11,0.05)_55%,transparent)]">
         <div className="mb-4 flex items-center justify-between">
@@ -126,6 +193,26 @@ export default function AnalysisPage() {
           </div>
         )}
       </Card>
+
+      {bossMonthSummary.totalRevenue > 0 && (
+        <Card>
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-t1">보스 수익</p>
+              <p className="text-[11px] text-t3">이번 달 주간 보스와 월간 보스 합계</p>
+            </div>
+            <p className="text-xs text-t3">{bossMonthSummary.selectedBosses}개 보스</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <ReportItem label="이번 달 보스" value={formatMeso(bossMonthSummary.totalRevenue)} />
+            <ReportItem label="이번 주 보스" value={formatMeso(bossWeekSummary.totalRevenue)} />
+            <ReportItem label="그란디스" value={formatMeso(bossMonthSummary.byCategory.grandis)} />
+            <ReportItem label="검밑솔" value={formatMeso(bossMonthSummary.byCategory.subboss)} />
+            <ReportItem label="일반 보스" value={formatMeso(bossMonthSummary.byCategory.general)} />
+            <ReportItem label="체크 횟수" value={`${bossMonthSummary.selectedClears}회`} />
+          </div>
+        </Card>
+      )}
 
       {/* 주간 비교 */}
       <Card>

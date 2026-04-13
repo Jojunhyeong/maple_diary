@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { Card } from '@/shared/ui/Card';
 import { Button } from '@/shared/ui/Button';
 import { useTheme } from '@/shared/ui/ThemeProvider';
+import { CharacterManager } from '@/shared/ui/CharacterManager';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -23,18 +24,12 @@ export default function SettingsPage() {
     setDark(toDark);
   };
 
-  const profile = (() => {
-    try {
-      return JSON.parse(localStorage.getItem('maple_diary:user_profile') || 'null');
-    } catch {
-      return null;
-    }
-  })();
-
   const handleResetOnboarding = async () => {
     if (!confirm('온보딩을 다시 시작하면 로컬 설정이 초기화됩니다. 계속하시겠습니까?')) return;
     localStorage.removeItem('maple_diary:onboarding_done');
     localStorage.removeItem('maple_diary:user_profile');
+    localStorage.removeItem('maple_diary:characters');
+    localStorage.removeItem('maple_diary:active_character_id');
     localStorage.removeItem('maple_diary:settings');
     localStorage.removeItem('maple_diary:local_owner_id');
     localStorage.removeItem('maple_diary:migrated');
@@ -96,21 +91,7 @@ export default function SettingsPage() {
         )}
       </Card>
 
-      {/* 캐릭터 */}
-      {profile && (
-        <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.14),rgba(245,158,11,0.03)_60%,transparent)]">
-          <p className="text-sm font-semibold text-t2 mb-3">캐릭터</p>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center text-lg">
-              🍁
-            </div>
-            <div>
-              <p className="text-t1 font-semibold">{profile.character_name}</p>
-              <p className="text-xs text-t3">{profile.character_class} · Lv.{profile.character_level}</p>
-            </div>
-          </div>
-        </Card>
-      )}
+      <CharacterManager />
 
       {/* 화면 테마 */}
       <Card>

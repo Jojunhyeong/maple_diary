@@ -62,10 +62,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (data) {
           session.user.id = data.id;
           session.user.kakaoId = data.kakao_id;
-          session.user.characterName = data.character_name;
-          session.user.characterClass = data.character_class;
-          session.user.characterLevel = data.character_level;
-          session.user.characterImage = data.character_image;
+
+          const { data: activeCharacter } = await db
+            .from('characters')
+            .select('id, character_name, class, level, image_url, is_active')
+            .eq('user_id', data.id)
+            .eq('is_active', true)
+            .maybeSingle();
+
+          if (activeCharacter) {
+            session.user.characterName = activeCharacter.character_name;
+            session.user.characterClass = activeCharacter.class;
+            session.user.characterLevel = activeCharacter.level;
+            session.user.characterImage = activeCharacter.image_url;
+            session.user.activeCharacterId = activeCharacter.id;
+          } else {
+            session.user.characterName = data.character_name;
+            session.user.characterClass = data.character_class;
+            session.user.characterLevel = data.character_level;
+            session.user.characterImage = data.character_image;
+            session.user.activeCharacterId = null;
+          }
         }
       }
       return session;
@@ -96,6 +113,7 @@ declare module 'next-auth' {
       characterClass?: string | null;
       characterLevel?: number | null;
       characterImage?: string | null;
+      activeCharacterId?: string | null;
     };
   }
 }

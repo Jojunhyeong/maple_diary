@@ -6,9 +6,11 @@ import Image from 'next/image';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
+import { seedLocalCharactersFromProfile } from '@/shared/lib/character-storage';
 
 interface CharacterInfo {
   character_name: string;
+  ocid?: string;
   character_world?: string | null;
   character_class: string;
   character_level: number;
@@ -60,6 +62,7 @@ export default function OnboardingCharacterPage() {
     // 프로필 저장
     const profile = {
       character_name: character.character_name,
+      character_ocid: character.ocid ?? null,
       character_world: character.character_world ?? null,
       character_class: character.character_class,
       character_level: character.character_level,
@@ -69,6 +72,11 @@ export default function OnboardingCharacterPage() {
       profile_set_at: new Date().toISOString(),
     };
     localStorage.setItem('maple_diary:user_profile', JSON.stringify(profile));
+    localStorage.setItem('maple_diary:active_character_id', character.ocid || character.character_name);
+    seedLocalCharactersFromProfile({
+      ...profile,
+      profile_set_at: profile.profile_set_at,
+    });
     localStorage.setItem('maple_diary:onboarding_done', 'true');
 
     sessionStorage.removeItem('onboarding:nickname');
