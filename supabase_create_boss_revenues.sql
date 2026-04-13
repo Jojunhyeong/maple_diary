@@ -45,6 +45,7 @@ BEGIN
 END $$;
 
 DROP INDEX IF EXISTS idx_boss_revenues_user_week;
+DROP INDEX IF EXISTS idx_boss_revenues_user_cycle_week;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_boss_revenues_user_cycle_week
   ON public.boss_revenues(user_id, character_id, cycle_type, week_key);
