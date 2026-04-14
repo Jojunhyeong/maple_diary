@@ -23,10 +23,6 @@ function isMissingBossSchemaError(error: { message?: string; code?: string } | n
   );
 }
 
-function isUniqueViolation(error: { code?: string } | null | undefined) {
-  return error?.code === '23505';
-}
-
 function serializeDbError(error: { code?: string; message?: string; hint?: string; details?: string } | null | undefined) {
   return {
     code: error?.code,
@@ -126,46 +122,15 @@ export async function POST(req: NextRequest) {
       by_category: snapshot.byCategory,
     };
 
-    const { error: modernError } = await db.from('boss_revenues').insert(currentPayload);
+    const { error: modernError } = await db
+      .from('boss_revenues')
+      .upsert(currentPayload, {
+        onConflict: 'user_id,character_id,cycle_type,week_key',
+      });
 
     if (!modernError) {
       savedCycles.push(snapshot.cycleType);
       continue;
-    }
-
-    if (isUniqueViolation(modernError)) {
-      const { data: existingByCharacter, error: lookupError } = await db
-        .from('boss_revenues')
-        .select('id')
-        .eq('user_id', session.user.id)
-        .eq('character_id', snapshot.characterId)
-        .eq('cycle_type', snapshot.cycleType)
-        .eq('week_key', snapshot.weekKey)
-        .maybeSingle();
-
-      if (lookupError) {
-        return NextResponse.json(
-          {
-            error: 'boss revenue lookup failed',
-            dbError: serializeDbError(lookupError),
-          },
-          { status: 500 },
-        );
-      }
-
-      if (existingByCharacter) {
-        savedCycles.push(snapshot.cycleType);
-        continue;
-      }
-
-      return NextResponse.json(
-        {
-          error:
-            'boss revenue schema migration required: please re-run supabase_create_boss_revenues.sql so the unique index includes character_id',
-          dbError: serializeDbError(modernError),
-        },
-        { status: 500 },
-      );
     }
 
     if (!isMissingBossSchemaError(modernError)) {
@@ -201,4 +166,69 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ savedCycles });
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const weekKey = req.nextUrl.searchParams.get('weekKey');
+  const monthKey = req.nextUrl.searchParams.get('monthKey');
+  const characterId = req.nextUrl.searchParams.get('characterId');
+
+  if (!characterId || (!weekKey && !monthKey)) {
+    return NextResponse.json({ error: 'characterId and at least one period key are required' }, { status: 400 });
+  }
+
+  const db = supabaseAdmin();
+  let query = db
+    .from('boss_revenues')
+    .select('id, character_id, cycle_type, week_key, state')
+    .eq('user_id', session.user.id)
+    .eq('character_id', characterId);
+
+  const keys = [weekKey, monthKey].filter((value): value is string => !!value);
+  if (keys.length === 1) {
+    query = query.eq('week_key', keys[0]);
+  } else if (keys.length > 1) {
+    query = query.in('week_key', keys);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return NextResponse.json(
+      { error: 'boss revenue lookup failed', dbError: serializeDbError(error) },
+      { status: 500 },
+    );
+  }
+
+  const targetRows = (data ?? []).filter((row) => {
+    const state = row.state as ChecklistState & {
+      __bossMeta?: { cycleType?: BossCycleType; characterId?: string | null };
+    };
+    const rowCycleType = row.cycle_type ?? state?.__bossMeta?.cycleType;
+    const rowCharacterId = row.character_id ?? state?.__bossMeta?.characterId ?? null;
+    const matchesCharacter = rowCharacterId === characterId;
+    const matchesKey = [weekKey, monthKey].filter(Boolean).includes(row.week_key);
+    return matchesCharacter && matchesKey && (!!rowCycleType || rowCycleType === undefined);
+  });
+
+  if (targetRows.length === 0) {
+    return NextResponse.json({ deletedCycles: [] });
+  }
+
+  const ids = targetRows.map((row) => row.id);
+  const { error: deleteError } = await db.from('boss_revenues').delete().in('id', ids);
+
+  if (deleteError) {
+    return NextResponse.json(
+      { error: 'boss revenue delete failed', dbError: serializeDbError(deleteError) },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ deletedCycles: targetRows.map((row) => row.cycle_type ?? row.state?.__bossMeta?.cycleType).filter(Boolean) });
 }

@@ -17,6 +17,7 @@ import {
   getBossPreviousWeekKey,
   getBossWeekKey,
   filterBossChecklistStateByCycle,
+  removeBossChecklistStatesByCycles,
   mergeBossChecklistStates,
   readBossChecklistState,
   splitBossChecklistState,
@@ -40,6 +41,7 @@ export default function BossPage() {
   const [saveMessage, setSaveMessage] = useState('');
   const [isWeeklyLocked, setIsWeeklyLocked] = useState(false);
   const [isMonthlyLocked, setIsMonthlyLocked] = useState(false);
+  const [isEditingSavedCycles, setIsEditingSavedCycles] = useState(false);
   const [loadedCharacterId, setLoadedCharacterId] = useState<string | null>(null);
   const canPersist = isHydrated && isReady && loadedCharacterId === activeCharacterId && !!activeCharacterId;
 
@@ -64,6 +66,7 @@ export default function BossPage() {
       setSaveMessage('');
       setIsWeeklyLocked(false);
       setIsMonthlyLocked(false);
+      setIsEditingSavedCycles(false);
       setState({});
 
       if (!activeCharacterId) {
@@ -313,23 +316,6 @@ export default function BossPage() {
     });
   };
 
-  const handleResetAll = () => {
-    if (!isHydrated) return;
-    setState((prev) => {
-      const next: ChecklistState = {};
-      for (const group of BOSS_CATALOG) {
-        for (const boss of group.bosses) {
-          if (getBossLockState(boss.id)) {
-            const current = prev[boss.id];
-            if (current) next[boss.id] = current;
-          }
-        }
-      }
-      return next;
-    });
-    setSaveMessage('');
-  };
-
   const handleSave = async () => {
     if (!isHydrated) return;
     if (!activeCharacterId) {
@@ -382,6 +368,7 @@ export default function BossPage() {
       const savedCycles = new Set(data.savedCycles ?? []);
       if (savedCycles.has('weekly')) setIsWeeklyLocked(true);
       if (savedCycles.has('monthly')) setIsMonthlyLocked(true);
+      setIsEditingSavedCycles(false);
 
       if (savedCycles.has('weekly') && savedCycles.has('monthly')) {
         setSaveMessage('이번 주와 이번 달 저장 완료');
@@ -396,6 +383,59 @@ export default function BossPage() {
       setSaveMessage(error instanceof Error ? error.message : '저장에 실패했어요');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleEditAll = () => {
+    if (!isWeeklyLocked && !isMonthlyLocked) {
+      setSaveMessage('이미 수정 가능한 상태예요');
+      return;
+    }
+
+    setIsEditingSavedCycles(true);
+    setIsWeeklyLocked(false);
+    setIsMonthlyLocked(false);
+    setSaveMessage('저장된 보스를 수정한 뒤 다시 저장해주세요');
+  };
+
+  const handleDeleteAll = async () => {
+    if (!activeCharacterId) {
+      setSaveMessage('캐릭터를 먼저 선택해주세요');
+      return;
+    }
+
+    const shouldDelete = window.confirm('현재 캐릭터의 보스 저장본을 삭제할까요?');
+    if (!shouldDelete) return;
+
+    try {
+      if (isLoggedIn) {
+        const res = await fetch(
+          `/api/boss-revenues?${new URLSearchParams({
+            weekKey,
+            monthKey,
+            characterId: activeCharacterId,
+          }).toString()}`,
+          { method: 'DELETE' },
+        );
+
+        if (!res.ok) {
+          const payload = (await res.json().catch(() => null)) as
+            | { error?: string; dbError?: { code?: string; message?: string; hint?: string; details?: string } }
+            | null;
+          const detail = payload?.dbError
+            ? [payload.dbError.message, payload.dbError.hint, payload.dbError.details].filter(Boolean).join(' | ')
+            : payload?.error;
+          throw new Error(detail || 'boss revenue delete failed');
+        }
+      }
+
+      setState((prev) => removeBossChecklistStatesByCycles(prev, ['weekly', 'monthly']));
+      setIsWeeklyLocked(false);
+      setIsMonthlyLocked(false);
+      setIsEditingSavedCycles(false);
+      setSaveMessage('보스 저장본을 삭제했어요');
+    } catch (error) {
+      setSaveMessage(error instanceof Error ? error.message : '삭제에 실패했어요');
     }
   };
 
@@ -414,7 +454,7 @@ export default function BossPage() {
         </Card>
       ) : (
         <>
-      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="maple-title text-2xl font-bold text-t1">보스 수익</h1>
           <p className="mt-1 text-xs text-t3">체크한 보스를 기준으로 주간(목~수)과 월간 검마 수익을 합산해요</p>
@@ -422,32 +462,27 @@ export default function BossPage() {
           <p className="mt-2 text-[11px] text-t3">주간 기준 · {weekLabel}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving || (isWeeklyLocked && isMonthlyLocked)}
-              className="rounded-full border border-amber-500/30 bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500/90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSaving
-                ? '저장 중...'
-                : isWeeklyLocked && isMonthlyLocked
-                  ? '저장 완료'
-                  : isWeeklyLocked
-                    ? '월간 저장'
-                    : isMonthlyLocked
-                      ? '주간 저장'
-                      : '저장'}
-            </button>
-            <button
-              type="button"
-              onClick={handleResetAll}
-              disabled={isWeeklyLocked && isMonthlyLocked}
-              className="rounded-full border border-line bg-card px-3 py-1.5 text-xs font-semibold text-t2 transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              전체 초기화
-            </button>
-          </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving || (!isEditingSavedCycles && (isWeeklyLocked || isMonthlyLocked))}
+            className="rounded-full border border-amber-500/30 bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500/90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSaving ? '저장 중...' : '저장'}
+          </button>
+          <button
+            type="button"
+            onClick={isEditingSavedCycles ? () => void handleDeleteAll() : handleEditAll}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+              isEditingSavedCycles
+                ? 'border border-red-500/25 bg-red-500/10 text-red-600 hover:bg-red-500/15'
+                : 'border border-amber-500/25 bg-amber-500/10 text-amber-600 hover:bg-amber-500/15'
+            }`}
+          >
+            {isEditingSavedCycles ? '삭제' : '수정'}
+          </button>
+        </div>
           {saveMessage && <p className="text-[11px] text-t3">{saveMessage}</p>}
         </div>
       </div>

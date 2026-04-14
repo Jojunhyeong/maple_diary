@@ -673,7 +673,7 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
                   {activeCharacter?.character_name || '등록된 캐릭터 없음'}
                 </h2>
                 <p className="mt-2 truncate text-[14px] font-medium tracking-[-0.03em] text-[#8b6f59]">
-                  {activeCharacter?.character_class || (isLoggedIn ? '로그인 후 캐릭터를 추가해줘' : '캐릭터를 추가해줘')}
+                  {activeCharacter?.character_class || (isLoggedIn ? '로그인 후 캐릭터를 추가해주세요' : '캐릭터를 추가해주세요')}
                 </p>
                 {activeCharacter && (
                   <p className="mt-2 text-[18px] font-bold tracking-[-0.05em] text-[#e98312]">
