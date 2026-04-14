@@ -296,6 +296,35 @@ export function filterBossChecklistStateByCycle(state: ChecklistState, cycleType
   return filtered;
 }
 
+export function removeBossChecklistStateByCycle(state: ChecklistState, cycleType: BossCycleType) {
+  const filtered: ChecklistState = {};
+
+  for (const group of BOSS_CATALOG) {
+    for (const boss of group.bosses) {
+      if ((boss.resetCycle ?? 'weekly') === cycleType) continue;
+      const selection = state[boss.id];
+      if (selection) filtered[boss.id] = selection;
+    }
+  }
+
+  return filtered;
+}
+
+export function removeBossChecklistStatesByCycles(state: ChecklistState, cycleTypes: BossCycleType[]) {
+  const cycleSet = new Set(cycleTypes);
+  const filtered: ChecklistState = {};
+
+  for (const group of BOSS_CATALOG) {
+    for (const boss of group.bosses) {
+      if (cycleSet.has(boss.resetCycle ?? 'weekly')) continue;
+      const selection = state[boss.id];
+      if (selection) filtered[boss.id] = selection;
+    }
+  }
+
+  return filtered;
+}
+
 export function summarizeBossRevenueRows(
   rows: BossRevenueRow[],
   cycleType?: BossCycleType,
