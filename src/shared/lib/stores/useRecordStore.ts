@@ -20,12 +20,24 @@ interface RecordStore {
     shardPrice: number,
     isLoggedIn?: boolean
   ) => Promise<void>;
+  updateRecord: (
+    record: Record,
+    localOwnerId: string,
+    shardPrice: number,
+    isLoggedIn?: boolean
+  ) => Promise<void>;
   deleteRecord: (id: string, isLoggedIn?: boolean) => Promise<void>;
   clearError: () => void;
 }
 
 function getShardPrice() {
   return JSON.parse(localStorage.getItem("maple_diary:settings") || "{}").shard_price || 7_000_000;
+}
+
+function sortRecords(records: RecordWithCalculations[]) {
+  return [...records].sort(
+    (a, b) => b.date.localeCompare(a.date) || b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)
+  );
 }
 
 export const useRecordStore = create<RecordStore>((set) => ({
@@ -39,7 +51,6 @@ export const useRecordStore = create<RecordStore>((set) => ({
       const shardPrice = getShardPrice();
 
       if (isLoggedIn) {
-        // 서버에서 로드
         const res = await fetch('/api/records');
         if (!res.ok) throw new Error('서버에서 기록을 불러오지 못했습니다');
         const rawRecords = await res.json();
@@ -55,17 +66,16 @@ export const useRecordStore = create<RecordStore>((set) => ({
         }
 
         const enriched = normalizedRecords.map((r: Record) => enrichRecordWithCalculations(r, shardPrice));
-        set({ records: enriched, loading: false, error: null });
+        set({ records: sortRecords(enriched), loading: false, error: null });
       } else {
-        // 로컬에서 로드
         const rawRecords = await getRecordsByOwner(localOwnerId);
         const normalizedRecords = normalizeLegacyRecords(rawRecords, activeCharacterId);
         const hasLegacyRecords = rawRecords.some((r) => !r.character_id);
         if (hasLegacyRecords && activeCharacterId) {
           await backfillRecordsCharacterId(localOwnerId, activeCharacterId);
         }
-        const enriched = normalizedRecords.map((r) => enrichRecordWithCalculations(r, shardPrice));
-        set({ records: enriched, loading: false, error: null });
+        const enriched = normalizedRecords.map((r: Record) => enrichRecordWithCalculations(r, shardPrice));
+        set({ records: sortRecords(enriched), loading: false, error: null });
       }
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "불러오기 실패", loading: false });
@@ -84,7 +94,6 @@ export const useRecordStore = create<RecordStore>((set) => ({
       };
 
       if (isLoggedIn) {
-        // 서버에 저장
         const res = await fetch('/api/records', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -109,14 +118,56 @@ export const useRecordStore = create<RecordStore>((set) => ({
         });
         if (!res.ok) throw new Error('서버 저장 실패');
       } else {
-        // 로컬에 저장
         await saveRecord(newRecord, localOwnerId);
       }
 
       const enriched = enrichRecordWithCalculations(newRecord, shardPrice);
-      set((state) => ({ records: [enriched, ...state.records] }));
+      set((state) => ({
+        records: sortRecords([enriched, ...state.records.filter((r) => r.id !== enriched.id)]),
+      }));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "저장 실패" });
+    }
+  },
+
+  updateRecord: async (record, localOwnerId, shardPrice, isLoggedIn = false) => {
+    try {
+      const updatedRecord: Record = {
+        ...record,
+        local_owner_id: record.local_owner_id ?? localOwnerId,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (isLoggedIn) {
+        const payload = {
+          date: updatedRecord.date,
+          time_minutes: updatedRecord.time_minutes,
+          meso: updatedRecord.meso,
+          shard_count: updatedRecord.shard_count,
+          material_cost: updatedRecord.material_cost,
+          memo: updatedRecord.memo,
+          character_id: updatedRecord.character_id ?? null,
+        };
+        const res = await fetch(`/api/records/${updatedRecord.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('서버 수정 실패');
+        const savedRecord = await res.json();
+        const enriched = enrichRecordWithCalculations(savedRecord, shardPrice);
+        set((state) => ({
+          records: sortRecords([enriched, ...state.records.filter((r) => r.id !== enriched.id)]),
+        }));
+      } else {
+        await saveRecord(updatedRecord, localOwnerId);
+        const enriched = enrichRecordWithCalculations(updatedRecord, shardPrice);
+        set((state) => ({
+          records: sortRecords([enriched, ...state.records.filter((r) => r.id !== enriched.id)]),
+        }));
+      }
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "수정 실패" });
     }
   },
 
