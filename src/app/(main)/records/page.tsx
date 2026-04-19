@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
+import { useRecordModalStore } from '@/shared/lib/stores/useRecordModalStore';
 import { Card } from '@/shared/ui/Card';
 import { Button } from '@/shared/ui/Button';
 import { formatDate, formatMeso, formatDateKorean, formatTime } from '@/shared/lib/utils/formatters';
@@ -44,13 +45,18 @@ function groupByDate(records: RecordWithCalculations[]): DayGroup[] {
 export default function RecordsPage() {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
-  const { localOwnerId } = useAuthStore();
+  const { localOwnerId, initializeLocal } = useAuthStore();
   const { records, loadRecords, deleteRecord, loading } = useRecordStore();
+  const { openForEdit } = useRecordModalStore();
   const [filter, setFilter] = useState<Filter>('month');
   const [selectedMonth, setSelectedMonth] = useState(() => toYearMonth(new Date()));
   const [page, setPage] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const activeCharacterId = useActiveCharacterId();
+
+  useEffect(() => {
+    initializeLocal();
+  }, [initializeLocal]);
 
   useEffect(() => {
     if (localOwnerId) loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
@@ -164,6 +170,7 @@ export default function RecordsPage() {
           <DayGroupCard
             key={group.date}
             group={group}
+            onEdit={openForEdit}
             onDelete={(id) => setConfirmDelete(id)}
           />
         ))}
@@ -194,7 +201,15 @@ export default function RecordsPage() {
   );
 }
 
-function DayGroupCard({ group, onDelete }: { group: DayGroup; onDelete: (id: string) => void }) {
+function DayGroupCard({
+  group,
+  onEdit,
+  onDelete,
+}: {
+  group: DayGroup;
+  onEdit: (record: RecordWithCalculations) => void;
+  onDelete: (id: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const multi = group.records.length > 1;
 
@@ -220,7 +235,11 @@ function DayGroupCard({ group, onDelete }: { group: DayGroup; onDelete: (id: str
 
       {/* 단일 기록 상세 */}
       {expanded && !multi && (
-        <SingleRecordDetail record={group.records[0]} onDelete={() => onDelete(group.records[0].id)} />
+        <SingleRecordDetail
+          record={group.records[0]}
+          onEdit={() => onEdit(group.records[0])}
+          onDelete={() => onDelete(group.records[0].id)}
+        />
       )}
 
       {/* 다중 기록 상세 */}
@@ -230,7 +249,10 @@ function DayGroupCard({ group, onDelete }: { group: DayGroup; onDelete: (id: str
             <div key={r.id} className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-t2">{i + 1}회차 · {formatTime(r.time_minutes)}</p>
-                <button onClick={() => onDelete(r.id)} className="cursor-pointer text-xs font-medium text-red-400">삭제</button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => onEdit(r)} className="cursor-pointer text-xs font-medium text-amber-400">수정</button>
+                  <button onClick={() => onDelete(r.id)} className="cursor-pointer text-xs font-medium text-red-400">삭제</button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-1 text-xs pl-1">
                 <span className="text-t3">메소</span>
@@ -257,7 +279,15 @@ function DayGroupCard({ group, onDelete }: { group: DayGroup; onDelete: (id: str
   );
 }
 
-function SingleRecordDetail({ record, onDelete }: { record: RecordWithCalculations; onDelete: () => void }) {
+function SingleRecordDetail({
+  record,
+  onEdit,
+  onDelete,
+}: {
+  record: RecordWithCalculations;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   return (
     <div className="mt-3 pt-3 border-t border-line">
       <div className="grid grid-cols-2 gap-1.5 text-xs mb-3">
@@ -274,7 +304,10 @@ function SingleRecordDetail({ record, onDelete }: { record: RecordWithCalculatio
           </>
         )}
       </div>
-      <Button variant="danger" size="sm" onClick={onDelete}>삭제</Button>
+      <div className="flex gap-2">
+        <Button variant="secondary" size="sm" fullWidth onClick={onEdit}>수정</Button>
+        <Button variant="danger" size="sm" fullWidth onClick={onDelete}>삭제</Button>
+      </div>
     </div>
   );
 }

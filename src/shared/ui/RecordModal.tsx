@@ -11,12 +11,14 @@ import { useRecordModalStore } from '@/shared/lib/stores/useRecordModalStore';
 import { enrichRecordWithCalculations } from '@/shared/lib/utils/calculations';
 import { formatMeso, formatDate, fromManInput, toManDisplay } from '@/shared/lib/utils/formatters';
 import { readActiveCharacterId } from '@/shared/lib/character-storage';
+import type { Record as RecordType } from '@/shared/types';
 
 const MINUTES_PER_SOJAE = 30;
 
 export function RecordModal() {
-  const { isOpen, close } = useRecordModalStore();
+  const { isOpen, close, editingRecord } = useRecordModalStore();
 
+  const [date, setDate] = useState(formatDate(new Date()));
   const [sojaeCnt, setSojaeCnt] = useState('');
   const [mesoMan, setMesoMan] = useState('');
   const [shardCount, setShardCount] = useState('');
@@ -32,7 +34,7 @@ export function RecordModal() {
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId } = useAuthStore();
   const { settings, updateSettings } = useUserStore();
-  const { records, addRecord } = useRecordStore();
+  const { records, addRecord, updateRecord } = useRecordStore();
 
   const panelRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<number | null>(null);
@@ -52,15 +54,26 @@ export function RecordModal() {
   // 열릴 때 폼 초기화
   useEffect(() => {
     if (isOpen) {
-      setSojaeCnt('');
-      setMesoMan('');
-      setShardCount('');
-      setMaterialCostMan('');
-      setMemo('');
+      if (editingRecord) {
+        const sojae = Math.max(1, Math.round(editingRecord.time_minutes / MINUTES_PER_SOJAE));
+        setDate(editingRecord.date);
+        setSojaeCnt(String(sojae));
+        setMesoMan(toManDisplay(editingRecord.meso));
+        setShardCount(editingRecord.shard_count > 0 ? String(editingRecord.shard_count) : '');
+        setMaterialCostMan(sojae > 0 ? toManDisplay(Math.floor(editingRecord.material_cost / sojae)) : '');
+        setMemo(editingRecord.memo ?? '');
+      } else {
+        setDate(formatDate(new Date()));
+        setSojaeCnt('');
+        setMesoMan('');
+        setShardCount('');
+        setMaterialCostMan('');
+        setMemo('');
+      }
       setShardPriceEditing(false);
       setToastMessage(null);
     }
-  }, [isOpen]);
+  }, [isOpen, editingRecord]);
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
     setToastType(type);
@@ -86,15 +99,22 @@ export function RecordModal() {
     if (!parseInt(sojaeCnt) && !meso) return null;
     return enrichRecordWithCalculations(
       {
-        id: '', date: '', created_at: '', updated_at: '', sync_status: 'local',
+        id: editingRecord?.id ?? '',
+        date,
+        created_at: editingRecord?.created_at ?? '',
+        updated_at: editingRecord?.updated_at ?? '',
+        sync_status: editingRecord?.sync_status ?? 'local',
         time_minutes: timeMinutes,
         meso,
         shard_count: parseInt(shardCount) || 0,
         material_cost: materialCost,
+        memo: memo.trim() || undefined,
+        local_owner_id: editingRecord?.local_owner_id,
+        character_id: editingRecord?.character_id,
       },
       shardPrice,
     );
-  }, [sojaeCnt, meso, shardCount, materialCost, shardPrice, timeMinutes]);
+  }, [date, sojaeCnt, meso, shardCount, materialCost, shardPrice, timeMinutes, memo, editingRecord]);
 
   const latestRecord = useMemo(() => records[0] ?? null, [records]);
   const latestSojaeCnt = useMemo(() => {
@@ -121,40 +141,60 @@ export function RecordModal() {
   };
 
   const handleSave = async () => {
-    if (!localOwnerId || !timeMinutes || !meso) return;
+    if (!localOwnerId || !timeMinutes || !meso || !date) return;
     setSaving(true);
     try {
       const characterId = readActiveCharacterId();
+      const now = new Date().toISOString();
+      const baseRecord: RecordType = {
+        id: editingRecord?.id ?? crypto.randomUUID(),
+        date,
+        time_minutes: timeMinutes,
+        meso,
+        shard_count: parseInt(shardCount) || 0,
+        material_cost: materialCost,
+        memo: memo.trim() || undefined,
+        character_id: characterId ?? editingRecord?.character_id,
+        local_owner_id: editingRecord?.local_owner_id ?? localOwnerId,
+        created_at: editingRecord?.created_at ?? now,
+        updated_at: now,
+        sync_status: editingRecord?.sync_status ?? 'local',
+      };
       if (shardPrice !== settings.shard_price) {
         await updateSettings({ shard_price: shardPrice });
       }
-      await addRecord(
-        {
-          date: formatDate(new Date()),
-          time_minutes: timeMinutes,
-          meso,
-          shard_count: parseInt(shardCount) || 0,
-          material_cost: materialCost,
-          memo: memo.trim() || undefined,
-          character_id: characterId ?? undefined,
-          sync_status: 'local',
-        },
-        localOwnerId,
-        shardPrice,
-        isLoggedIn,
-      );
-      showToast('기록이 저장됐어요', 'success');
+      if (editingRecord) {
+        await updateRecord(baseRecord, localOwnerId, shardPrice, isLoggedIn);
+        showToast('기록을 수정했어요', 'success');
+      } else {
+        await addRecord(
+          {
+            date,
+            time_minutes: timeMinutes,
+            meso,
+            shard_count: parseInt(shardCount) || 0,
+            material_cost: materialCost,
+            memo: memo.trim() || undefined,
+            character_id: characterId ?? undefined,
+            sync_status: 'local',
+          },
+          localOwnerId,
+          shardPrice,
+          isLoggedIn,
+        );
+        showToast('기록이 저장됐어요', 'success');
+      }
       if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
       closeTimerRef.current = window.setTimeout(() => close(), 420);
     } catch (err) {
       console.error(err);
-      showToast('저장 중 오류가 발생했어요', 'error');
+      showToast(editingRecord ? '수정 중 오류가 발생했어요' : '저장 중 오류가 발생했어요', 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  const canSave = !!localOwnerId && parseInt(sojaeCnt) > 0 && meso > 0;
+  const canSave = !!localOwnerId && !!date && parseInt(sojaeCnt) > 0 && meso > 0;
 
   if (!isOpen) return null;
 
@@ -169,7 +209,7 @@ export function RecordModal() {
       >
         {/* 헤더 */}
         <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-line flex-shrink-0">
-          <h2 className="text-base font-bold text-t1">오늘 기록</h2>
+          <h2 className="text-base font-bold text-t1">{editingRecord ? '기록 수정' : '오늘 기록'}</h2>
           <button onClick={close} className="text-t3 text-sm font-medium cursor-pointer">닫기</button>
         </div>
 
@@ -207,6 +247,13 @@ export function RecordModal() {
               </div>
             </div>
           )}
+
+          <Input
+            label="기록 날짜"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
 
           {/* 소재비 횟수 */}
           <div>
@@ -345,7 +392,7 @@ export function RecordModal() {
 
         <div className="border-t border-line bg-app px-4 py-3.5">
           <Button size="lg" fullWidth onClick={handleSave} disabled={!canSave || saving}>
-            {saving ? '저장 중...' : '저장'}
+            {saving ? '저장 중...' : editingRecord ? '수정' : '저장'}
           </Button>
         </div>
       </div>
