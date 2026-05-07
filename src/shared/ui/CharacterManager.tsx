@@ -117,13 +117,47 @@ function formatCompactNumber(value?: number | null) {
   return new Intl.NumberFormat('ko-KR').format(value);
 }
 
+const CHARACTER_CACHE_KEY = 'maple_diary:maple_character_cache:v1';
+
+type CachedCharacterPayload = { expiresAt: number; data: Record<string, unknown> };
+
 async function fetchMapleCharacter(nickname: string) {
+  const key = nickname.trim().toLowerCase();
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(CHARACTER_CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, CachedCharacterPayload>;
+        const cached = parsed[key];
+        if (cached?.expiresAt && cached.expiresAt > Date.now() && cached.data) {
+          return cached.data;
+        }
+      }
+    } catch {
+      // ignore cache errors
+    }
+  }
+
   const res = await fetch(`/api/maple/character?name=${encodeURIComponent(nickname)}`);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
+    if (res.status === 429) {
+      throw new Error(data.error || '캐릭터 정보를 너무 자주 조회했어요. 잠시 후 다시 시도해주세요.');
+    }
     throw new Error(data.error || '캐릭터를 찾을 수 없습니다');
   }
-  return res.json();
+  const data = await res.json();
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(CHARACTER_CACHE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as Record<string, CachedCharacterPayload>) : {};
+      parsed[key] = { data, expiresAt: Date.now() + 1000 * 60 * 60 * 24 };
+      localStorage.setItem(CHARACTER_CACHE_KEY, JSON.stringify(parsed));
+    } catch {
+      // ignore cache errors
+    }
+  }
+  return data;
 }
 
 export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {

@@ -19,6 +19,42 @@ interface CharacterInfo {
   character_image: string;
 }
 
+type CachedCharacterPayload = {
+  expiresAt: number;
+  data: CharacterInfo;
+};
+
+const CHARACTER_CACHE_KEY = 'maple_diary:maple_character_cache:v1';
+
+function readCachedCharacter(nickname: string): CharacterInfo | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(CHARACTER_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, CachedCharacterPayload>;
+    const cached = parsed[nickname.trim().toLowerCase()];
+    if (!cached || cached.expiresAt <= Date.now()) return null;
+    return cached.data;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedCharacter(nickname: string, data: CharacterInfo) {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = localStorage.getItem(CHARACTER_CACHE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, CachedCharacterPayload>) : {};
+    parsed[nickname.trim().toLowerCase()] = {
+      data,
+      expiresAt: Date.now() + 1000 * 60 * 60 * 24,
+    };
+    localStorage.setItem(CHARACTER_CACHE_KEY, JSON.stringify(parsed));
+  } catch {
+    // ignore cache failures
+  }
+}
+
 export default function OnboardingCharacterPage() {
   const router = useRouter();
   const [character, setCharacter] = useState<CharacterInfo | null>(null);
@@ -31,24 +67,37 @@ export default function OnboardingCharacterPage() {
       router.replace('/onboarding/nickname');
       return;
     }
-    fetchCharacter(nickname);
+    const controller = new AbortController();
+    fetchCharacter(nickname, controller.signal);
+    return () => controller.abort();
   }, [router]);
 
-  const fetchCharacter = async (nickname: string) => {
+  const fetchCharacter = async (nickname: string, signal?: AbortSignal) => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/maple/character?name=${encodeURIComponent(nickname)}`);
+      const cached = readCachedCharacter(nickname);
+      if (cached) {
+        setCharacter(cached);
+        return;
+      }
+
+      const res = await fetch(`/api/maple/character?name=${encodeURIComponent(nickname)}`, { signal });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (res.status === 429) {
+          throw new Error(data.error || '캐릭터 정보를 너무 자주 조회했어요. 잠시 후 다시 시도해주세요.');
+        }
         throw new Error(data.error || '캐릭터를 찾을 수 없습니다');
       }
       const data = await res.json();
       setCharacter(data);
+      writeCachedCharacter(nickname, data);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : '불러오기 실패');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 

@@ -1,10 +1,11 @@
-import { Record, Goal } from "@/shared/types";
+import { Record, Goal, Expense } from "@/shared/types";
 
 const DB_NAME = "maple_diary";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const STORES = {
   RECORDS: "records",
+  EXPENSES: "expenses",
   GOALS: "goals",
   SESSIONS: "sessions",
   BACKUPS: "backups",
@@ -37,6 +38,16 @@ export const initDB = async (): Promise<IDBDatabase> => {
         if (recordStore && !recordStore.indexNames.contains("character_id")) {
           recordStore.createIndex("character_id", "character_id");
         }
+      }
+
+      // Expenses 스토어
+      if (!db.objectStoreNames.contains(STORES.EXPENSES)) {
+        const expenseStore = db.createObjectStore(STORES.EXPENSES, {
+          keyPath: "id",
+        });
+        expenseStore.createIndex("local_owner_id", "local_owner_id");
+        expenseStore.createIndex("date", "date");
+        expenseStore.createIndex("created_at", "created_at");
       }
 
       // Goals 스토어
@@ -171,6 +182,93 @@ export const deleteRecordsByCharacterId = async (
 };
 
 /**
+ * 지출 추가/업데이트
+ */
+export const saveExpense = async (
+  expense: Expense,
+  localOwnerId: string
+): Promise<string> => {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([STORES.EXPENSES], "readwrite");
+    const store = tx.objectStore(STORES.EXPENSES);
+
+    const expenseWithOwner = {
+      ...expense,
+      local_owner_id: localOwnerId,
+    };
+
+    const request = store.put(expenseWithOwner);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result as string);
+  });
+};
+
+/**
+ * 특정 로컬 오너의 모든 지출 조회
+ */
+export const getExpensesByOwner = async (
+  localOwnerId: string,
+  options?: {
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+  }
+): Promise<Expense[]> => {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([STORES.EXPENSES], "readonly");
+    const store = tx.objectStore(STORES.EXPENSES);
+    const index = store.index("local_owner_id");
+
+    const request = index.getAll(localOwnerId);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      let expenses = request.result as Expense[];
+
+      if (options?.startDate || options?.endDate) {
+        expenses = expenses.filter((expense) => {
+          if (options.startDate && expense.date < options.startDate) return false;
+          if (options.endDate && expense.date > options.endDate) return false;
+          return true;
+        });
+      }
+
+      expenses.sort((a, b) => {
+        const dateDelta = b.date.localeCompare(a.date);
+        if (dateDelta !== 0) return dateDelta;
+        const createdDelta = (b.created_at || "").localeCompare(a.created_at || "");
+        if (createdDelta !== 0) return createdDelta;
+        return b.id.localeCompare(a.id);
+      });
+
+      if (options?.limit) {
+        expenses = expenses.slice(0, options.limit);
+      }
+
+      resolve(expenses);
+    };
+  });
+};
+
+/**
+ * 지출 삭제
+ */
+export const deleteExpense = async (expenseId: string): Promise<void> => {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([STORES.EXPENSES], "readwrite");
+    const store = tx.objectStore(STORES.EXPENSES);
+    const request = store.delete(expenseId);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve();
+  });
+};
+
+/**
  * 캐릭터 ID가 없는 기존 기록을 특정 캐릭터로 백필
  */
 export const backfillRecordsCharacterId = async (
@@ -224,20 +322,70 @@ export const saveGoal = async (
   goal: Goal,
   localOwnerId: string
 ): Promise<string> => {
+  return saveGoals([goal], localOwnerId).then((ids) => ids[0] ?? goal.id);
+};
+
+/**
+ * 목표 여러 개 저장
+ */
+export const saveGoals = async (
+  goals: Goal[],
+  localOwnerId: string,
+): Promise<string[]> => {
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction([STORES.GOALS], "readwrite");
     const store = tx.objectStore(STORES.GOALS);
 
-    const goalWithOwner = {
-      ...goal,
-      local_owner_id: localOwnerId,
-    };
+    const goalIds = goals.map((goal) => goal.id);
 
-    const request = store.put(goalWithOwner);
+    for (const goal of goals) {
+      store.put({
+        ...goal,
+        local_owner_id: localOwnerId,
+      });
+    }
+
+    const existingRequest = store.index("local_owner_id").getAll(localOwnerId);
+    existingRequest.onerror = () => reject(existingRequest.error);
+    existingRequest.onsuccess = () => {
+      const existingGoals = existingRequest.result as Goal[];
+      for (const existingGoal of existingGoals) {
+        if (!goalIds.includes(existingGoal.id)) {
+          store.delete(existingGoal.id);
+        }
+      }
+      resolve(goalIds);
+    };
+  });
+};
+
+function pickLatestGoal(goals: Goal[]): Goal | null {
+  if (goals.length === 0) return null;
+
+  return [...goals].sort((a, b) => {
+    const aTime = a.updated_at || a.created_at || '';
+    const bTime = b.updated_at || b.created_at || '';
+    return bTime.localeCompare(aTime);
+  })[0] ?? null;
+}
+
+/**
+ * 특정 로컬 오너의 최신 목표 조회
+ */
+export const getLatestGoalByOwner = async (localOwnerId: string): Promise<Goal | null> => {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([STORES.GOALS], "readonly");
+    const store = tx.objectStore(STORES.GOALS);
+    const index = store.index("local_owner_id");
+
+    const request = index.getAll(localOwnerId);
 
     request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result as string);
+    request.onsuccess = () => {
+      resolve(pickLatestGoal(request.result));
+    };
   });
 };
 
@@ -259,7 +407,7 @@ export const getGoalByMonth = async (
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const goals = request.result.filter((g) => g.month === month);
-      resolve(goals.length > 0 ? goals[0] : null);
+      resolve(pickLatestGoal(goals));
     };
   });
 };
@@ -275,7 +423,17 @@ export const getAllGoalsByOwner = async (localOwnerId: string): Promise<Goal[]> 
     const index = store.index('local_owner_id');
     const request = index.getAll(localOwnerId);
     request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const goals = request.result as Goal[];
+      goals.sort((a, b) => {
+        const positionDelta = (a.position ?? 0) - (b.position ?? 0);
+        if (positionDelta !== 0) return positionDelta;
+        const aTime = a.updated_at || a.created_at || '';
+        const bTime = b.updated_at || b.created_at || '';
+        return bTime.localeCompare(aTime);
+      });
+      resolve(goals);
+    };
   });
 };
 
@@ -351,7 +509,7 @@ export const clearAllData = async (
   localOwnerId: string
 ): Promise<void> => {
   const db = await initDB();
-  const stores = [STORES.RECORDS, STORES.GOALS, STORES.SESSIONS];
+  const stores = [STORES.RECORDS, STORES.EXPENSES, STORES.GOALS, STORES.SESSIONS];
 
   for (const storeName of stores) {
     await new Promise<void>((resolve, reject) => {

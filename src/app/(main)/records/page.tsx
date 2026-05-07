@@ -47,7 +47,7 @@ export default function RecordsPage() {
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId, initializeLocal } = useAuthStore();
   const { records, loadRecords, deleteRecord, loading } = useRecordStore();
-  const { openForEdit } = useRecordModalStore();
+  const { open: openRecordModal, openForEdit } = useRecordModalStore();
   const [filter, setFilter] = useState<Filter>('month');
   const [selectedMonth, setSelectedMonth] = useState(() => toYearMonth(new Date()));
   const [page, setPage] = useState(0);
@@ -104,9 +104,12 @@ export default function RecordsPage() {
   return (
     <main className="maple-fade-up flex flex-col gap-4 px-4 pt-6 pb-4">
       <div>
-        <h1 className="maple-title text-2xl font-bold text-t1">기록 목록</h1>
-        <p className="mt-1 text-xs text-t3">메이플 재획 기록을 기간별로 정리해보세요</p>
+        <h1 className="maple-title text-2xl font-bold text-t1">사냥 기록</h1>
+        <p className="mt-1 text-xs text-t3">재획 기록을 기간별로 정리해보세요</p>
       </div>
+      <Button type="button" size="lg" fullWidth onClick={openRecordModal}>
+        + 사냥 추가
+      </Button>
 
       {/* 필터 탭 */}
       <div className="flex flex-wrap gap-2">
@@ -161,7 +164,7 @@ export default function RecordsPage() {
       {loading && <p className="text-sm text-t3 text-center py-8">불러오는 중...</p>}
       {!loading && groups.length === 0 && (
         <Card className="py-10 text-center">
-          <p className="text-sm text-t3">조건에 맞는 기록이 없습니다</p>
+          <p className="text-sm text-t3">조건에 맞는 사냥이 없습니다</p>
         </Card>
       )}
 
@@ -185,8 +188,8 @@ export default function RecordsPage() {
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
           <Card className="w-full max-w-sm">
-            <p className="text-t1 font-semibold mb-2">기록 삭제</p>
-            <p className="text-t3 text-sm mb-6">이 기록을 삭제하시겠습니까?</p>
+            <p className="text-t1 font-semibold mb-2">사냥 삭제</p>
+            <p className="text-t3 text-sm mb-6">이 사냥을 삭제하시겠습니까?</p>
             <div className="flex gap-3">
               <Button variant="secondary" fullWidth onClick={() => setConfirmDelete(null)}>취소</Button>
               <Button variant="danger" fullWidth onClick={async () => {
@@ -221,7 +224,7 @@ function DayGroupCard({
           <p className="text-sm font-medium text-t1">{formatDateKorean(group.date)}</p>
           <p className="text-xs text-t3">
             {formatTime(group.totalTimeMinutes)}
-            {multi && <span className="ml-1.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">기록 {group.records.length}회</span>}
+            {multi && <span className="ml-1.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">사냥 {group.records.length}회</span>}
           </p>
         </div>
         <div className="text-right flex items-center gap-2">
@@ -233,7 +236,7 @@ function DayGroupCard({
         </div>
       </button>
 
-      {/* 단일 기록 상세 */}
+      {/* 단일 사냥 상세 */}
       {expanded && !multi && (
         <SingleRecordDetail
           record={group.records[0]}
@@ -242,7 +245,7 @@ function DayGroupCard({
         />
       )}
 
-      {/* 다중 기록 상세 */}
+      {/* 다중 사냥 상세 */}
       {expanded && multi && (
         <div className="mt-3 flex flex-col gap-3 border-t border-line pt-3">
           {group.records.map((r, i) => (

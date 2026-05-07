@@ -102,6 +102,7 @@ export const sumRecords = (records: RecordWithCalculations[]) => {
     total_shards: records.reduce((sum, r) => sum + r.shard_count, 0),
     total_time_minutes: records.reduce((sum, r) => sum + r.time_minutes, 0),
     total_material_cost: records.reduce((sum, r) => sum + r.material_cost, 0),
+    total_expense: records.reduce((sum, r) => sum + r.material_cost, 0),
     count: records.length,
   };
 };
