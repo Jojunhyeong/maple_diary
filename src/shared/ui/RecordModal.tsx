@@ -165,7 +165,7 @@ export function RecordModal() {
       }
       if (editingRecord) {
         await updateRecord(baseRecord, localOwnerId, shardPrice, isLoggedIn);
-        showToast('기록을 수정했어요', 'success');
+        showToast('사냥을 수정했어요', 'success');
       } else {
         await addRecord(
           {
@@ -182,7 +182,7 @@ export function RecordModal() {
           shardPrice,
           isLoggedIn,
         );
-        showToast('기록이 저장됐어요', 'success');
+        showToast('사냥이 저장됐어요', 'success');
       }
       if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
       closeTimerRef.current = window.setTimeout(() => close(), 420);
@@ -209,7 +209,7 @@ export function RecordModal() {
       >
         {/* 헤더 */}
         <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-line flex-shrink-0">
-          <h2 className="text-base font-bold text-t1">{editingRecord ? '기록 수정' : '오늘 기록'}</h2>
+          <h2 className="text-base font-bold text-t1">{editingRecord ? '사냥 수정' : '오늘 사냥'}</h2>
           <button onClick={close} className="text-t3 text-sm font-medium cursor-pointer">닫기</button>
         </div>
 
@@ -249,7 +249,7 @@ export function RecordModal() {
           )}
 
           <Input
-            label="기록 날짜"
+            label="사냥 날짜"
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
@@ -388,6 +388,10 @@ export function RecordModal() {
               </div>
             </div>
           )}
+          <div className="flex items-center justify-between text-[11px] text-t3">
+            <span>총 지출</span>
+            <span className="font-medium text-t1">{formatMeso(materialCost)}</span>
+          </div>
         </div>
 
         <div className="border-t border-line bg-app px-4 py-3.5">

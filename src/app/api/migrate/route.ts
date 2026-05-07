@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/../auth';
 import { supabaseAdmin } from '@/shared/lib/supabase';
-import type { Goal, Record as DiaryRecord, RecordWithCalculations } from '@/shared/types';
+import type { Expense, Goal, Record as DiaryRecord, RecordWithCalculations } from '@/shared/types';
 
 type MigratableRecord = DiaryRecord & Partial<
   Pick<
@@ -13,6 +13,7 @@ type MigratableRecord = DiaryRecord & Partial<
 interface MigratePayload {
   records?: MigratableRecord[];
   goals?: Goal[];
+  expenses?: Expense[];
 }
 
 export async function POST(req: NextRequest) {
@@ -21,9 +22,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { records, goals } = (await req.json()) as MigratePayload;
+  const { records, goals, expenses } = (await req.json()) as MigratePayload;
   const safeRecords = Array.isArray(records) ? records : [];
   const safeGoals = Array.isArray(goals) ? goals : [];
+  const safeExpenses = Array.isArray(expenses) ? expenses : [];
   const db = supabaseAdmin();
   const userId = session.user.id;
 
@@ -63,9 +65,11 @@ export async function POST(req: NextRequest) {
     const rows = safeGoals.map((g) => ({
       id: g.id,
       user_id: userId,
-      month: g.month,
+      position: g.position ?? 0,
       meso_goal: g.meso_goal ?? null,
       shard_goal: g.shard_goal ?? null,
+      time_goal_minutes: g.time_goal_minutes ?? null,
+      targets: g.targets ?? null,
       created_at: g.created_at,
       updated_at: g.updated_at,
     }));
@@ -79,5 +83,31 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, migratedRecords: safeRecords.length });
+  if (safeExpenses.length > 0) {
+    const rows = safeExpenses.map((expense) => ({
+      id: expense.id,
+      user_id: userId,
+      local_owner_id: expense.local_owner_id ?? null,
+      date: expense.date,
+      title: expense.title,
+      amount: expense.amount ?? 0,
+      category: expense.category ?? null,
+      memo: expense.memo ?? null,
+      sync_status: expense.sync_status ?? 'local',
+      local_id: expense.local_id ?? null,
+      created_at: expense.created_at,
+      updated_at: expense.updated_at,
+    }));
+
+    const { error } = await db
+      .from('expenses')
+      .upsert(rows, { onConflict: 'id' });
+
+    if (error) {
+      console.error('expenses migrate error:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+  }
+
+  return NextResponse.json({ ok: true, migratedRecords: safeRecords.length, migratedExpenses: safeExpenses.length });
 }

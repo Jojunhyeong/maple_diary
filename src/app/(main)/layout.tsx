@@ -1,6 +1,7 @@
 import { BottomNav } from '@/shared/ui/BottomNav';
 import { CharacterSidebarSlot } from '@/shared/ui/CharacterSidebarSlot';
 import { RecordModal } from '@/shared/ui/RecordModal';
+import { ExpenseModal } from '@/shared/ui/ExpenseModal';
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,6 +16,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         <BottomNav />
       </div>
       <RecordModal />
+      <ExpenseModal />
     </div>
   );
 }

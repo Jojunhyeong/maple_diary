@@ -21,10 +21,11 @@ export interface UserSettings {
 }
 
 export interface UserGoals {
-  current_month: string;  // "2026-04"
+  current_month: string;  // legacy/compat only
   meso_goal?: number;
   shard_goal?: number;
   time_goal_minutes?: number;
+  targets?: GoalTarget[];
 }
 
 // ===== 기록 관련 타입 =====
@@ -45,6 +46,21 @@ export interface Record {
   updated_at: string;
   sync_status: SyncStatus;
   local_id?: string;  // 마이그레이션용
+}
+
+export interface Expense {
+  id: string;
+  local_owner_id?: string;
+  user_id?: string;
+  date: string;
+  title: string;
+  amount: number;
+  category?: string;
+  memo?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status: SyncStatus;
+  local_id?: string;
 }
 
 export interface RecordWithCalculations extends Record {
@@ -85,4 +101,18 @@ export interface PeriodStats {
   };
   trend: number;
   trend_direction: "up" | "down" | "stable";
+}
+
+export type GoalTargetKind = "equipment" | "meso";
+
+export interface GoalTarget {
+  id: string;
+  kind: GoalTargetKind;
+  title: string;
+  target_amount: number;
+  equipment_name?: string | null;
+  equipment_slot?: string | null;
+  equipment_icon_url?: string | null;
+  equipment_shape_icon_url?: string | null;
+  equipment_part?: string | null;
 }

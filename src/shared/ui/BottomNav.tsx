@@ -7,7 +7,8 @@ import type { ReactNode } from 'react';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: '대시보드', icon: <HomeIcon /> },
-  { href: '/records', label: '기록', icon: <ListIcon /> },
+  { href: '/records', label: '사냥', icon: <ListIcon /> },
+  { href: '/expenses', label: '지출', icon: <WalletIcon /> },
   { href: '/boss', label: '보스', icon: <BossIcon /> },
   { href: '/analysis', label: '분석', icon: <ChartIcon /> },
   { href: '/goals', label: '목표', icon: <TargetIcon /> },
@@ -72,6 +73,18 @@ function ListIcon() {
         <circle cx="6.4" cy="9" r=".8" fill="currentColor" stroke="none" />
         <circle cx="6.4" cy="12.1" r=".8" fill="currentColor" stroke="none" />
         <circle cx="6.4" cy="15.2" r=".8" fill="currentColor" stroke="none" />
+      </svg>
+    </NavIcon>
+  );
+}
+
+function WalletIcon() {
+  return (
+    <NavIcon>
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4.5 8.5h14.2a1.8 1.8 0 0 1 1.8 1.8v5.2a1.8 1.8 0 0 1-1.8 1.8H6.4a1.9 1.9 0 0 1-1.9-1.9V8.5z" />
+        <path d="M4.5 8.5V7.2a2 2 0 0 1 2-2h10.2" />
+        <path d="M15.1 12.7h2.1" />
       </svg>
     </NavIcon>
   );

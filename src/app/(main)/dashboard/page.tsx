@@ -14,18 +14,19 @@ import {
   type ChartOptions,
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
-import { useRecordModalStore } from '@/shared/lib/stores/useRecordModalStore';
 import { useMigrateOnLogin } from '@/shared/lib/hooks/useMigrateOnLogin';
 import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
+import { useExpenseStore } from '@/shared/lib/stores/useExpenseStore';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { useGoalStore } from '@/shared/lib/stores/useGoalStore';
 import { useDashboardStore } from '@/shared/lib/stores/useDashboardStore';
 import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
+import { useBossRevenueSummary } from '@/shared/lib/hooks/useBossRevenueSummary';
 import { Card } from '@/shared/ui/Card';
 import { Button } from '@/shared/ui/Button';
-import { formatMeso, formatDateKorean, formatTime } from '@/shared/lib/utils/formatters';
+import { formatMeso, formatDate, formatDateKorean, formatTime } from '@/shared/lib/utils/formatters';
 import { filterRecordsByCharacter } from '@/shared/lib/utils/characterFilter';
-import type { RecordWithCalculations } from '@/shared/types';
+import type { Expense, RecordWithCalculations } from '@/shared/types';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -51,12 +52,24 @@ function getCurrentMonth(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function getMonthBounds(date: Date) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  return { start, end };
+}
+
 interface DayGroup {
   date: string;
   records: RecordWithCalculations[];
   totalNetRevenue: number;
   totalTimeMinutes: number;
   netPerHour: number;
+}
+
+interface ExpenseGroup {
+  date: string;
+  expenses: Expense[];
+  totalAmount: number;
 }
 
 function groupByDate(records: RecordWithCalculations[]): DayGroup[] {
@@ -71,6 +84,19 @@ function groupByDate(records: RecordWithCalculations[]): DayGroup[] {
     const netPerHour = totalTimeMinutes > 0 ? Math.floor((totalNetRevenue / totalTimeMinutes) * 60) : 0;
     return { date, records: recs, totalNetRevenue, totalTimeMinutes, netPerHour };
   });
+}
+
+function groupExpensesByDate(expenses: Expense[]): ExpenseGroup[] {
+  const map = new Map<string, Expense[]>();
+  for (const expense of expenses) {
+    if (!map.has(expense.date)) map.set(expense.date, []);
+    map.get(expense.date)!.push(expense);
+  }
+  return Array.from(map.entries()).map(([date, items]) => ({
+    date,
+    expenses: items.sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)),
+    totalAmount: items.reduce((sum, item) => sum + item.amount, 0),
+  }));
 }
 
 function DayRow({ group }: { group: DayGroup }) {
@@ -101,19 +127,24 @@ function DayRow({ group }: { group: DayGroup }) {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { open: openRecordModal } = useRecordModalStore();
   const initialized = useRef(false);
   useMigrateOnLogin();
 
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
   const { initializeLocal, localOwnerId } = useAuthStore();
-  const { currentGoal, loadGoal } = useGoalStore();
+  const { currentGoals, loadGoal } = useGoalStore();
   const { records, loadRecords, loading } = useRecordStore();
+  const { expenses, loadExpenses } = useExpenseStore();
   const { todayRevenue, recentRecords, sevenDayStats } =
     useDashboardStore();
-  const currentMonth = useMemo(() => getCurrentMonth(new Date()), []);
+  const currentDate = useMemo(() => new Date(), []);
+  const currentMonth = useMemo(() => getCurrentMonth(currentDate), [currentDate]);
+  const { start: currentMonthStart, end: currentMonthEnd } = useMemo(() => getMonthBounds(currentDate), [currentDate]);
   const activeCharacterId = useActiveCharacterId();
+  const bossCharacterId = activeCharacterId ?? null;
+  const currentBossWeeklySummary = useBossRevenueSummary(currentMonthStart, currentMonthEnd, isLoggedIn, 'weekly', bossCharacterId);
+  const currentBossMonthlySummary = useBossRevenueSummary(currentMonthStart, currentMonthEnd, isLoggedIn, 'monthly', bossCharacterId);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -130,31 +161,58 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!localOwnerId) return;
     loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
-    loadGoal(localOwnerId, currentMonth, isLoggedIn);
-  }, [localOwnerId, loadRecords, loadGoal, currentMonth, isLoggedIn, activeCharacterId]);
+    loadGoal(localOwnerId, isLoggedIn);
+    loadExpenses(localOwnerId, isLoggedIn);
+  }, [localOwnerId, loadRecords, loadGoal, loadExpenses, currentMonth, isLoggedIn, activeCharacterId]);
 
   const visibleRecords = useMemo(
     () => filterRecordsByCharacter(records, activeCharacterId),
     [records, activeCharacterId],
   );
-  const today = useMemo(() => todayRevenue(visibleRecords), [todayRevenue, visibleRecords]);
+  const todayRevenueValue = useMemo(() => todayRevenue(visibleRecords), [todayRevenue, visibleRecords]);
   const recent = useMemo(() => recentRecords(visibleRecords, 9), [recentRecords, visibleRecords]);
   const recentGroups = useMemo(() => groupByDate(recent).slice(0, 3), [recent]);
   const chartData = useMemo(() => sevenDayStats(visibleRecords), [sevenDayStats, visibleRecords]);
-  const monthNetRevenue = useMemo(() => {
-    return visibleRecords
-      .filter((r) => r.date.startsWith(currentMonth))
-      .reduce((sum, r) => sum + r.net_revenue, 0);
-  }, [visibleRecords, currentMonth]);
-  const monthActiveDays = useMemo(() => {
-    return new Set(visibleRecords.filter((r) => r.date.startsWith(currentMonth)).map((r) => r.date)).size;
-  }, [visibleRecords, currentMonth]);
+  const currentMonthStartStr = useMemo(() => formatDate(currentMonthStart), [currentMonthStart]);
+  const currentMonthEndStr = useMemo(() => formatDate(currentMonthEnd), [currentMonthEnd]);
+  const currentMonthRecords = useMemo(
+    () => visibleRecords.filter((r) => r.date >= currentMonthStartStr && r.date <= currentMonthEndStr),
+    [visibleRecords, currentMonthStartStr, currentMonthEndStr],
+  );
+  const currentMonthExpenses = useMemo(
+    () => expenses.filter((expense) => expense.date >= currentMonthStartStr && expense.date <= currentMonthEndStr),
+    [expenses, currentMonthStartStr, currentMonthEndStr],
+  );
+  const currentHuntingIncome = useMemo(
+    () => currentMonthRecords.reduce((sum, r) => sum + r.total_revenue, 0),
+    [currentMonthRecords],
+  );
+  const currentHuntingExpense = useMemo(
+    () => currentMonthRecords.reduce((sum, r) => sum + r.material_cost, 0),
+    [currentMonthRecords],
+  );
+  const currentExpenseTotal = useMemo(
+    () => currentMonthExpenses.reduce((sum, expense) => sum + expense.amount, 0),
+    [currentMonthExpenses],
+  );
+  const recentExpenses = useMemo(() => groupExpensesByDate(currentMonthExpenses).slice(0, 3), [currentMonthExpenses]);
+  const currentBossIncome = currentBossWeeklySummary.totalRevenue + currentBossMonthlySummary.totalRevenue;
+  const currentTotalIncome = currentHuntingIncome + currentBossIncome;
+  const currentNetIncome = currentTotalIncome - currentHuntingExpense;
+  const monthActiveDays = useMemo(() => new Set(currentMonthRecords.map((r) => r.date)).size, [currentMonthRecords]);
+
+  const currentGoalTargetAmount = useMemo(() => {
+    return currentGoals.reduce((sum, goal) => {
+      const targetAmount = goal.targets?.[0]?.target_amount ?? goal.meso_goal ?? 0;
+      return sum + targetAmount;
+    }, 0);
+  }, [currentGoals]);
 
   const goalProgressText = useMemo(() => {
-    if (!currentGoal?.meso_goal || currentGoal.meso_goal <= 0) return '목표 미설정';
-    const pct = Math.min((monthNetRevenue / currentGoal.meso_goal) * 100, 999);
+    if (currentGoalTargetAmount <= 0) return '목표 미설정';
+    const pct = Math.min((currentNetIncome / currentGoalTargetAmount) * 100, 999);
     return `${pct.toFixed(1)}%`;
-  }, [currentGoal?.meso_goal, monthNetRevenue]);
+  }, [currentGoalTargetAmount, currentNetIncome]);
 
   const profile = useMemo(() => {
     try {
@@ -162,7 +220,7 @@ export default function DashboardPage() {
     } catch {
       return null;
     }
-  }, [activeCharacterId]);
+  }, []);
 
   return (
     <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4">
@@ -184,7 +242,7 @@ export default function DashboardPage() {
         </div>
         <div className="grid grid-cols-2 gap-2.5">
           <div className="rounded-xl bg-card/80 p-3">
-            <p className="text-[11px] text-t3">총 기록</p>
+            <p className="text-[11px] text-t3">총 사냥</p>
             <p className="mt-1 text-lg font-bold text-t1">{visibleRecords.length}회</p>
           </div>
           <div className="rounded-xl bg-card/80 p-3">
@@ -195,8 +253,8 @@ export default function DashboardPage() {
       </Card>
 
       <div className="grid grid-cols-3 gap-2.5">
-        <RevenueCard label="오늘" value={today} />
-        <InfoCard label="이달 목표 진행" value={goalProgressText} />
+        <RevenueCard label="오늘" value={todayRevenueValue} />
+        <InfoCard label="목표 진행" value={goalProgressText} />
         <InfoCard label="이번 달 활동일" value={`${monthActiveDays}일`} />
       </div>
 
@@ -211,13 +269,43 @@ export default function DashboardPage() {
         <MiniBarChart data={chartData.data} />
       </Card>
 
-      <Button size="lg" fullWidth onClick={openRecordModal}>
-        + 오늘 기록 추가
-      </Button>
+      <Card>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-t1">이번 달 지출</p>
+            <p className="text-[11px] text-t3">구매/강화/소모 비용 요약</p>
+          </div>
+          <p className="text-xs font-semibold text-amber-600">{formatMeso(currentExpenseTotal)}</p>
+        </div>
+        {recentExpenses.length === 0 ? (
+          <div className="rounded-xl bg-surface/60 px-4 py-6 text-center">
+            <p className="text-sm text-t3">아직 지출이 없어요.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {recentExpenses.map((group) => (
+              <div key={group.date} className="rounded-xl border border-line bg-card/80 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-t1">{formatDateKorean(group.date)}</p>
+                  <p className="text-xs font-semibold text-amber-600">-{formatMeso(group.totalAmount)}</p>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {group.expenses.slice(0, 2).map((expense) => (
+                    <div key={expense.id} className="flex items-center justify-between gap-3 text-xs">
+                      <span className="truncate text-t2">{expense.title}</span>
+                      <span className="shrink-0 font-semibold text-t1">-{formatMeso(expense.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Card>
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-semibold text-t1">최근 기록</p>
+          <p className="text-sm font-semibold text-t1">최근 사냥</p>
           <Link href="/records" className="text-xs font-semibold text-amber-500">
             전체보기
           </Link>
@@ -229,7 +317,7 @@ export default function DashboardPage() {
 
         {!loading && recentGroups.length === 0 && (
           <div className="rounded-xl bg-surface/60 px-4 py-8 text-center">
-            <p className="text-sm text-t3">아직 기록이 없어요. 첫 기록을 추가해보세요!</p>
+            <p className="text-sm text-t3">아직 사냥이 없어요. 첫 사냥을 추가해보세요!</p>
           </div>
         )}
 
@@ -247,7 +335,7 @@ function MiniBarChart({ data }: { data: { date: string; revenue: number }[] }) {
   if (data.length === 0) {
     return (
       <div className="flex h-28 items-center justify-center rounded-xl bg-surface/45 text-xs text-t3">
-        최근 7일 기록이 없습니다
+        최근 7일 사냥이 없습니다
       </div>
     );
   }

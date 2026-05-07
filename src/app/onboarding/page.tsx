@@ -14,7 +14,7 @@ export default function OnboardingWelcomePage() {
         <div className="flex flex-col gap-3">
           <h1 className="text-3xl font-bold text-t1">Maple Diary</h1>
           <p className="text-t3 text-base leading-relaxed">
-            메이플스토리 재획 수익을 기록하고<br />
+            메이플스토리 재획 수익을 사냥 기록으로 남기고<br />
             성과를 분석하는 개인용 대시보드
           </p>
         </div>
