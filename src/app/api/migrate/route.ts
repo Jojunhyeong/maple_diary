@@ -38,7 +38,6 @@ export async function POST(req: NextRequest) {
       time_minutes: r.time_minutes,
       meso: r.meso,
       shard_count: r.shard_count ?? 0,
-      exp_gain_percent: r.exp_gain_percent ?? 0,
       material_cost: r.material_cost ?? 0,
       shard_value: r.shard_value ?? 0,
       total_revenue: r.total_revenue ?? 0,

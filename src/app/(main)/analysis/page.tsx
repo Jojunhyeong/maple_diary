@@ -8,7 +8,7 @@ import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import { Card } from '@/shared/ui/Card';
 import { ScopeTabs, type ScopeTabValue } from '@/shared/ui/ScopeTabs';
 import { calculateWeeklyStats } from '@/shared/lib/utils/calculations';
-import { formatDateKorean, formatMeso, formatPercent, formatTime } from '@/shared/lib/utils/formatters';
+import { formatDateKorean, formatMeso, formatTime } from '@/shared/lib/utils/formatters';
 import { filterRecordsByCharacter } from '@/shared/lib/utils/characterFilter';
 import { getBossThursday } from '@/shared/lib/boss-checklist';
 import { useBossRevenueSummary } from '@/shared/lib/hooks/useBossRevenueSummary';
@@ -31,7 +31,6 @@ type MonthlyReport = {
   activeDays: number;
   totalMinutes: number;
   totalShards: number;
-  avgExpGain: number;
   avgPerActiveDay: number;
   avgPerHour: number;
   bestDay: { date: string; revenue: number } | null;
@@ -102,14 +101,11 @@ export default function AnalysisPage() {
     activeDays: 0,
     totalNetRevenue: 0,
     totalShards: 0,
-    totalExpGain: 0,
     avgDailyNetRevenue: 0,
     avgNetPerHour: 0,
   } satisfies WeekStats;
   const thisWeek = weeks[0] ?? emptyWeek;
   const lastWeek = weeks[1] ?? emptyWeek;
-  const thisWeekAvgExp = thisWeek.count > 0 ? thisWeek.totalExpGain / thisWeek.count : 0;
-  const lastWeekAvgExp = lastWeek.count > 0 ? lastWeek.totalExpGain / lastWeek.count : 0;
   const weekdayStats = useMemo(() => buildWeekdayStats(visibleRecords), [visibleRecords]);
   const topRecords = useMemo(() => buildTopRecords(visibleRecords, 3), [visibleRecords]);
   const monthlyReport = useMemo(() => buildMonthlyReport(visibleRecords), [visibleRecords]);
@@ -171,7 +167,6 @@ export default function AnalysisPage() {
             <ReportItem label="지난달 총 순수익" value={formatMeso(monthlyReport.previousTotal)} />
             <ReportItem label="총 재획 시간" value={formatTime(monthlyReport.totalMinutes)} />
             <ReportItem label="총 조각" value={`${monthlyReport.totalShards}개`} />
-            <ReportItem label="평균 경험치율" value={`+${formatPercent(monthlyReport.avgExpGain)}`} />
             <ReportItem label="활동 일수" value={`${monthlyReport.activeDays}일`} />
             <ReportItem label="활동일 평균 순수익" value={formatMeso(monthlyReport.avgPerActiveDay)} />
             <ReportItem label="시간당 평균 순수익" value={`${formatMeso(monthlyReport.avgPerHour)}/h`} />
@@ -214,12 +209,6 @@ export default function AnalysisPage() {
               label="총 조각"
               value={`${thisWeek.totalShards}개`}
               compare={lastWeek.count > 0 ? thisWeek.totalShards - lastWeek.totalShards : null}
-            />
-            <StatItem
-              label="평균 경험치율"
-              value={`+${formatPercent(thisWeekAvgExp)}`}
-              compare={lastWeek.count > 0 ? thisWeekAvgExp - lastWeekAvgExp : null}
-              compareFormatter={formatPercent}
             />
           </div>
         )}
@@ -297,7 +286,6 @@ export default function AnalysisPage() {
           <p className="text-sm font-semibold text-t1 mb-4">이번 주 vs 저번 주</p>
           <CompareRow label="날짜당 순수익" this={thisWeek.avgDailyNetRevenue} last={lastWeek.avgDailyNetRevenue} format={formatMeso} />
           <CompareRow label="시간당 순수익" this={thisWeek.avgNetPerHour} last={lastWeek.avgNetPerHour} format={formatMeso} />
-          <CompareRow label="평균 경험치율" this={thisWeekAvgExp} last={lastWeekAvgExp} format={formatPercent} />
         </Card>
       )}
     </main>
@@ -388,8 +376,6 @@ function buildMonthlyReport(records: RecordWithCalculations[]): MonthlyReport {
   const diffPct = previousTotal > 0 ? Math.round((diff / previousTotal) * 100) : null;
   const totalMinutes = currentRecords.reduce((s, r) => s + r.time_minutes, 0);
   const totalShards = currentRecords.reduce((s, r) => s + r.shard_count, 0);
-  const totalExpGain = currentRecords.reduce((s, r) => s + (r.exp_gain_percent || 0), 0);
-  const avgExpGain = currentRecords.length > 0 ? totalExpGain / currentRecords.length : 0;
 
   const byDate = new Map<string, number>();
   currentRecords.forEach((r) => byDate.set(r.date, (byDate.get(r.date) || 0) + r.net_revenue));
@@ -410,7 +396,6 @@ function buildMonthlyReport(records: RecordWithCalculations[]): MonthlyReport {
     activeDays,
     totalMinutes,
     totalShards,
-    avgExpGain,
     avgPerActiveDay,
     avgPerHour,
     bestDay,

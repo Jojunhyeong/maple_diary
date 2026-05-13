@@ -100,7 +100,6 @@ export const sumRecords = (records: RecordWithCalculations[]) => {
     total_revenue: records.reduce((sum, r) => sum + r.net_revenue, 0),
     total_meso: records.reduce((sum, r) => sum + r.meso, 0),
     total_shards: records.reduce((sum, r) => sum + r.shard_count, 0),
-    total_exp_gain: records.reduce((sum, r) => sum + (r.exp_gain_percent || 0), 0),
     total_time_minutes: records.reduce((sum, r) => sum + r.time_minutes, 0),
     total_material_cost: records.reduce((sum, r) => sum + r.material_cost, 0),
     total_expense: records.reduce((sum, r) => sum + r.material_cost, 0),
@@ -119,7 +118,6 @@ export const calculateAverages = (records: RecordWithCalculations[]) => {
     average_revenue: Math.floor(sums.total_revenue / sums.count),
     average_time_minutes: Math.floor(sums.total_time_minutes / sums.count),
     average_shards: Math.floor(sums.total_shards / sums.count),
-    average_exp_gain: sums.count > 0 ? sums.total_exp_gain / sums.count : 0,
     average_meso_per_hour: Math.floor(
       sums.total_meso / (sums.total_time_minutes / 60)
     ),
@@ -196,7 +194,6 @@ export interface WeekStats {
   activeDays: number;
   totalNetRevenue: number;
   totalShards: number;
-  totalExpGain: number;
   avgDailyNetRevenue: number; // 날짜당 순수익
   avgNetPerHour: number;    // 시간당 순수익
 }
@@ -234,7 +231,6 @@ export const calculateWeeklyStats = (
     const count = wr.length;
     const totalNetRevenue = wr.reduce((s, r) => s + r.net_revenue, 0);
     const totalShards = wr.reduce((s, r) => s + r.shard_count, 0);
-    const totalExpGain = wr.reduce((s, r) => s + (r.exp_gain_percent || 0), 0);
     const totalTime = wr.reduce((s, r) => s + r.time_minutes, 0);
     const activeDays = new Set(wr.map((r) => r.date)).size;
 
@@ -251,7 +247,6 @@ export const calculateWeeklyStats = (
       activeDays,
       totalNetRevenue,
       totalShards,
-      totalExpGain,
       avgDailyNetRevenue,
       avgNetPerHour,
     });

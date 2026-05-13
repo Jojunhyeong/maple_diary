@@ -20,8 +20,6 @@ interface DayGroup {
   totalNetRevenue: number;
   totalTimeMinutes: number;
   totalShards: number;
-  totalExpGain: number;
-  avgExpGain: number;
   netPerHour: number;
 }
 
@@ -41,10 +39,8 @@ function groupByDate(records: RecordWithCalculations[]): DayGroup[] {
     const totalNetRevenue = recs.reduce((s, r) => s + r.net_revenue, 0);
     const totalTimeMinutes = recs.reduce((s, r) => s + r.time_minutes, 0);
     const totalShards = recs.reduce((s, r) => s + r.shard_count, 0);
-    const totalExpGain = recs.reduce((s, r) => s + (r.exp_gain_percent || 0), 0);
-    const avgExpGain = recs.length > 0 ? totalExpGain / recs.length : 0;
     const netPerHour = totalTimeMinutes > 0 ? (totalNetRevenue / totalTimeMinutes) * 60 : 0;
-    return { date, records: recs, totalNetRevenue, totalTimeMinutes, totalShards, totalExpGain, avgExpGain, netPerHour };
+    return { date, records: recs, totalNetRevenue, totalTimeMinutes, totalShards, netPerHour };
   });
 }
 
@@ -234,11 +230,6 @@ function DayGroupCard({
             <span className="ml-1.5 rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-semibold text-t2">
               조각 {group.totalShards}개
             </span>
-            {group.avgExpGain > 0 && (
-              <span className="ml-1.5 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500">
-                경험치 +{group.avgExpGain.toFixed(1)}%
-              </span>
-            )}
           </p>
         </div>
         <div className="text-right flex items-center gap-2">
@@ -276,12 +267,6 @@ function DayGroupCard({
                 <span className="text-t2 text-right">{formatMeso(r.meso)}</span>
                 <span className="text-t3">조각 {r.shard_count}개</span>
                 <span className="text-t2 text-right">{formatMeso(r.shard_value)}</span>
-                {r.exp_gain_percent > 0 && (
-                  <>
-                    <span className="text-t3">경험치율</span>
-                    <span className="text-t2 text-right">+{r.exp_gain_percent.toFixed(1)}%</span>
-                  </>
-                )}
                 <span className="text-t3">소재비</span>
                 <span className="text-t2 text-right">-{formatMeso(r.material_cost)}</span>
                 <span className="text-t3">순수익</span>
@@ -318,12 +303,6 @@ function SingleRecordDetail({
         <span className="text-t2 text-right">{formatMeso(record.meso)}</span>
         <span className="text-t3">조각 {record.shard_count}개</span>
         <span className="text-t2 text-right">{formatMeso(record.shard_value)}</span>
-        {record.exp_gain_percent > 0 && (
-          <>
-            <span className="text-t3">경험치율</span>
-            <span className="text-t2 text-right">+{record.exp_gain_percent.toFixed(1)}%</span>
-          </>
-        )}
         <span className="text-t3">소재비</span>
         <span className="text-t2 text-right">-{formatMeso(record.material_cost)}</span>
         {record.memo && (
