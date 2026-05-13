@@ -13,7 +13,6 @@ import {
   deleteRecordsByCharacterId,
   migrateRecordsCharacterId,
 } from '@/shared/lib/db/local';
-import { filterRecordsByCharacter } from '@/shared/lib/utils/characterFilter';
 import { formatDate } from '@/shared/lib/utils/formatters';
 import {
   CHARACTER_STORAGE_KEYS,
@@ -194,7 +193,7 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId } = useAuthStore();
-  const { records, loadRecords } = useRecordStore();
+  const { loadRecords } = useRecordStore();
   const [characters, setCharacters] = useState<ManagedCharacter[]>([]);
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -523,36 +522,12 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
       : 'maple-panel rounded-[28px] border border-line bg-card/90 p-5 shadow-[var(--shadow-md)]';
   const expRateValue = parsePercentValue(activeCharacter?.character_exp_rate);
   const expRateFill = Math.min(Math.max(expRateValue, 0), 100);
-  const activeCharacterKey = activeCharacter ? getCharacterKey(activeCharacter) : null;
-
-  const recordExpHistory = useMemo(() => {
-    if (!activeCharacterKey) return [];
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const start = new Date(today);
-    start.setDate(start.getDate() - 6);
-    const startDate = formatDate(start);
-    const endDate = formatDate(today);
-
-    const grouped = new Map<string, number>();
-    for (const record of filterRecordsByCharacter(records, activeCharacterKey)) {
-      if (record.date < startDate || record.date > endDate) continue;
-      const exp = Number(record.exp_gain_percent) || 0;
-      if (exp <= 0) continue;
-      grouped.set(record.date, (grouped.get(record.date) ?? 0) + exp);
-    }
-
-    return Array.from(grouped.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, exp_gain_percent]) => ({ date, exp_gain_percent }));
-  }, [activeCharacterKey, records]);
   const expHistory = useMemo(() => {
     if (activeCharacter?.character_exp_history?.length) {
       return activeCharacter.character_exp_history;
     }
-    return recordExpHistory;
-  }, [activeCharacter?.character_exp_history, recordExpHistory]);
+    return [];
+  }, [activeCharacter?.character_exp_history]);
   const expHistoryMax = useMemo(
     () => Math.max(...expHistory.map((entry) => entry.exp_gain_percent), 1),
     [expHistory],

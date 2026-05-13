@@ -10,7 +10,7 @@ import { useUserStore } from '@/shared/lib/stores/useUserStore';
 import { useRecordModalStore } from '@/shared/lib/stores/useRecordModalStore';
 import { enrichRecordWithCalculations } from '@/shared/lib/utils/calculations';
 import { formatMeso, formatDate, fromManInput, toManDisplay } from '@/shared/lib/utils/formatters';
-import { readActiveCharacterId, readLocalCharacters } from '@/shared/lib/character-storage';
+import { readActiveCharacterId } from '@/shared/lib/character-storage';
 import type { Record as RecordType } from '@/shared/types';
 
 const MINUTES_PER_SOJAE = 30;
@@ -94,17 +94,6 @@ export function RecordModal() {
   const materialCostPerSojae = fromManInput(materialCostMan);
   const materialCost = materialCostPerSojae * (parseInt(sojaeCnt) || 0);
   const shardPrice = shardPriceMan.trim() === '' ? settings.shard_price : fromManInput(shardPriceMan);
-  const expGain = useMemo(() => {
-    const activeCharacterId = readActiveCharacterId();
-    if (!activeCharacterId) return 0;
-    const characters = readLocalCharacters();
-    const activeCharacter = characters.find((character) => character.id === activeCharacterId);
-    const value = typeof activeCharacter?.character_exp_rate === 'string'
-      ? Number(activeCharacter.character_exp_rate)
-      : activeCharacter?.character_exp_rate ?? 0;
-    return Number.isFinite(value) ? Math.max(0, value) : 0;
-  }, [isOpen, editingRecord, records]);
-
   const preview = useMemo(() => {
     if (!parseInt(sojaeCnt) && !meso) return null;
     return enrichRecordWithCalculations(
@@ -117,7 +106,6 @@ export function RecordModal() {
         time_minutes: timeMinutes,
         meso,
         shard_count: parseInt(shardCount) || 0,
-        exp_gain_percent: expGain,
         material_cost: materialCost,
         memo: memo.trim() || undefined,
         local_owner_id: editingRecord?.local_owner_id,
@@ -167,7 +155,6 @@ export function RecordModal() {
         time_minutes: timeMinutes,
         meso,
         shard_count: parseInt(shardCount) || 0,
-        exp_gain_percent: expGain,
         material_cost: materialCost,
         memo: memo.trim() || undefined,
         character_id: characterId ?? editingRecord?.character_id,
@@ -189,7 +176,6 @@ export function RecordModal() {
             time_minutes: timeMinutes,
             meso,
             shard_count: parseInt(shardCount) || 0,
-            exp_gain_percent: expGain,
             material_cost: materialCost,
             memo: memo.trim() || undefined,
             character_id: characterId ?? undefined,
