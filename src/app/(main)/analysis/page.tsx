@@ -8,7 +8,7 @@ import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import { Card } from '@/shared/ui/Card';
 import { ScopeTabs, type ScopeTabValue } from '@/shared/ui/ScopeTabs';
 import { calculateWeeklyStats } from '@/shared/lib/utils/calculations';
-import { formatDateKorean, formatMeso, formatTime } from '@/shared/lib/utils/formatters';
+import { formatDateKorean, formatMeso, formatPercent, formatTime } from '@/shared/lib/utils/formatters';
 import { filterRecordsByCharacter } from '@/shared/lib/utils/characterFilter';
 import { getBossThursday } from '@/shared/lib/boss-checklist';
 import { useBossRevenueSummary } from '@/shared/lib/hooks/useBossRevenueSummary';
@@ -30,6 +30,8 @@ type MonthlyReport = {
   diffPct: number | null;
   activeDays: number;
   totalMinutes: number;
+  totalShards: number;
+  avgExpGain: number;
   avgPerActiveDay: number;
   avgPerHour: number;
   bestDay: { date: string; revenue: number } | null;
@@ -51,9 +53,15 @@ export default function AnalysisPage() {
   const bossWeekSummary = useBossRevenueSummary(bossWeekStart, today, isLoggedIn, 'weekly', bossCharacterId);
   const bossMonthSummary = useMemo(
     () => ({
-      totalRevenue: bossMonthWeeklySummary.totalRevenue + bossMonthMonthlySummary.totalRevenue,
+      totalRevenue:
+        bossMonthWeeklySummary.totalRevenue +
+        bossMonthWeeklySummary.lootRevenue +
+        bossMonthMonthlySummary.totalRevenue +
+        bossMonthMonthlySummary.lootRevenue,
       selectedBosses: bossMonthWeeklySummary.selectedBosses + bossMonthMonthlySummary.selectedBosses,
       selectedClears: bossMonthWeeklySummary.selectedClears + bossMonthMonthlySummary.selectedClears,
+      lootRevenue: bossMonthWeeklySummary.lootRevenue + bossMonthMonthlySummary.lootRevenue,
+      lootCount: bossMonthWeeklySummary.lootCount + bossMonthMonthlySummary.lootCount,
       byCategory: {
         general: bossMonthWeeklySummary.byCategory.general + bossMonthMonthlySummary.byCategory.general,
         subboss: bossMonthWeeklySummary.byCategory.subboss + bossMonthMonthlySummary.byCategory.subboss,
@@ -79,7 +87,12 @@ export default function AnalysisPage() {
     },
     [records, activeCharacterId, scope],
   );
-  const hasAnyData = visibleRecords.length > 0 || bossMonthSummary.totalRevenue > 0 || bossWeekSummary.totalRevenue > 0;
+  const hasAnyData =
+    visibleRecords.length > 0 ||
+    bossMonthSummary.totalRevenue > 0 ||
+    bossMonthSummary.lootRevenue > 0 ||
+    bossWeekSummary.totalRevenue > 0 ||
+    bossWeekSummary.lootRevenue > 0;
   const weeks = useMemo(() => calculateWeeklyStats(visibleRecords, 4), [visibleRecords]);
   const emptyWeek = {
     weekLabel: '이번 주',
@@ -88,11 +101,15 @@ export default function AnalysisPage() {
     count: 0,
     activeDays: 0,
     totalNetRevenue: 0,
+    totalShards: 0,
+    totalExpGain: 0,
     avgDailyNetRevenue: 0,
     avgNetPerHour: 0,
   } satisfies WeekStats;
   const thisWeek = weeks[0] ?? emptyWeek;
   const lastWeek = weeks[1] ?? emptyWeek;
+  const thisWeekAvgExp = thisWeek.count > 0 ? thisWeek.totalExpGain / thisWeek.count : 0;
+  const lastWeekAvgExp = lastWeek.count > 0 ? lastWeek.totalExpGain / lastWeek.count : 0;
   const weekdayStats = useMemo(() => buildWeekdayStats(visibleRecords), [visibleRecords]);
   const topRecords = useMemo(() => buildTopRecords(visibleRecords, 3), [visibleRecords]);
   const monthlyReport = useMemo(() => buildMonthlyReport(visibleRecords), [visibleRecords]);
@@ -150,13 +167,15 @@ export default function AnalysisPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <ReportItem label="지난달 총 순수익" value={formatMeso(monthlyReport.previousTotal)} />
-          <ReportItem label="총 재획 시간" value={formatTime(monthlyReport.totalMinutes)} />
-          <ReportItem label="활동 일수" value={`${monthlyReport.activeDays}일`} />
-          <ReportItem label="활동일 평균 순수익" value={formatMeso(monthlyReport.avgPerActiveDay)} />
-          <ReportItem label="시간당 평균 순수익" value={`${formatMeso(monthlyReport.avgPerHour)}/h`} />
-        </div>
+          <div className="grid grid-cols-2 gap-2">
+            <ReportItem label="지난달 총 순수익" value={formatMeso(monthlyReport.previousTotal)} />
+            <ReportItem label="총 재획 시간" value={formatTime(monthlyReport.totalMinutes)} />
+            <ReportItem label="총 조각" value={`${monthlyReport.totalShards}개`} />
+            <ReportItem label="평균 경험치율" value={`+${formatPercent(monthlyReport.avgExpGain)}`} />
+            <ReportItem label="활동 일수" value={`${monthlyReport.activeDays}일`} />
+            <ReportItem label="활동일 평균 순수익" value={formatMeso(monthlyReport.avgPerActiveDay)} />
+            <ReportItem label="시간당 평균 순수익" value={`${formatMeso(monthlyReport.avgPerHour)}/h`} />
+          </div>
 
         <div className="mt-3 rounded-xl border border-line bg-card/80 px-3 py-2.5">
           <p className="text-[11px] text-t3">베스트 데이</p>
@@ -191,6 +210,17 @@ export default function AnalysisPage() {
               value={formatMeso(thisWeek.avgNetPerHour)}
               compare={lastWeek.count > 0 ? thisWeek.avgNetPerHour - lastWeek.avgNetPerHour : null}
             />
+            <StatItem
+              label="총 조각"
+              value={`${thisWeek.totalShards}개`}
+              compare={lastWeek.count > 0 ? thisWeek.totalShards - lastWeek.totalShards : null}
+            />
+            <StatItem
+              label="평균 경험치율"
+              value={`+${formatPercent(thisWeekAvgExp)}`}
+              compare={lastWeek.count > 0 ? thisWeekAvgExp - lastWeekAvgExp : null}
+              compareFormatter={formatPercent}
+            />
           </div>
         )}
       </Card>
@@ -200,7 +230,7 @@ export default function AnalysisPage() {
           <div className="mb-4 flex items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold text-t1">보스 수익</p>
-              <p className="text-[11px] text-t3">이번 달 주간 보스와 월간 보스 합계</p>
+              <p className="text-[11px] text-t3">이번 달 주간 보스와 월간 보스, 보스 드랍템 수익을 합산해요</p>
             </div>
             <p className="text-xs text-t3">{bossMonthSummary.selectedBosses}개 보스</p>
           </div>
@@ -209,8 +239,8 @@ export default function AnalysisPage() {
             <ReportItem label="이번 주 보스" value={formatMeso(bossWeekSummary.totalRevenue)} />
             <ReportItem label="그란디스" value={formatMeso(bossMonthSummary.byCategory.grandis)} />
             <ReportItem label="검밑솔" value={formatMeso(bossMonthSummary.byCategory.subboss)} />
-            <ReportItem label="일반 보스" value={formatMeso(bossMonthSummary.byCategory.general)} />
-            <ReportItem label="체크 횟수" value={`${bossMonthSummary.selectedClears}회`} />
+            <ReportItem label="보스 드랍템" value={formatMeso(bossMonthSummary.lootRevenue)} />
+            <ReportItem label="드랍템 수" value={`${bossMonthSummary.lootCount}개`} />
           </div>
         </Card>
       )}
@@ -267,6 +297,7 @@ export default function AnalysisPage() {
           <p className="text-sm font-semibold text-t1 mb-4">이번 주 vs 저번 주</p>
           <CompareRow label="날짜당 순수익" this={thisWeek.avgDailyNetRevenue} last={lastWeek.avgDailyNetRevenue} format={formatMeso} />
           <CompareRow label="시간당 순수익" this={thisWeek.avgNetPerHour} last={lastWeek.avgNetPerHour} format={formatMeso} />
+          <CompareRow label="평균 경험치율" this={thisWeekAvgExp} last={lastWeekAvgExp} format={formatPercent} />
         </Card>
       )}
     </main>
@@ -282,10 +313,11 @@ function ReportItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StatItem({ label, value, compare }: {
+function StatItem({ label, value, compare, compareFormatter = formatMeso }: {
   label: string;
   value: string;
   compare: number | null;
+  compareFormatter?: (value: number) => string;
 }) {
   const isPositive = compare !== null && compare > 0;
   const isNegative = compare !== null && compare < 0;
@@ -298,7 +330,7 @@ function StatItem({ label, value, compare }: {
       <p className="text-sm font-bold text-t1">{value}</p>
       {compare !== null && compare !== 0 && (
         <p className={`mt-1 text-[10px] font-medium ${goodDirection ? 'text-green-500' : badDirection ? 'text-red-400' : 'text-t3'}`}>
-          {`${compare > 0 ? '+' : ''}${formatMeso(compare)} 저번 주 대비`}
+          {`${compare > 0 ? '+' : ''}${compareFormatter(compare)} 저번 주 대비`}
         </p>
       )}
       {compare === 0 && (
@@ -355,6 +387,9 @@ function buildMonthlyReport(records: RecordWithCalculations[]): MonthlyReport {
   const diff = currentTotal - previousTotal;
   const diffPct = previousTotal > 0 ? Math.round((diff / previousTotal) * 100) : null;
   const totalMinutes = currentRecords.reduce((s, r) => s + r.time_minutes, 0);
+  const totalShards = currentRecords.reduce((s, r) => s + r.shard_count, 0);
+  const totalExpGain = currentRecords.reduce((s, r) => s + (r.exp_gain_percent || 0), 0);
+  const avgExpGain = currentRecords.length > 0 ? totalExpGain / currentRecords.length : 0;
 
   const byDate = new Map<string, number>();
   currentRecords.forEach((r) => byDate.set(r.date, (byDate.get(r.date) || 0) + r.net_revenue));
@@ -374,6 +409,8 @@ function buildMonthlyReport(records: RecordWithCalculations[]): MonthlyReport {
     diffPct,
     activeDays,
     totalMinutes,
+    totalShards,
+    avgExpGain,
     avgPerActiveDay,
     avgPerHour,
     bestDay,

@@ -31,7 +31,14 @@ interface RecordStore {
 }
 
 function getShardPrice() {
-  return JSON.parse(localStorage.getItem("maple_diary:settings") || "{}").shard_price || 7_000_000;
+  try {
+    const raw = localStorage.getItem("maple_diary:settings");
+    if (!raw) return 7_000_000;
+    const settings = JSON.parse(raw) as { shard_price?: number };
+    return settings.shard_price ?? 7_000_000;
+  } catch {
+    return 7_000_000;
+  }
 }
 
 function sortRecords(records: RecordWithCalculations[]) {
@@ -103,6 +110,7 @@ export const useRecordStore = create<RecordStore>((set) => ({
             time_minutes: newRecord.time_minutes,
             meso: newRecord.meso,
             shard_count: newRecord.shard_count,
+            exp_gain_percent: newRecord.exp_gain_percent,
             material_cost: newRecord.material_cost,
             memo: newRecord.memo,
             character_id: newRecord.character_id ?? null,
@@ -144,6 +152,7 @@ export const useRecordStore = create<RecordStore>((set) => ({
           time_minutes: updatedRecord.time_minutes,
           meso: updatedRecord.meso,
           shard_count: updatedRecord.shard_count,
+          exp_gain_percent: updatedRecord.exp_gain_percent,
           material_cost: updatedRecord.material_cost,
           memo: updatedRecord.memo,
           character_id: updatedRecord.character_id ?? null,
@@ -190,5 +199,9 @@ export const useRecordStore = create<RecordStore>((set) => ({
 
 function normalizeLegacyRecords<T extends Record>(records: T[], characterId: string | null) {
   if (!characterId) return records;
-  return records.map((record) => (record.character_id ? record : { ...record, character_id: characterId }));
+  return records.map((record) =>
+    record.character_id
+      ? { ...record, exp_gain_percent: record.exp_gain_percent ?? 0 }
+      : { ...record, character_id: characterId, exp_gain_percent: record.exp_gain_percent ?? 0 },
+  );
 }

@@ -15,6 +15,8 @@ function createEmptyBossRevenueSummary(): BossRevenueSummary {
     totalRevenue: 0,
     selectedBosses: 0,
     selectedClears: 0,
+    lootRevenue: 0,
+    lootCount: 0,
     byCategory: {
       general: 0,
       subboss: 0,

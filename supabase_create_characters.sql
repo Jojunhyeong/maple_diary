@@ -10,6 +10,7 @@ CREATE TABLE public.characters (
   character_world TEXT,
   character_exp_rate NUMERIC,
   character_combat_power BIGINT,
+  character_exp_history JSONB,
 
   is_active BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

@@ -13,6 +13,8 @@ import {
   deleteRecordsByCharacterId,
   migrateRecordsCharacterId,
 } from '@/shared/lib/db/local';
+import { filterRecordsByCharacter } from '@/shared/lib/utils/characterFilter';
+import { formatDate } from '@/shared/lib/utils/formatters';
 import {
   CHARACTER_STORAGE_KEYS,
   clearCharacterSelection,
@@ -39,6 +41,20 @@ function getCharacterKey(character: Partial<ManagedCharacter>) {
 }
 
 function toLocalCharacter(character: Record<string, unknown>): ManagedCharacter {
+  const history = Array.isArray(character.character_exp_history)
+    ? character.character_exp_history
+        .filter(
+          (entry) =>
+            entry &&
+            typeof entry === 'object' &&
+            typeof (entry as { date?: unknown }).date === 'string' &&
+            typeof (entry as { exp_gain_percent?: unknown }).exp_gain_percent === 'number',
+        )
+        .map((entry) => ({
+          date: (entry as { date: string }).date,
+          exp_gain_percent: (entry as { exp_gain_percent: number }).exp_gain_percent,
+        }))
+    : null;
   const name = typeof character.character_name === 'string' ? character.character_name : 'Unknown';
   return {
     id: typeof character.id === 'string' && isUuidLike(character.id) ? character.id : crypto.randomUUID(),
@@ -67,6 +83,7 @@ function toLocalCharacter(character: Record<string, unknown>): ManagedCharacter 
       typeof character.character_combat_power === 'number' || character.character_combat_power === null
         ? character.character_combat_power
         : null,
+    character_exp_history: history,
     image_url:
       typeof character.image_url === 'string' || character.image_url === null
         ? character.image_url
@@ -90,6 +107,7 @@ function syncLegacyProfile(character: ManagedCharacter) {
     character_level: character.character_level,
     character_exp_rate: character.character_exp_rate ?? null,
     character_combat_power: character.character_combat_power ?? null,
+    character_exp_history: character.character_exp_history ?? null,
     image_url: character.image_url ?? null,
     profile_set_at: character.profile_set_at || new Date().toISOString(),
   };
@@ -112,6 +130,11 @@ function formatPercent(value?: number | string | null) {
   }).format(parsed)}%`;
 }
 
+function formatChartDate(date: string) {
+  const parsed = new Date(date);
+  return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
+}
+
 function formatCompactNumber(value?: number | null) {
   if (value === null || value === undefined) return '0';
   return new Intl.NumberFormat('ko-KR').format(value);
@@ -121,9 +144,9 @@ const CHARACTER_CACHE_KEY = 'maple_diary:maple_character_cache:v1';
 
 type CachedCharacterPayload = { expiresAt: number; data: Record<string, unknown> };
 
-async function fetchMapleCharacter(nickname: string) {
+async function fetchMapleCharacter(nickname: string, forceRefresh = false) {
   const key = nickname.trim().toLowerCase();
-  if (typeof window !== 'undefined') {
+  if (!forceRefresh && typeof window !== 'undefined') {
     try {
       const raw = localStorage.getItem(CHARACTER_CACHE_KEY);
       if (raw) {
@@ -138,7 +161,7 @@ async function fetchMapleCharacter(nickname: string) {
     }
   }
 
-  const res = await fetch(`/api/maple/character?name=${encodeURIComponent(nickname)}`);
+  const res = await fetch(`/api/maple/character?name=${encodeURIComponent(nickname)}${forceRefresh ? '&refresh=1' : ''}`);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     if (res.status === 429) {
@@ -151,7 +174,14 @@ async function fetchMapleCharacter(nickname: string) {
     try {
       const raw = localStorage.getItem(CHARACTER_CACHE_KEY);
       const parsed = raw ? (JSON.parse(raw) as Record<string, CachedCharacterPayload>) : {};
-      parsed[key] = { data, expiresAt: Date.now() + 1000 * 60 * 60 * 24 };
+      const expiresAt = forceRefresh
+        ? (() => {
+            const next = new Date();
+            next.setHours(23, 59, 59, 999);
+            return next.getTime();
+          })()
+        : Date.now() + 1000 * 60 * 60 * 24;
+      parsed[key] = { data, expiresAt };
       localStorage.setItem(CHARACTER_CACHE_KEY, JSON.stringify(parsed));
     } catch {
       // ignore cache errors
@@ -164,6 +194,7 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId } = useAuthStore();
+  const { records, loadRecords } = useRecordStore();
   const [characters, setCharacters] = useState<ManagedCharacter[]>([]);
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -263,6 +294,11 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
 
     load();
   }, [isLoggedIn, localOwnerId]);
+
+  useEffect(() => {
+    if (!localOwnerId) return;
+    void loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
+  }, [activeCharacterId, isLoggedIn, loadRecords, localOwnerId]);
 
   useEffect(() => {
     if (drawerPhase === 'closed') return;
@@ -366,6 +402,8 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
     try {
       const latest = await fetchMapleCharacter(trimmed);
       const previousActive = activeCharacter || characters[0] || null;
+      const today = formatDate(new Date());
+      const initialExpRate = parsePercentValue(latest.character_exp_rate ?? 0);
       const nextCharacter: ManagedCharacter = {
         id: crypto.randomUUID(),
         character_name: latest.character_name,
@@ -376,6 +414,12 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
         character_exp_rate: latest.character_exp_rate ?? null,
         character_combat_power: latest.character_combat_power ?? null,
         image_url: latest.character_image ?? null,
+        character_exp_history: [
+          {
+            date: today,
+            exp_gain_percent: initialExpRate,
+          },
+        ],
         profile_set_at: new Date().toISOString(),
         is_active: true,
       };
@@ -479,6 +523,115 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
       : 'maple-panel rounded-[28px] border border-line bg-card/90 p-5 shadow-[var(--shadow-md)]';
   const expRateValue = parsePercentValue(activeCharacter?.character_exp_rate);
   const expRateFill = Math.min(Math.max(expRateValue, 0), 100);
+  const activeCharacterKey = activeCharacter ? getCharacterKey(activeCharacter) : null;
+
+  const recordExpHistory = useMemo(() => {
+    if (!activeCharacterKey) return [];
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(today);
+    start.setDate(start.getDate() - 6);
+    const startDate = formatDate(start);
+    const endDate = formatDate(today);
+
+    const grouped = new Map<string, number>();
+    for (const record of filterRecordsByCharacter(records, activeCharacterKey)) {
+      if (record.date < startDate || record.date > endDate) continue;
+      const exp = Number(record.exp_gain_percent) || 0;
+      if (exp <= 0) continue;
+      grouped.set(record.date, (grouped.get(record.date) ?? 0) + exp);
+    }
+
+    return Array.from(grouped.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, exp_gain_percent]) => ({ date, exp_gain_percent }));
+  }, [activeCharacterKey, records]);
+  const expHistory = useMemo(() => {
+    if (activeCharacter?.character_exp_history?.length) {
+      return activeCharacter.character_exp_history;
+    }
+    return recordExpHistory;
+  }, [activeCharacter?.character_exp_history, recordExpHistory]);
+  const expHistoryMax = useMemo(
+    () => Math.max(...expHistory.map((entry) => entry.exp_gain_percent), 1),
+    [expHistory],
+  );
+  const renderExperienceHistoryCard = (compact = false) => {
+    if (!activeCharacter) return null;
+
+    const cardShellClass = compact
+      ? 'rounded-[18px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.98),rgba(247,241,231,0.98))] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]'
+      : 'rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]';
+
+    const chartShellClass = compact
+      ? 'mt-3 rounded-[14px] border border-[#eee1ca] bg-white/78 px-2 py-2'
+      : 'mt-4 rounded-[18px] border border-[#eee1ca] bg-white/75 px-3 py-4';
+
+    const emptyStateClass = compact
+      ? 'mt-3 rounded-[14px] border border-dashed border-[#e8ddc6] bg-white/60 px-3 py-4 text-center text-[10px] text-[#8b6f59]'
+      : 'mt-4 rounded-[18px] border border-dashed border-[#e8ddc6] bg-white/55 px-4 py-6 text-center text-[12px] text-[#8b6f59]';
+
+    return (
+      <Card className={compact ? 'mt-3' : 'mt-4'}>
+        <div className={cardShellClass}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className={compact ? 'text-[10px] font-medium text-[#b8a28e]' : 'text-[11px] font-medium text-[#b8a28e]'}>
+                경험치 히스토리
+              </p>
+              <p className={compact ? 'mt-0.5 text-[12px] font-semibold tracking-[-0.04em] text-[#3a2517]' : 'mt-1 text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]'}>
+                Lv. {activeCharacter.character_level} → {activeCharacter.character_level + 1}
+              </p>
+            </div>
+            <p className={compact ? 'text-[10px] font-semibold text-[#8b6f59]' : 'text-[11px] font-semibold text-[#8b6f59]'}>
+              {formatPercent(activeCharacter.character_exp_rate)}
+            </p>
+          </div>
+
+          {expHistory.length > 0 ? (
+            <>
+              <div className={chartShellClass}>
+                <div className={compact ? 'flex h-24 items-end gap-1.5' : 'flex h-48 items-end gap-3'}>
+                  {expHistory.map((item) => {
+                    const height = Math.max((item.exp_gain_percent / expHistoryMax) * 100, item.exp_gain_percent > 0 ? (compact ? 18 : 20) : 6);
+                    return (
+                      <div key={item.date} className="flex min-w-0 flex-1 flex-col items-center">
+                        <p className={compact ? 'mb-1 text-[9px] font-semibold text-[#8b6f59]' : 'mb-2 text-[10px] font-semibold text-[#8b6f59]'}>
+                          {formatPercent(item.exp_gain_percent)}
+                        </p>
+                        <div className={compact ? 'flex h-16 w-full items-end justify-center' : 'flex h-36 w-full items-end justify-center'}>
+                          <div
+                            className={
+                              compact
+                                ? 'w-full max-w-[18px] rounded-t-[10px] bg-[linear-gradient(180deg,#fbbf24_0%,#fb923c_42%,#ef4444_100%)]'
+                                : 'w-full max-w-[34px] rounded-t-[14px] bg-[linear-gradient(180deg,#fbbf24_0%,#fb923c_42%,#ef4444_100%)] shadow-[0_8px_16px_rgba(239,68,68,0.12)]'
+                            }
+                            style={{ height: `${height}%` }}
+                          />
+                        </div>
+                        <p className={compact ? 'mt-1 text-[8px] font-medium text-[#a58b75]' : 'mt-2 text-[10px] font-medium text-[#a58b75]'}>
+                          {formatChartDate(item.date)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className={compact ? 'mt-2 flex items-center justify-between text-[9px] font-semibold text-[#b8a28e]' : 'mt-2 flex items-center justify-between text-[10px] font-semibold text-[#b8a28e]'}>
+                <span>Lv. {activeCharacter.character_level}</span>
+                <span>Lv. {activeCharacter.character_level + 1}</span>
+              </div>
+            </>
+          ) : (
+            <div className={emptyStateClass}>
+              {compact ? '기록이 없어요' : '최근 경험치 기록이 없어요'}
+            </div>
+          )}
+        </div>
+      </Card>
+    );
+  };
   const openDrawer = () => {
     if (drawerCloseTimerRef.current) {
       window.clearTimeout(drawerCloseTimerRef.current);
@@ -709,63 +862,47 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
                 <p className="mt-2 truncate text-[14px] font-medium tracking-[-0.03em] text-[#8b6f59]">
                   {activeCharacter?.character_class || (isLoggedIn ? '로그인 후 캐릭터를 추가해주세요' : '캐릭터를 추가해주세요')}
                 </p>
-                {activeCharacter && (
-                  <p className="mt-2 text-[18px] font-bold tracking-[-0.05em] text-[#e98312]">
-                    Lv. {activeCharacter.character_level}
-                  </p>
-                )}
               </div>
             </div>
 
             {activeCharacter ? (
-              <div className="mt-5 grid grid-cols-2 gap-2.5">
-                <div className="rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                  <p className="text-[11px] font-medium text-[#b8a28e]">월드</p>
-                  <p className="mt-1.5 text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]">
-                    {activeCharacter.character_world || '미지정'}
-                  </p>
+              <>
+                <div className="mt-3 grid grid-cols-2 gap-2.5">
+                  <div className="rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                    <p className="text-[11px] font-medium text-[#b8a28e]">월드</p>
+                    <p className="mt-1.5 text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]">
+                      {activeCharacter.character_world || '미지정'}
+                    </p>
+                  </div>
+                  <div className="rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                    <p className="text-[11px] font-medium text-[#b8a28e]">레벨</p>
+                    <p className="mt-1.5 text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]">
+                      Lv. {activeCharacter.character_level}
+                    </p>
+                  </div>
+                  <div className="rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                    <p className="text-[11px] font-medium text-[#b8a28e]">직업</p>
+                    <p className="mt-1.5 truncate text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]">
+                      {activeCharacter.character_class}
+                    </p>
+                  </div>
+                  <div className="rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                    <p className="text-[11px] font-medium text-[#b8a28e]">전투력</p>
+                    <p className="mt-1.5 whitespace-nowrap text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]">
+                      {formatCompactNumber(activeCharacter.character_combat_power)}
+                    </p>
+                  </div>
                 </div>
-                <div className="rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                  <p className="text-[11px] font-medium text-[#b8a28e]">레벨</p>
-                  <p className="mt-1.5 text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]">
-                    Lv. {activeCharacter.character_level}
-                  </p>
-                </div>
-                <div className="rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                  <p className="text-[11px] font-medium text-[#b8a28e]">직업</p>
-                  <p className="mt-1.5 truncate text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]">
-                    {activeCharacter.character_class}
-                  </p>
-                </div>
-                <div className="rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                  <p className="text-[11px] font-medium text-[#b8a28e]">전투력</p>
-                  <p className="mt-1.5 whitespace-nowrap text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]">
-                    {formatCompactNumber(activeCharacter.character_combat_power)}
-                  </p>
-                </div>
-              </div>
+              </>
             ) : (
               <div className="mt-5 rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] p-4 text-center text-sm text-[#8b6f59] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
                 아직 선택된 캐릭터가 없어요
               </div>
             )}
-
-            {activeCharacter && (
-              <div className="mt-3 rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-[11px] font-medium text-[#b8a28e]">경험치</p>
-                  <p className="text-[11px] font-semibold text-[#8b6f59]">{formatPercent(activeCharacter.character_exp_rate)}</p>
-                </div>
-                <div className="mt-2.5 h-3.5 rounded-full bg-white/95 p-0.5">
-                  <div
-                    className="h-full rounded-full bg-[linear-gradient(90deg,#f59e0b_0%,#ef4444_100%)]"
-                    style={{ width: `${expRateFill}%` }}
-                  />
-                </div>
-              </div>
-            )}
           </div>
         </Card>
+
+        {activeCharacter && renderExperienceHistoryCard(true)}
 
         {drawerPhase !== 'closed' && drawerMarkup}
       </>
@@ -829,26 +966,18 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
                   : (isLoggedIn ? '로그인 계정과 동기화됩니다' : '이 브라우저에 저장됩니다')}
               </p>
               {activeCharacter && (
-                <p className="mt-1 text-sm font-semibold tracking-[-0.03em] text-amber-600">
-                  Lv. {activeCharacter.character_level}
-                </p>
-              )}
-
-              {activeCharacter && (
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                  <div className="rounded-[20px] border border-line bg-card/82 px-3 py-2.5 text-center shadow-[0_1px_0_rgba(255,255,255,0.45)_inset]">
-                    <p className="text-[10px] text-t3">레벨</p>
-                    <p className="mt-1 text-[15px] font-bold tracking-[-0.03em] text-t1">Lv. {activeCharacter.character_level}</p>
+                <>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <div className="rounded-[20px] border border-line bg-card/82 px-3 py-2.5 text-center shadow-[0_1px_0_rgba(255,255,255,0.45)_inset]">
+                      <p className="text-[10px] text-t3">레벨</p>
+                      <p className="mt-1 text-[15px] font-bold tracking-[-0.03em] text-t1">Lv. {activeCharacter.character_level}</p>
+                    </div>
+                    <div className="rounded-[20px] border border-line bg-card/82 px-3 py-2.5 text-center shadow-[0_1px_0_rgba(255,255,255,0.45)_inset]">
+                      <p className="text-[10px] text-t3">전투력</p>
+                      <p className="mt-1 truncate text-[15px] font-bold tracking-[-0.03em] text-t1">{formatCompactNumber(activeCharacter.character_combat_power)}</p>
+                    </div>
                   </div>
-                  <div className="rounded-[20px] border border-line bg-card/82 px-3 py-2.5 text-center shadow-[0_1px_0_rgba(255,255,255,0.45)_inset]">
-                    <p className="text-[10px] text-t3">경험치</p>
-                    <p className="mt-1 text-[15px] font-bold tracking-[-0.03em] text-t1">{formatPercent(activeCharacter.character_exp_rate)}</p>
-                  </div>
-                  <div className="rounded-[20px] border border-line bg-card/82 px-3 py-2.5 text-center shadow-[0_1px_0_rgba(255,255,255,0.45)_inset]">
-                    <p className="text-[10px] text-t3">전투력</p>
-                    <p className="mt-1 truncate text-[15px] font-bold tracking-[-0.03em] text-t1">{formatCompactNumber(activeCharacter.character_combat_power)}</p>
-                  </div>
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -867,6 +996,8 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
           </div>
         )}
       </Card>
+
+      {activeCharacter && renderExperienceHistoryCard(false)}
 
       {drawerPhase !== 'closed' && drawerMarkup}
     </>

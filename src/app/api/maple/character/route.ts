@@ -110,14 +110,17 @@ async function fetchFromNexon(
 
 export async function GET(request: NextRequest) {
   const name = request.nextUrl.searchParams.get('name');
+  const forceRefresh = request.nextUrl.searchParams.get('refresh') === '1';
   if (!name) {
     return NextResponse.json({ error: '캐릭터 이름이 필요합니다' }, { status: 400 });
   }
 
   const cacheKey = name.trim().toLowerCase();
-  const cached = characterCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
-    return NextResponse.json(cached.payload, { status: cached.status });
+  if (!forceRefresh) {
+    const cached = characterCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return NextResponse.json(cached.payload, { status: cached.status });
+    }
   }
 
   const apiKey = process.env.NEXT_PUBLIC_MAPLE_API_KEY;
