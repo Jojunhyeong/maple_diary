@@ -27,6 +27,7 @@ export interface CharacterProfile {
   character_world?: string | null;
   character_exp_rate?: number | string | null;
   character_combat_power?: number | null;
+  character_exp_history?: CharacterExpHistoryEntry[] | null;
   is_active?: boolean;
   source?: "legacy_profile" | "manual" | "api";
   created_at: string;
@@ -67,6 +68,7 @@ export interface Record {
   time_minutes: number;
   meso: number;
   shard_count: number;
+  exp_gain_percent: number;
   material_cost: number;
   memo?: string;
   created_at: string;
@@ -97,6 +99,11 @@ export interface RecordWithCalculations extends Record {
   meso_per_hour: number;
   net_per_hour: number;
   shard_per_hour: number;
+}
+
+export interface CharacterExpHistoryEntry {
+  date: string;
+  exp_gain_percent: number;
 }
 
 // ===== 분석 관련 타입 =====

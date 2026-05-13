@@ -7,6 +7,7 @@ export interface Record {
   time_minutes: number;
   meso: number;
   shard_count: number;
+  exp_gain_percent: number;
   material_cost: number;
   memo?: string;
   created_at: string;

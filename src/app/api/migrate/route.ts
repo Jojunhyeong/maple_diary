@@ -3,7 +3,7 @@ import { auth } from '@/../auth';
 import { supabaseAdmin } from '@/shared/lib/supabase';
 import type { Expense, Goal, Record as DiaryRecord, RecordWithCalculations } from '@/shared/types';
 
-type MigratableRecord = DiaryRecord & Partial<
+type MigratableRecord = Partial<DiaryRecord> & Partial<
   Pick<
     RecordWithCalculations,
     'shard_value' | 'total_revenue' | 'net_revenue' | 'meso_per_hour' | 'net_per_hour' | 'shard_per_hour'
@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
       time_minutes: r.time_minutes,
       meso: r.meso,
       shard_count: r.shard_count ?? 0,
+      exp_gain_percent: r.exp_gain_percent ?? 0,
       material_cost: r.material_cost ?? 0,
       shard_value: r.shard_value ?? 0,
       total_revenue: r.total_revenue ?? 0,

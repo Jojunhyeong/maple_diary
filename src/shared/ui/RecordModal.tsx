@@ -10,7 +10,7 @@ import { useUserStore } from '@/shared/lib/stores/useUserStore';
 import { useRecordModalStore } from '@/shared/lib/stores/useRecordModalStore';
 import { enrichRecordWithCalculations } from '@/shared/lib/utils/calculations';
 import { formatMeso, formatDate, fromManInput, toManDisplay } from '@/shared/lib/utils/formatters';
-import { readActiveCharacterId } from '@/shared/lib/character-storage';
+import { readActiveCharacterId, readLocalCharacters } from '@/shared/lib/character-storage';
 import type { Record as RecordType } from '@/shared/types';
 
 const MINUTES_PER_SOJAE = 30;
@@ -41,7 +41,7 @@ export function RecordModal() {
   const closeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    setShardPriceMan(toManDisplay(settings.shard_price));
+    setShardPriceMan(settings.shard_price === 0 ? '0' : toManDisplay(settings.shard_price));
   }, [settings.shard_price]);
 
   useEffect(() => {
@@ -93,7 +93,17 @@ export function RecordModal() {
   const meso = fromManInput(mesoMan);
   const materialCostPerSojae = fromManInput(materialCostMan);
   const materialCost = materialCostPerSojae * (parseInt(sojaeCnt) || 0);
-  const shardPrice = fromManInput(shardPriceMan) || settings.shard_price;
+  const shardPrice = shardPriceMan.trim() === '' ? settings.shard_price : fromManInput(shardPriceMan);
+  const expGain = useMemo(() => {
+    const activeCharacterId = readActiveCharacterId();
+    if (!activeCharacterId) return 0;
+    const characters = readLocalCharacters();
+    const activeCharacter = characters.find((character) => character.id === activeCharacterId);
+    const value = typeof activeCharacter?.character_exp_rate === 'string'
+      ? Number(activeCharacter.character_exp_rate)
+      : activeCharacter?.character_exp_rate ?? 0;
+    return Number.isFinite(value) ? Math.max(0, value) : 0;
+  }, [isOpen, editingRecord, records]);
 
   const preview = useMemo(() => {
     if (!parseInt(sojaeCnt) && !meso) return null;
@@ -107,6 +117,7 @@ export function RecordModal() {
         time_minutes: timeMinutes,
         meso,
         shard_count: parseInt(shardCount) || 0,
+        exp_gain_percent: expGain,
         material_cost: materialCost,
         memo: memo.trim() || undefined,
         local_owner_id: editingRecord?.local_owner_id,
@@ -135,8 +146,12 @@ export function RecordModal() {
   };
 
   const handleShardPriceSave = async () => {
+    if (shardPriceMan.trim() === '') {
+      setShardPriceEditing(false);
+      return;
+    }
     const val = fromManInput(shardPriceMan);
-    if (val > 0) await updateSettings({ shard_price: val });
+    await updateSettings({ shard_price: val });
     setShardPriceEditing(false);
   };
 
@@ -152,6 +167,7 @@ export function RecordModal() {
         time_minutes: timeMinutes,
         meso,
         shard_count: parseInt(shardCount) || 0,
+        exp_gain_percent: expGain,
         material_cost: materialCost,
         memo: memo.trim() || undefined,
         character_id: characterId ?? editingRecord?.character_id,
@@ -173,6 +189,7 @@ export function RecordModal() {
             time_minutes: timeMinutes,
             meso,
             shard_count: parseInt(shardCount) || 0,
+            exp_gain_percent: expGain,
             material_cost: materialCost,
             memo: memo.trim() || undefined,
             character_id: characterId ?? undefined,
@@ -354,8 +371,8 @@ export function RecordModal() {
                 className="w-full rounded-xl bg-card border border-line px-4 py-3 cursor-pointer"
                 onClick={() => setShardPriceEditing(true)}
               >
-                <span className="text-t1 font-medium">{shardPriceMan}만</span>
-                <span className="text-t3 text-sm ml-2">({formatMeso(shardPrice)})</span>
+                <span className="text-t1 font-medium">{shardPriceMan || '0'}만</span>
+                <span className="text-t3 text-sm ml-2">({formatMeso(shardPrice)}원)</span>
               </div>
             )}
           </div>
@@ -375,6 +392,12 @@ export function RecordModal() {
               <div className="grid grid-cols-2 gap-y-2.5 text-sm">
                 <span className="text-t3">조각 환산</span>
                 <span className="text-t1 text-right">{formatMeso(preview.shard_value)}</span>
+                {shardPrice === 0 && (
+                  <>
+                    <span className="text-t3">조각 개수</span>
+                    <span className="text-t1 text-right">{parseInt(shardCount) || 0}개</span>
+                  </>
+                )}
                 <span className="text-t3">총 수익</span>
                 <span className="text-t1 text-right">{formatMeso(preview.total_revenue)}</span>
                 <span className="text-t2 font-medium">순수익</span>

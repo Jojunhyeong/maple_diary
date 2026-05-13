@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card } from '@/shared/ui/Card';
+import { Input } from '@/shared/ui/Input';
 import {
   BOSS_CATALOG,
   type BossCategoryKey,
   type BossDifficultyKey,
   getBossCategory,
 } from '@/shared/data/boss-catalog';
+import { BOSS_DROP_ITEM_OPTIONS, getBossDropItemOption } from '@/shared/data/boss-drop-items';
 import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import {
   BOSS_STORAGE_PREFIX,
@@ -21,10 +23,13 @@ import {
   mergeBossChecklistStates,
   readBossChecklistState,
   splitBossChecklistState,
+  type BossLootItem,
   type ChecklistState,
   type BossSelection,
 } from '@/shared/lib/boss-checklist';
 import { formatMeso, formatDate } from '@/shared/lib/utils/formatters';
+
+const LOOT_PRICE_UNIT = 10_000_000;
 
 export default function BossPage() {
   const { data: session } = useSession();
@@ -51,8 +56,11 @@ export default function BossPage() {
 
   useEffect(() => {
     if (!canPersist || typeof window === 'undefined' || !activeCharacterId) return;
-    const { weekly, monthly } = splitBossChecklistState(state);
-    localStorage.setItem(`${BOSS_STORAGE_PREFIX}:${activeCharacterId}:${weekKey}`, JSON.stringify(weekly));
+    const { weekly, monthly, lootItems } = splitBossChecklistState(state);
+    localStorage.setItem(
+      `${BOSS_STORAGE_PREFIX}:${activeCharacterId}:${weekKey}`,
+      JSON.stringify({ ...weekly, __lootItems: lootItems }),
+    );
     localStorage.setItem(`${BOSS_STORAGE_PREFIX}:${activeCharacterId}:${monthKey}`, JSON.stringify(monthly));
   }, [canPersist, activeCharacterId, weekKey, monthKey, state]);
 
@@ -155,12 +163,21 @@ export default function BossPage() {
   };
 
   const activeGroup = useMemo(() => getBossCategory(activeCategory), [activeCategory]);
+  const dropItemOptions = BOSS_DROP_ITEM_OPTIONS;
+  const lootItems = useMemo(() => state.__lootItems ?? [], [state.__lootItems]);
+  const lootRevenue = useMemo(
+    () => lootItems.reduce((sum, item) => (item.checked ? sum + Math.max(0, item.sellPrice || 0) : sum), 0),
+    [lootItems],
+  );
+  const lootCount = useMemo(() => lootItems.filter((item) => item.checked).length, [lootItems]);
 
   const summary = useMemo(() => {
     const totals = {
       totalRevenue: 0,
       selectedBosses: 0,
       selectedClears: 0,
+      lootRevenue,
+      lootCount,
       byCategory: {
         general: 0,
         subboss: 0,
@@ -186,8 +203,10 @@ export default function BossPage() {
       }
     }
 
+    totals.totalRevenue += lootRevenue;
+
     return totals;
-  }, [state]);
+  }, [state, lootRevenue, lootCount]);
 
   const selectedEntries = useMemo(() => {
     const entries: Array<{
@@ -222,6 +241,42 @@ export default function BossPage() {
 
     return entries.sort((a, b) => b.revenue - a.revenue);
   }, [state]);
+
+  const canEditLoot = !isWeeklyLocked || isEditingSavedCycles;
+
+  const updateLootItems = (updater: (items: BossLootItem[]) => BossLootItem[]) => {
+    if (!isHydrated || !canEditLoot) return;
+    setState((prev) => {
+      const nextItems = updater(prev.__lootItems ?? []);
+      return {
+        ...prev,
+        __lootItems: nextItems,
+      } as ChecklistState;
+    });
+  };
+
+  const addLootItem = () => {
+    updateLootItems((items) => [
+      ...items,
+      {
+        id: crypto.randomUUID(),
+        itemId: '',
+        name: '',
+        sellPrice: 0,
+        checked: true,
+      },
+    ]);
+  };
+
+  const patchLootItem = (itemId: string, patch: Partial<BossLootItem>) => {
+    updateLootItems((items) =>
+      items.map((item) => (item.id === itemId ? { ...item, ...patch } : item)),
+    );
+  };
+
+  const removeLootItem = (itemId: string) => {
+    updateLootItems((items) => items.filter((item) => item.id !== itemId));
+  };
 
   const handleToggle = (bossId: string, difficulty: BossDifficultyKey, checked: boolean) => {
     if (!isHydrated) return;
@@ -457,7 +512,7 @@ export default function BossPage() {
         <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="maple-title text-2xl font-bold text-t1">보스 수익</h1>
-          <p className="mt-1 text-xs text-t3">체크한 보스를 기준으로 주간(목~수)과 월간 검마 수익을 합산해요</p>
+          <p className="mt-1 text-xs text-t3">체크한 보스와 보스별 드랍템을 기준으로 주간(목~수)과 월간 검마 수익을 합산해요</p>
           <p className="mt-1 text-[11px] text-t3">임시 저장은 자동, 서버 저장은 주간/월간 각각 1회만 가능해요</p>
           <p className="mt-2 text-[11px] text-t3">주간 기준 · {weekLabel}</p>
         </div>
@@ -489,9 +544,9 @@ export default function BossPage() {
 
       <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.18),rgba(245,158,11,0.05)_55%,transparent)]">
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          <MetricCard label="주간+월간 예상 수익" value={formatMeso(summary.totalRevenue)} highlight />
+          <MetricCard label="보스 예상 수익" value={formatMeso(summary.totalRevenue)} highlight />
           <MetricCard label="체크한 보스" value={`${summary.selectedBosses}개`} />
-          <MetricCard label="체크 횟수" value={`${summary.selectedClears}회`} />
+          <MetricCard label="드랍템 체크" value={`${summary.lootCount}개`} />
           <MetricCard label="현재 탭" value={activeGroup.label} />
         </div>
       </Card>
@@ -667,9 +722,108 @@ export default function BossPage() {
                     {checkedRevenue > 0 ? formatMeso(checkedRevenue) : '-'}
                   </p>
                 </div>
+
               </div>
             );
           })}
+        </div>
+      </Card>
+
+      <Card>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-t1">보스 드랍템</p>
+            <p className="text-[11px] text-t3">드랍템을 추가하고 품목은 드랍박스에서 선택해요</p>
+          </div>
+          <div className="flex flex-col items-end gap-1 text-right">
+            <p className="text-xs text-t3">{lootCount}개 체크</p>
+            <p className="text-sm font-bold text-t1">{formatMeso(lootRevenue)}</p>
+          </div>
+        </div>
+
+        {lootItems.length === 0 ? (
+          <div className="rounded-xl bg-surface/50 py-8 text-center">
+            <p className="text-sm text-t3">아직 등록한 드랍템이 없어요</p>
+            <button
+              type="button"
+              onClick={addLootItem}
+              disabled={!canEditLoot}
+              className="mt-3 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              + 품목 추가
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {lootItems.map((item) => (
+              <div key={item.id} className="rounded-xl border border-line bg-surface/35 p-3">
+                <div className="hidden min-w-0 grid-cols-[auto_minmax(0,1fr)_240px_auto] items-end gap-3 px-14 text-[11px] text-t3 sm:grid">
+                  <div />
+                  <span>드랍템</span>
+                  <span>판매가</span>
+                  <div />
+                </div>
+                <div className="mt-0 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-[auto_minmax(0,1fr)_240px_auto] sm:items-center">
+                  <div className="shrink-0">
+                    <LootThumb itemId={item.itemId} label={item.name} />
+                  </div>
+                  <select
+                    value={item.itemId}
+                    onChange={(e) => {
+                      const nextItem = getBossDropItemOption(e.target.value);
+                      patchLootItem(item.id, {
+                        itemId: e.target.value,
+                        name: nextItem?.label ?? '',
+                      });
+                    }}
+                    disabled={!canEditLoot}
+                    className="h-11 min-w-0 rounded-xl border border-line bg-card px-3 text-sm font-medium text-t1 focus:outline-none focus:ring-2 focus:ring-amber-400/30 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="">드랍템 선택</option>
+                    {dropItemOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    className="!h-11 !py-0"
+                    value={formatLootPriceUnit(item.sellPrice)}
+                    onChange={(e) =>
+                      patchLootItem(item.id, {
+                        sellPrice: parseLootPriceUnit(e.target.value),
+                      })
+                    }
+                    placeholder="0"
+                    suffix="천만"
+                    inputMode="decimal"
+                    disabled={!canEditLoot}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeLootItem(item.id)}
+                    disabled={!canEditLoot}
+                    className="h-11 shrink-0 rounded-xl border border-red-500/20 bg-red-500/10 px-3 text-xs font-semibold text-red-600 transition-colors hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    삭제
+                  </button>
+                </div>
+                {item.itemId && <p className="mt-2 text-[11px] text-t3">선택: {getBossDropItemOption(item.itemId)?.label ?? item.name}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="text-[11px] text-t3">추가한 드랍템은 자동으로 획득 처리돼요</p>
+          <button
+            type="button"
+            onClick={addLootItem}
+            disabled={!canEditLoot}
+            className="rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            + 품목 추가
+          </button>
         </div>
       </Card>
 
@@ -736,4 +890,42 @@ function difficultyColor(difficulty: BossDifficultyKey) {
     case 'extreme':
       return 'linear-gradient(135deg,#ee4b4b,#c81e1e)';
   }
+}
+
+function formatLootPriceUnit(value: number) {
+  if (!value || value <= 0) return '';
+  const unitValue = value / LOOT_PRICE_UNIT;
+  const rounded = Math.round(unitValue * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function parseLootPriceUnit(value: string) {
+  const normalized = value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+  if (!normalized) return 0;
+  const unitValue = Number(normalized);
+  if (!Number.isFinite(unitValue) || unitValue <= 0) return 0;
+  return Math.round(unitValue * LOOT_PRICE_UNIT);
+}
+
+function LootThumb({ itemId, label }: { itemId: string; label: string }) {
+  const option = getBossDropItemOption(itemId);
+  const [failed, setFailed] = useState(false);
+  const imageUrl = option?.imageUrl;
+
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-card text-[10px] font-bold text-t2">
+      {imageUrl && !failed ? (
+        <img
+          src={imageUrl}
+          alt={option?.label ?? label ?? '드랍템'}
+          className="h-full w-full object-contain"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <span className="px-1 text-center leading-tight">{option?.iconLabel ?? 'IMG'}</span>
+      )}
+    </div>
+  );
 }

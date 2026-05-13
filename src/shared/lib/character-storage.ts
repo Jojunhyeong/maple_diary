@@ -15,6 +15,7 @@ export interface LocalCharacterProfile {
   character_level: number;
   character_exp_rate?: number | string | null;
   character_combat_power?: number | null;
+  character_exp_history?: { date: string; exp_gain_percent: number }[] | null;
   image_url?: string | null;
   profile_set_at: string;
   is_active?: boolean;
