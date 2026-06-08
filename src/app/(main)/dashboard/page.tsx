@@ -162,7 +162,7 @@ export default function DashboardPage() {
     if (!localOwnerId) return;
     loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
     loadGoal(localOwnerId, isLoggedIn);
-    loadExpenses(localOwnerId, isLoggedIn);
+    loadExpenses(isLoggedIn);
   }, [localOwnerId, loadRecords, loadGoal, loadExpenses, currentMonth, isLoggedIn, activeCharacterId]);
 
   const visibleRecords = useMemo(

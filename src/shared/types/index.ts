@@ -91,6 +91,30 @@ export interface Expense {
   local_id?: string;
 }
 
+export type GatheringItemTab = "seed" | "flower" | "ore";
+
+export interface GatheringRevenue {
+  id: string;
+  user_id?: string;
+  character_id?: string | null;
+  date: string;
+  item_name: string;
+  item_tab: GatheringItemTab;
+  quantity: number;
+  unit_price: number;
+  total_amount: number;
+  created_at: string;
+  updated_at: string;
+  sync_status: SyncStatus;
+  local_id?: string;
+}
+
+export interface GatheringTabTotals {
+  seed: number;
+  flower: number;
+  ore: number;
+}
+
 export interface RecordWithCalculations extends Record {
   shard_value: number;
   total_revenue: number;
@@ -189,4 +213,11 @@ export interface GoalProgress {
     remaining: number;
     expected_date?: string;
   };
+}
+
+export interface GatheringRevenueSummary {
+  totalRevenue: number;
+  entryCount: number;
+  byTab: GatheringTabTotals;
+  entries: GatheringRevenue[];
 }

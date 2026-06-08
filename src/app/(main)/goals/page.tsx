@@ -5,11 +5,13 @@ import { useEffect, useMemo, useState } from 'react';
 import type { DragEvent } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
+import { useExpenseStore } from '@/shared/lib/stores/useExpenseStore';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { useGoalStore } from '@/shared/lib/stores/useGoalStore';
 import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import { useStoredCharacterProfile } from '@/shared/lib/hooks/useStoredCharacterProfile';
 import { useBossRevenueSummary } from '@/shared/lib/hooks/useBossRevenueSummary';
+import { useGatheringRevenueSummary } from '@/shared/lib/hooks/useGatheringRevenueSummary';
 import { Card } from '@/shared/ui/Card';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
@@ -98,6 +100,10 @@ type TargetView = GoalTarget & {
   goalId: string;
   goalStartStr: string;
 };
+
+type GoalRevenueMode = 'gross' | 'net';
+
+const GOAL_REVENUE_MODE_KEY = 'maple_diary:goal_revenue_mode';
 
 function catalogItemKey(item: Pick<EquipmentCatalogItem, 'id' | 'slug'>) {
   return item.slug || item.id;
@@ -726,6 +732,7 @@ export default function GoalsPage() {
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId, initializeLocal } = useAuthStore();
   const { records, loadRecords } = useRecordStore();
+  const { expenses, loadExpenses } = useExpenseStore();
   const { currentGoals, loadGoal, saveGoals, error: goalError, clearError } = useGoalStore();
   const activeCharacterId = useActiveCharacterId();
   const profile = useStoredCharacterProfile();
@@ -738,6 +745,8 @@ export default function GoalsPage() {
   const [formError, setFormError] = useState('');
   const [draggingGoalId, setDraggingGoalId] = useState<string | null>(null);
   const [dragOverGoalId, setDragOverGoalId] = useState<string | null>(null);
+  const [goalRevenueMode, setGoalRevenueMode] = useState<GoalRevenueMode>('gross');
+  const [goalRevenueModeReady, setGoalRevenueModeReady] = useState(false);
 
   useEffect(() => {
     initializeLocal();
@@ -751,24 +760,56 @@ export default function GoalsPage() {
     if (localOwnerId) {
       loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
       loadGoal(localOwnerId, isLoggedIn);
+      loadExpenses(isLoggedIn);
     }
-  }, [localOwnerId, loadRecords, loadGoal, isLoggedIn, activeCharacterId]);
+  }, [localOwnerId, loadRecords, loadGoal, loadExpenses, isLoggedIn, activeCharacterId]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(GOAL_REVENUE_MODE_KEY);
+      if (stored === 'gross' || stored === 'net') {
+        setGoalRevenueMode(stored);
+      }
+    } catch {
+      // ignore storage errors
+    } finally {
+      setGoalRevenueModeReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!goalRevenueModeReady) return;
+    try {
+      localStorage.setItem(GOAL_REVENUE_MODE_KEY, goalRevenueMode);
+    } catch {
+      // ignore storage errors
+    }
+  }, [goalRevenueMode, goalRevenueModeReady]);
 
   const today = useMemo(() => new Date(), []);
   const monthStart = useMemo(() => new Date(today.getFullYear(), today.getMonth(), 1), [today]);
 
   const todayStr = useMemo(() => formatDate(today), [today]);
+  const currentMonthStartStr = useMemo(() => formatDate(monthStart), [monthStart]);
+  const currentMonthRecords = useMemo(
+    () => records.filter((r) => r.date >= currentMonthStartStr && r.date <= todayStr),
+    [records, currentMonthStartStr, todayStr],
+  );
+  const currentMonthExpenses = useMemo(
+    () => expenses.filter((expense) => expense.date >= currentMonthStartStr && expense.date <= todayStr),
+    [expenses, currentMonthStartStr, todayStr],
+  );
   const bossWeeklySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'weekly');
   const bossMonthlySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'monthly');
+  const gatheringMonthlySummary = useGatheringRevenueSummary(monthStart, today, isLoggedIn);
 
-  const scopedRecords = useMemo(
-    () => records.filter((r) => r.date <= todayStr),
-    [records, todayStr],
-  );
-
-  const totalHunting = scopedRecords.reduce((sum, r) => sum + r.net_revenue, 0);
+  const totalHunting = currentMonthRecords.reduce((sum, r) => sum + r.net_revenue, 0);
   const totalBoss = bossWeeklySummary.totalRevenue + bossMonthlySummary.totalRevenue;
-  const totalCurrent = totalHunting + totalBoss;
+  const totalGrossRevenue = totalHunting + totalBoss + gatheringMonthlySummary.totalRevenue;
+  const currentExpenseTotal = currentMonthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const totalNetRevenue = totalGrossRevenue - currentExpenseTotal;
+  const selectedGoalRevenue = goalRevenueMode === 'gross' ? totalGrossRevenue : totalNetRevenue;
+  const effectiveGoalRevenue = Math.max(selectedGoalRevenue, 0);
 
   const goalCards = useMemo(() => normalizeGoalCards(currentGoals), [currentGoals]);
   const totalTargetAmount = useMemo(
@@ -785,7 +826,7 @@ export default function GoalsPage() {
     }, 0),
     [goalCards],
   );
-  const progressPct = totalTargetAmount > 0 ? Math.min((totalCurrent / totalTargetAmount) * 100, 100) : 0;
+  const progressPct = totalTargetAmount > 0 ? Math.min((effectiveGoalRevenue / totalTargetAmount) * 100, 100) : 0;
   const targetViews = useMemo<TargetView[]>(
     () => {
       let runningTotal = 0;
@@ -800,7 +841,7 @@ export default function GoalsPage() {
           : null);
         if (!target) return [];
         const previousTargetTotal = runningTotal;
-        const allocatedCurrent = clampAllocation(totalCurrent, previousTargetTotal, target.target_amount);
+        const allocatedCurrent = clampAllocation(effectiveGoalRevenue, previousTargetTotal, target.target_amount);
         runningTotal += target.target_amount;
         return {
           ...target,
@@ -810,11 +851,11 @@ export default function GoalsPage() {
           previousTargetTotal,
           cumulativeTarget: runningTotal,
           allocatedCurrent,
-          isActive: totalCurrent > previousTargetTotal,
+          isActive: effectiveGoalRevenue > previousTargetTotal,
         };
       });
     },
-    [goalCards, totalCurrent],
+    [goalCards, effectiveGoalRevenue],
   );
 
   const currentCharacterLabel = useMemo(() => {
@@ -1101,21 +1142,49 @@ export default function GoalsPage() {
 
         <section className="flex min-w-0 flex-col gap-5">
           <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.13),rgba(245,158,11,0.03)_55%,transparent)] p-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex-1">
                 <p className="text-[11px] text-t3">목표 현황</p>
                 <p className="mt-1 text-2xl font-black tracking-tight text-t1">목표 카드를 하나씩 쌓아갑니다</p>
                 <p className="mt-2 text-xs text-t3">카드 추가 버튼으로 목표를 한 장씩 만들고, 각 카드에서 바로 수정과 삭제를 할 수 있어요.</p>
                 <p className="mt-1 text-xs font-medium text-amber-600">드래그해서 우선순위를 변경할 수 있어요.</p>
               </div>
-              <div className="grid min-w-[220px] grid-cols-2 gap-2">
-                <div className="rounded-2xl border border-line bg-card/80 p-3">
-                  <p className="text-[11px] text-t3">총 목표액</p>
-                  <p className="mt-1 text-base font-bold text-t1">{formatMeso(totalTargetAmount)}</p>
+              <div className="flex shrink-0 flex-col items-end gap-2 self-start">
+                <div className="inline-flex rounded-full border border-line bg-white/80 p-1 shadow-[var(--shadow-sm)]">
+                  <button
+                    type="button"
+                    onClick={() => setGoalRevenueMode('gross')}
+                    className={[
+                      'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+                      goalRevenueMode === 'gross' ? 'bg-amber-500 text-white shadow-sm' : 'text-t3 hover:text-t1',
+                    ].join(' ')}
+                  >
+                    총수익
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGoalRevenueMode('net')}
+                    className={[
+                      'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+                      goalRevenueMode === 'net' ? 'bg-amber-500 text-white shadow-sm' : 'text-t3 hover:text-t1',
+                    ].join(' ')}
+                  >
+                    순수익
+                  </button>
                 </div>
-                <div className="rounded-2xl border border-line bg-card/80 p-3">
-                  <p className="text-[11px] text-t3">목표 진행</p>
-                  <p className="mt-1 text-base font-bold text-t1">{progressPct.toFixed(1)}%</p>
+                <div className="grid w-full min-w-[240px] grid-cols-3 gap-2">
+                  <div className="rounded-2xl border border-line bg-card/80 p-3">
+                    <p className="text-[11px] text-t3">총 목표액</p>
+                    <p className="mt-1 text-base font-bold text-t1">{formatMeso(totalTargetAmount)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-line bg-card/80 p-3">
+                    <p className="text-[11px] text-t3">{goalRevenueMode === 'gross' ? '총수익' : '순수익'}</p>
+                    <p className="mt-1 text-base font-bold text-t1">{formatMeso(effectiveGoalRevenue)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-line bg-card/80 p-3">
+                    <p className="text-[11px] text-t3">목표 진행</p>
+                    <p className="mt-1 text-base font-bold text-t1">{progressPct.toFixed(1)}%</p>
+                  </div>
                 </div>
               </div>
             </div>

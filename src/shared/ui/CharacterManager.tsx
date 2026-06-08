@@ -24,7 +24,7 @@ import {
   writeLocalCharacters,
   type LocalCharacterProfile,
 } from '@/shared/lib/character-storage';
-import { migrateBossChecklistCharacterId } from '@/shared/lib/boss-checklist';
+import { migrateBossChecklistCharacterId, removeBossChecklistCharacterId } from '@/shared/lib/boss-checklist';
 
 type ManagedCharacter = LocalCharacterProfile & {
   id: string;
@@ -235,13 +235,27 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
               : null) ||
             (fallbackActive ? getCharacterKey(fallbackActive) : null);
 
+          const nextActive = loaded.find((character) => getCharacterKey(character) === activeKey) || loaded[0] || null;
+
           setCharacters(loaded);
           setActiveCharacterId(activeKey);
 
           if (loaded.length > 0) {
             writeLocalCharacters(loaded, activeKey);
-            const nextActive = loaded.find((character) => getCharacterKey(character) === activeKey) || loaded[0];
             if (nextActive) syncLegacyProfile(nextActive);
+          }
+
+          if (isLoggedIn && nextActive && getCharacterKey(nextActive) === activeKey) {
+            void fetch('/api/characters', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...nextActive,
+                is_active: true,
+              }),
+            }).catch(() => {
+              // ignore background sync errors
+            });
           }
         } else {
           const rawCharacters = readLocalCharacters();
@@ -276,11 +290,12 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
             }
           }
 
+          const nextActive = normalizedCharacters.find((character) => getCharacterKey(character) === activeKey) || normalizedCharacters[0] || null;
+
           setCharacters(normalizedCharacters);
           setActiveCharacterId(activeKey);
           if (normalizedCharacters.length > 0) {
             writeLocalCharacters(normalizedCharacters, activeKey);
-            const nextActive = normalizedCharacters.find((character) => getCharacterKey(character) === activeKey) || normalizedCharacters[0];
             if (nextActive) syncLegacyProfile(nextActive);
           }
         }
@@ -469,9 +484,21 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
     setError('');
 
     try {
+      const matchingCharacters = characters.filter((item) => {
+        if (getCharacterKey(item) === characterKey) return true;
+        if (character.character_ocid && item.character_ocid && item.character_ocid === character.character_ocid) return true;
+        return !character.character_ocid && item.character_name === character.character_name;
+      });
+      const matchingCharacterKeys = matchingCharacters.map((item) => getCharacterKey(item)).filter(Boolean);
+
       if (isLoggedIn) {
         const res = await fetch(`/api/characters/${encodeURIComponent(characterKey)}`, {
           method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            characterName: character.character_name,
+            characterOcid: character.character_ocid ?? null,
+          }),
         });
 
         if (!res.ok) {
@@ -481,8 +508,9 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
       }
 
       const remaining = characters.filter((item) => getCharacterKey(item) !== characterKey);
+      const nextRemaining = remaining.filter((item) => !matchingCharacterKeys.includes(getCharacterKey(item)));
       const wasActive = characterKey === activeCharacterId;
-      const nextActive = wasActive ? remaining[0] || null : remaining.find((item) => item.is_active) || remaining[0] || null;
+      const nextActive = wasActive ? nextRemaining[0] || null : nextRemaining.find((item) => item.is_active) || nextRemaining[0] || null;
 
       if (isLoggedIn && wasActive && nextActive) {
         const activateRes = await fetch('/api/characters', {
@@ -496,19 +524,25 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
 
         if (!activateRes.ok) {
           const data = await activateRes.json().catch(() => ({}));
-          throw new Error(data.error || '다음 캐릭터 활성화에 실패했습니다');
+          setError(data.error || '캐릭터는 삭제했지만 다음 캐릭터 활성화에 실패했어요');
         }
       }
 
       if (!isLoggedIn && localOwnerId) {
-        await deleteRecordsByCharacterId(localOwnerId, characterKey);
+        for (const targetKey of matchingCharacterKeys) {
+          await deleteRecordsByCharacterId(localOwnerId, targetKey);
+        }
+      }
+
+      for (const targetKey of matchingCharacterKeys) {
+        removeBossChecklistCharacterId(targetKey);
       }
 
       useRecordStore.setState((state) => ({
-        records: state.records.filter((record) => record.character_id !== characterKey),
+        records: state.records.filter((record) => !matchingCharacterKeys.includes(record.character_id ?? '')),
       }));
 
-      syncAfterDelete(remaining, nextActive);
+      syncAfterDelete(nextRemaining, nextActive);
     } catch (err) {
       setError(err instanceof Error ? err.message : '캐릭터 삭제 실패');
     } finally {

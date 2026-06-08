@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
-import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { useExpenseStore } from '@/shared/lib/stores/useExpenseStore';
 import { useExpenseModalStore } from '@/shared/lib/stores/useExpenseModalStore';
 import { formatDate, formatMeso, fromManInput, toManDisplay } from '@/shared/lib/utils/formatters';
@@ -16,8 +15,7 @@ export function ExpenseModal() {
   const { isOpen, close, editingExpense } = useExpenseModalStore();
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
-  const { localOwnerId } = useAuthStore();
-  const { addExpense, updateExpense } = useExpenseStore();
+  const { addExpense, updateExpense, error, clearError } = useExpenseStore();
 
   const [date, setDate] = useState(formatDate(new Date()));
   const [title, setTitle] = useState('');
@@ -57,9 +55,10 @@ export function ExpenseModal() {
   const handleSave = async () => {
     const trimmedTitle = title.trim();
     const trimmedMemo = memo.trim();
-    if (!localOwnerId || !trimmedTitle || amount <= 0) return;
+    if (!isLoggedIn || !trimmedTitle || amount <= 0) return;
 
     setSaving(true);
+    clearError();
     try {
       const payload = {
         date,
@@ -74,15 +73,15 @@ export function ExpenseModal() {
           {
             ...editingExpense,
             ...payload,
-            local_owner_id: editingExpense.local_owner_id ?? localOwnerId,
             created_at: editingExpense.created_at,
           } as Expense,
-          localOwnerId,
           isLoggedIn,
         );
       } else {
-        await addExpense(payload, localOwnerId, isLoggedIn);
+        await addExpense(payload, isLoggedIn);
       }
+
+      if (useExpenseStore.getState().error) return;
       close();
     } finally {
       setSaving(false);
@@ -142,9 +141,14 @@ export function ExpenseModal() {
         </div>
 
         <div className="border-t border-line bg-app px-4 py-3.5">
-          <Button type="button" size="lg" fullWidth onClick={handleSave} disabled={!localOwnerId || !title.trim() || amount <= 0 || saving}>
+          <Button type="button" size="lg" fullWidth onClick={handleSave} disabled={!isLoggedIn || !title.trim() || amount <= 0 || saving}>
             {editingExpense ? '수정 저장' : '지출 저장'}
           </Button>
+          {error && (
+            <p className="mt-3 rounded-xl border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-sm text-rose-700">
+              {error}
+            </p>
+          )}
         </div>
       </div>
     </div>

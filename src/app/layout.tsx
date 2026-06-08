@@ -22,9 +22,19 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const gaId = process.env.NEXT_PUBLIC_GA_ID;
+  const isDev = process.env.NODE_ENV === "development";
 
   return (
     <html lang="ko" className="h-full">
+      <head>
+        {isDev && (
+          <Script
+            src="//unpkg.com/react-grab/dist/index.global.js"
+            crossOrigin="anonymous"
+            strategy="beforeInteractive"
+          />
+        )}
+      </head>
       <body className="min-h-full antialiased bg-app">
         {gaId && (
           <>

@@ -59,6 +59,17 @@ export async function GET(req: NextRequest) {
   const characterId = req.nextUrl.searchParams.get('characterId');
   const db = supabaseAdmin();
 
+  const { data: characters, error: charactersError } = await db
+    .from('characters')
+    .select('id')
+    .eq('user_id', session.user.id);
+
+  if (charactersError) {
+    return NextResponse.json({ error: charactersError.message }, { status: 500 });
+  }
+
+  const activeCharacterIds = new Set((characters ?? []).map((character) => character.id).filter((id): id is string => !!id));
+
   let query = db
     .from('boss_revenues')
     .select('*')
@@ -83,6 +94,7 @@ export async function GET(req: NextRequest) {
     const rowCharacterId = row.character_id ?? state?.__bossMeta?.characterId ?? null;
     if (cycleType && rowCycleType !== cycleType) return false;
     if (characterId && rowCharacterId !== characterId) return false;
+    if (rowCharacterId && !activeCharacterIds.has(rowCharacterId)) return false;
     return true;
   });
 

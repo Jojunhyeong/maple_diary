@@ -22,6 +22,7 @@ function createEmptyBossRevenueSummary(): BossRevenueSummary {
       subboss: 0,
       grandis: 0,
     },
+    byCharacter: [],
     entries: [],
     weekKeys: [],
   };

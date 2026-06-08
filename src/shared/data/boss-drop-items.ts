@@ -25,6 +25,12 @@ export const BOSS_DROP_ITEM_OPTIONS: BossDropItemOption[] = [
   { id: 'exceptional_hammer', label: '익셉셔널 해머', iconLabel: '해머', imageUrl: wikiImageUrl('https://media.maplestorywiki.net/yetidb/Use_Exceptional_Hammer_%28Belt%29.png') },
   { id: 'mitra_wrath_box', label: '미트라의 분노 선택 상자', iconLabel: '미트라', imageUrl: wikiImageUrl('https://media.maplestorywiki.net/yetidb/Use_Mitra%27s_Rage_Selection_Box.png') },
   { id: 'glowing_moon_potion', label: '영롱한 달빛 포션', iconLabel: '포션', imageUrl: wikiImageUrl('https://media.maplestorywiki.net/yetidb/Use_Bright_Moonlight_Potion.png') },
+  {
+    id: 'misc_loot',
+    label: '기타 잡템',
+    iconLabel: '기타',
+    imageUrl: wikiImageUrl('https://media.maplestorywiki.net/yetidb/Use_Power_Elixir.png'),
+  },
   { id: 'life_grindstone', label: '생명의 연마석', iconLabel: '생명석', imageUrl: wikiImageUrl('https://media.maplestorywiki.net/yetidb/Use_Grindstone_of_Life.png') },
   { id: 'belief_grindstone', label: '신념의 연마석', iconLabel: '신념석', imageUrl: wikiImageUrl('https://media.maplestorywiki.net/yetidb/Use_Grindstone_of_Faith.png') },
   { id: 'eternel_armor_box_top', label: '에테르넬 방어구 상자(모,상,하,견)', iconLabel: '에테르넬', imageUrl: wikiImageUrl('https://media.maplestorywiki.net/yetidb/Use_Divine_Eternal_Armor_Box.png') },

@@ -163,7 +163,7 @@ export default function BossPage() {
   };
 
   const activeGroup = useMemo(() => getBossCategory(activeCategory), [activeCategory]);
-  const dropItemOptions = BOSS_DROP_ITEM_OPTIONS;
+  const dropItemOptions = BOSS_DROP_ITEM_OPTIONS.filter((option) => option.id !== 'misc_loot');
   const lootItems = useMemo(() => state.__lootItems ?? [], [state.__lootItems]);
   const lootRevenue = useMemo(
     () => lootItems.reduce((sum, item) => (item.checked ? sum + Math.max(0, item.sellPrice || 0) : sum), 0),
@@ -255,17 +255,22 @@ export default function BossPage() {
     });
   };
 
-  const addLootItem = () => {
+  const addLootItem = (itemId = '', name = '', checked = true) => {
     updateLootItems((items) => [
       ...items,
       {
         id: crypto.randomUUID(),
-        itemId: '',
-        name: '',
+        itemId,
+        name,
         sellPrice: 0,
-        checked: true,
+        checked,
       },
     ]);
+  };
+
+  const addMiscLootItem = () => {
+    const miscLoot = getBossDropItemOption('misc_loot');
+    addLootItem(miscLoot?.id ?? 'misc_loot', miscLoot?.label ?? '기타 잡템', true);
   };
 
   const patchLootItem = (itemId: string, patch: Partial<BossLootItem>) => {
@@ -733,7 +738,7 @@ export default function BossPage() {
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
             <p className="text-sm font-semibold text-t1">보스 드랍템</p>
-            <p className="text-[11px] text-t3">드랍템을 추가하고 품목은 드랍박스에서 선택해요</p>
+            <p className="text-[11px] text-t3">드랍템을 추가하고 품목은 드랍박스에서 선택해요. 기타 잡템도 묶어서 기록할 수 있어요.</p>
           </div>
           <div className="flex flex-col items-end gap-1 text-right">
             <p className="text-xs text-t3">{lootCount}개 체크</p>
@@ -744,14 +749,25 @@ export default function BossPage() {
         {lootItems.length === 0 ? (
           <div className="rounded-xl bg-surface/50 py-8 text-center">
             <p className="text-sm text-t3">아직 등록한 드랍템이 없어요</p>
-            <button
-              type="button"
-              onClick={addLootItem}
-              disabled={!canEditLoot}
-              className="mt-3 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              + 품목 추가
-            </button>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              
+              <button
+                type="button"
+                onClick={() => addLootItem()}
+                disabled={!canEditLoot}
+                className="rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                + 품목 추가
+              </button>
+              <button
+                type="button"
+                onClick={addMiscLootItem}
+                disabled={!canEditLoot}
+                className="rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                + 기타 잡템
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -767,25 +783,31 @@ export default function BossPage() {
                   <div className="shrink-0">
                     <LootThumb itemId={item.itemId} label={item.name} />
                   </div>
-                  <select
-                    value={item.itemId}
-                    onChange={(e) => {
-                      const nextItem = getBossDropItemOption(e.target.value);
-                      patchLootItem(item.id, {
-                        itemId: e.target.value,
-                        name: nextItem?.label ?? '',
-                      });
-                    }}
-                    disabled={!canEditLoot}
-                    className="h-11 min-w-0 rounded-xl border border-line bg-card px-3 text-sm font-medium text-t1 focus:outline-none focus:ring-2 focus:ring-amber-400/30 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <option value="">드랍템 선택</option>
-                    {dropItemOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  {item.itemId === 'misc_loot' ? (
+                    <div className="flex h-11 min-w-0 items-center rounded-xl border border-line bg-card px-3 text-sm font-medium text-t1">
+                      기타 아이템
+                    </div>
+                  ) : (
+                    <select
+                      value={item.itemId}
+                      onChange={(e) => {
+                        const nextItem = getBossDropItemOption(e.target.value);
+                        patchLootItem(item.id, {
+                          itemId: e.target.value,
+                          name: nextItem?.label ?? '',
+                        });
+                      }}
+                      disabled={!canEditLoot}
+                      className="h-11 min-w-0 rounded-xl border border-line bg-card px-3 text-sm font-medium text-t1 focus:outline-none focus:ring-2 focus:ring-amber-400/30 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value="">드랍템 선택</option>
+                      {dropItemOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <Input
                     className="!h-11 !py-0"
                     value={formatLootPriceUnit(item.sellPrice)}
@@ -815,15 +837,26 @@ export default function BossPage() {
         )}
 
         <div className="mt-3 flex items-center justify-between gap-3">
-          <p className="text-[11px] text-t3">추가한 드랍템은 자동으로 획득 처리돼요</p>
-          <button
-            type="button"
-            onClick={addLootItem}
-            disabled={!canEditLoot}
-            className="rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            + 품목 추가
-          </button>
+          <p className="text-[11px] text-t3">추가한 드랍템은 자동으로 획득 처리돼요. 놀긍, 프악공, 경쿠 같은 기타 잡템도 여기에 넣으면 돼요.</p>
+          <div className="flex items-center gap-2">
+            
+            <button
+              type="button"
+              onClick={() => addLootItem()}
+              disabled={!canEditLoot}
+              className="rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              + 품목 추가
+            </button>
+            <button
+              type="button"
+              onClick={addMiscLootItem}
+              disabled={!canEditLoot}
+              className="rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              + 기타 잡템
+            </button>
+          </div>
         </div>
       </Card>
 
