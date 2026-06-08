@@ -9,9 +9,12 @@ import { Card } from '@/shared/ui/Card';
 import { ScopeTabs, type ScopeTabValue } from '@/shared/ui/ScopeTabs';
 import { calculateWeeklyStats } from '@/shared/lib/utils/calculations';
 import { formatDateKorean, formatMeso, formatTime } from '@/shared/lib/utils/formatters';
+import { CHARACTER_CHANGE_EVENT, readLocalCharacters } from '@/shared/lib/character-storage';
 import { filterRecordsByCharacter } from '@/shared/lib/utils/characterFilter';
 import { getBossThursday } from '@/shared/lib/boss-checklist';
 import { useBossRevenueSummary } from '@/shared/lib/hooks/useBossRevenueSummary';
+import { useGatheringRevenueSummary } from '@/shared/lib/hooks/useGatheringRevenueSummary';
+import type { BossRevenueCharacterSummary, BossRevenueSummary } from '@/shared/lib/boss-checklist';
 import type { RecordWithCalculations } from '@/shared/types';
 import type { WeekStats } from '@/shared/lib/utils/calculations';
 
@@ -43,36 +46,95 @@ export default function AnalysisPage() {
   const { records, loadRecords } = useRecordStore();
   const activeCharacterId = useActiveCharacterId();
   const [scope, setScope] = useState<ScopeTabValue>('all');
+  const [characterProfiles, setCharacterProfiles] = useState<Array<{ id: string; character_name: string }>>([]);
   const today = useMemo(() => new Date(), []);
+  const currentMonthLabel = `${today.getMonth() + 1}월`;
   const monthStart = useMemo(() => new Date(today.getFullYear(), today.getMonth(), 1), [today]);
   const bossWeekStart = useMemo(() => getBossThursday(today), [today]);
   const bossCharacterId = scope === 'character' ? (activeCharacterId ?? '') : null;
   const bossMonthWeeklySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'weekly', bossCharacterId);
   const bossMonthMonthlySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'monthly', bossCharacterId);
   const bossWeekSummary = useBossRevenueSummary(bossWeekStart, today, isLoggedIn, 'weekly', bossCharacterId);
+  const gatheringCharacterId = scope === 'character' ? (activeCharacterId ?? '') : null;
+  const gatheringMonthSummary = useGatheringRevenueSummary(monthStart, today, isLoggedIn, gatheringCharacterId);
   const bossMonthSummary = useMemo(
-    () => ({
-      totalRevenue:
-        bossMonthWeeklySummary.totalRevenue +
-        bossMonthWeeklySummary.lootRevenue +
-        bossMonthMonthlySummary.totalRevenue +
-        bossMonthMonthlySummary.lootRevenue,
-      selectedBosses: bossMonthWeeklySummary.selectedBosses + bossMonthMonthlySummary.selectedBosses,
-      selectedClears: bossMonthWeeklySummary.selectedClears + bossMonthMonthlySummary.selectedClears,
-      lootRevenue: bossMonthWeeklySummary.lootRevenue + bossMonthMonthlySummary.lootRevenue,
-      lootCount: bossMonthWeeklySummary.lootCount + bossMonthMonthlySummary.lootCount,
-      byCategory: {
-        general: bossMonthWeeklySummary.byCategory.general + bossMonthMonthlySummary.byCategory.general,
-        subboss: bossMonthWeeklySummary.byCategory.subboss + bossMonthMonthlySummary.byCategory.subboss,
-        grandis: bossMonthWeeklySummary.byCategory.grandis + bossMonthMonthlySummary.byCategory.grandis,
-      },
-    }),
+    () => mergeBossRevenueSummaries(bossMonthWeeklySummary, bossMonthMonthlySummary),
     [bossMonthWeeklySummary, bossMonthMonthlySummary],
   );
+  const characterNameById = useMemo(
+    () => new Map(characterProfiles.map((character) => [character.id, character.character_name])),
+    [characterProfiles],
+  );
+  const getCharacterName = (characterId: string | null) =>
+    (characterId ? characterNameById.get(characterId) : undefined) ?? (characterId ? `캐릭터 ${characterId.slice(0, 4)}` : '미분류/기타');
 
   useEffect(() => {
     initializeLocal();
   }, [initializeLocal]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCharacters = async () => {
+      if (!isLoggedIn) {
+        if (!cancelled) {
+          setCharacterProfiles(
+            readLocalCharacters()
+              .map((character) => ({
+                id: character.id ?? '',
+                character_name: character.character_name,
+              }))
+              .filter((character): character is { id: string; character_name: string } => !!character.id),
+          );
+        }
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/characters');
+        if (!res.ok) throw new Error('character load failed');
+        const data = (await res.json()) as { characters?: Array<{ id?: string; character_name?: string }> };
+        const nextCharacters = Array.isArray(data.characters)
+          ? data.characters
+              .map((character) => ({
+                id: typeof character.id === 'string' ? character.id : '',
+                character_name: typeof character.character_name === 'string' ? character.character_name : '캐릭터',
+              }))
+              .filter((character): character is { id: string; character_name: string } => !!character.id)
+          : [];
+
+        if (!cancelled) {
+          setCharacterProfiles(nextCharacters);
+        }
+      } catch {
+        if (!cancelled) {
+          setCharacterProfiles(
+            readLocalCharacters()
+              .map((character) => ({
+                id: character.id ?? '',
+                character_name: character.character_name,
+              }))
+              .filter((character): character is { id: string; character_name: string } => !!character.id),
+          );
+        }
+      }
+    };
+
+    void loadCharacters();
+
+    const syncCharacters = () => {
+      void loadCharacters();
+    };
+
+    window.addEventListener('storage', syncCharacters);
+    window.addEventListener(CHARACTER_CHANGE_EVENT, syncCharacters);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('storage', syncCharacters);
+      window.removeEventListener(CHARACTER_CHANGE_EVENT, syncCharacters);
+    };
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (localOwnerId) loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
@@ -91,7 +153,8 @@ export default function AnalysisPage() {
     bossMonthSummary.totalRevenue > 0 ||
     bossMonthSummary.lootRevenue > 0 ||
     bossWeekSummary.totalRevenue > 0 ||
-    bossWeekSummary.lootRevenue > 0;
+    bossWeekSummary.lootRevenue > 0 ||
+    gatheringMonthSummary.totalRevenue > 0;
   const weeks = useMemo(() => calculateWeeklyStats(visibleRecords, 4), [visibleRecords]);
   const emptyWeek = {
     weekLabel: '이번 주',
@@ -112,12 +175,12 @@ export default function AnalysisPage() {
 
   if (!hasAnyData) {
     return (
-      <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4">
+      <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4 md:relative md:left-1/2 md:w-[760px] md:max-w-none md:-translate-x-1/2 md:px-0">
         <div>
-          <h1 className="maple-title text-2xl font-bold text-t1">수익 분석</h1>
-          <p className="mt-1 text-xs text-t3">사냥은 월~일, 보스는 목~수 기준으로 함께 비교합니다</p>
-        </div>
-        <ScopeTabs value={scope} onChange={setScope} />
+        <h1 className="maple-title text-2xl font-bold text-t1">수익 분석</h1>
+        <p className="mt-1 text-xs text-t3">사냥은 월~일, 보스는 목~수 기준으로 함께 비교합니다</p>
+      </div>
+      <ScopeTabs value={scope} onChange={setScope} />
         <Card className="py-12 text-center">
           <p className="text-sm text-t3">
             {scope === 'all'
@@ -132,7 +195,7 @@ export default function AnalysisPage() {
   }
 
   return (
-    <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4">
+    <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4 md:relative md:left-1/2 md:w-[760px] md:max-w-none md:-translate-x-1/2 md:px-0">
       <div>
         <h1 className="maple-title text-2xl font-bold text-t1">수익 분석</h1>
         <p className="mt-1 text-xs text-t3">사냥은 월~일, 보스는 목~수와 월간 검마를 따로 합쳐서 봅니다</p>
@@ -146,10 +209,11 @@ export default function AnalysisPage() {
         </p>
       )}
 
-      <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.2),rgba(245,158,11,0.05)_55%,transparent)]">
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.2),rgba(245,158,11,0.05)_55%,transparent)] lg:col-span-2">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-t1">월간 리포트 · {monthlyReport.monthLabel}</p>
+            <p className="text-sm font-semibold text-t1">월간 재획 리포트 · {monthlyReport.monthLabel}</p>
             <p className="text-[11px] text-t3">이번 달 누적 성과 요약</p>
           </div>
           <div className="text-right">
@@ -183,111 +247,137 @@ export default function AnalysisPage() {
             <p className="mt-1 text-xs text-t3">이번 달 기록이 없습니다</p>
           )}
         </div>
-      </Card>
+        </Card>
 
-      {/* 이번 주 통계 */}
-      <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.18),rgba(245,158,11,0.05)_45%,transparent)]">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-semibold text-t1">이번 주 통계</p>
-          <span className="rounded-full bg-card/90 px-2 py-0.5 text-[11px] font-semibold text-t2">{thisWeek.activeDays}일 활동</span>
-        </div>
-        {thisWeek.count === 0 ? (
-          <p className="text-sm text-t3 text-center py-4">이번 주 기록이 없습니다</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <StatItem
-              label="날짜당 순수익"
-              value={formatMeso(thisWeek.avgDailyNetRevenue)}
-              compare={lastWeek.count > 0 ? thisWeek.avgDailyNetRevenue - lastWeek.avgDailyNetRevenue : null}
-            />
-            <StatItem
-              label="시간당 순수익"
-              value={formatMeso(thisWeek.avgNetPerHour)}
-              compare={lastWeek.count > 0 ? thisWeek.avgNetPerHour - lastWeek.avgNetPerHour : null}
-            />
-            <StatItem
-              label="총 조각"
-              value={`${thisWeek.totalShards}개`}
-              compare={lastWeek.count > 0 ? thisWeek.totalShards - lastWeek.totalShards : null}
-            />
-          </div>
+        {/* 이번 주 통계 */}
+        <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.18),rgba(245,158,11,0.05)_45%,transparent)]">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-semibold text-t1">이번 주 통계</p>
+              <span className="rounded-full bg-card/90 px-2 py-0.5 text-[11px] font-semibold text-t2">{thisWeek.activeDays}일 활동</span>
+            </div>
+            {thisWeek.count === 0 ? (
+              <p className="py-4 text-center text-sm text-t3">이번 주 기록이 없습니다</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <StatItem
+                  label="날짜당 순수익"
+                  value={formatMeso(thisWeek.avgDailyNetRevenue)}
+                  compare={lastWeek.count > 0 ? thisWeek.avgDailyNetRevenue - lastWeek.avgDailyNetRevenue : null}
+                />
+                <StatItem
+                  label="시간당 순수익"
+                  value={formatMeso(thisWeek.avgNetPerHour)}
+                  compare={lastWeek.count > 0 ? thisWeek.avgNetPerHour - lastWeek.avgNetPerHour : null}
+                />
+                <StatItem
+                  label="총 조각"
+                  value={`${thisWeek.totalShards}개`}
+                  compare={lastWeek.count > 0 ? thisWeek.totalShards - lastWeek.totalShards : null}
+                />
+              </div>
+            )}
+        </Card>
+
+        {bossMonthSummary.totalRevenue > 0 && (
+          <Card>
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-t1">보스 수익</p>
+                  <p className="text-[11px] text-t3">이번 달 주간 보스와 월간 보스, 보스 드랍템 수익을 합산해요</p>
+                  {scope === 'all' && bossMonthSummary.byCharacter.length > 0 && (
+                    <CharacterMixBadge
+                      characterCount={bossMonthSummary.byCharacter.length}
+                      characterNames={bossMonthSummary.byCharacter.map((item) => getCharacterName(item.characterId))}
+                    />
+                  )}
+                </div>
+                <p className="text-xs text-t3">{bossMonthSummary.selectedBosses}개 보스</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <ReportItem label="이번 달 보스" value={formatMeso(bossMonthSummary.totalRevenue)} />
+                <ReportItem label="이번 주 보스" value={formatMeso(bossWeekSummary.totalRevenue)} />
+                <ReportItem label="그란디스" value={formatMeso(bossMonthSummary.byCategory.grandis)} />
+                <ReportItem label="검밑솔" value={formatMeso(bossMonthSummary.byCategory.subboss)} />
+                <ReportItem label="보스 드랍템" value={formatMeso(bossMonthSummary.lootRevenue)} />
+                <ReportItem label="드랍템 수" value={`${bossMonthSummary.lootCount}개`} />
+              </div>
+          </Card>
         )}
-      </Card>
 
-      {bossMonthSummary.totalRevenue > 0 && (
-        <Card>
-          <div className="mb-4 flex items-center justify-between gap-2">
-            <div>
-              <p className="text-sm font-semibold text-t1">보스 수익</p>
-              <p className="text-[11px] text-t3">이번 달 주간 보스와 월간 보스, 보스 드랍템 수익을 합산해요</p>
+        <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.18),rgba(245,158,11,0.05)_45%,transparent)]">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-t1">채집 수익 · {currentMonthLabel}</p>
+                <p className="text-[11px] text-t3">씨앗, 꽃, 원석 전리품 판매 합계</p>
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-bold text-t1">{formatMeso(gatheringMonthSummary.totalRevenue)}</p>
+                <p className="text-[11px] text-t3">{gatheringMonthSummary.entryCount}개 기록</p>
+              </div>
             </div>
-            <p className="text-xs text-t3">{bossMonthSummary.selectedBosses}개 보스</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <ReportItem label="이번 달 보스" value={formatMeso(bossMonthSummary.totalRevenue)} />
-            <ReportItem label="이번 주 보스" value={formatMeso(bossWeekSummary.totalRevenue)} />
-            <ReportItem label="그란디스" value={formatMeso(bossMonthSummary.byCategory.grandis)} />
-            <ReportItem label="검밑솔" value={formatMeso(bossMonthSummary.byCategory.subboss)} />
-            <ReportItem label="보스 드랍템" value={formatMeso(bossMonthSummary.lootRevenue)} />
-            <ReportItem label="드랍템 수" value={`${bossMonthSummary.lootCount}개`} />
-          </div>
+            <div className="grid grid-cols-2 gap-2">
+              <ReportItem label="씨앗" value={formatMeso(gatheringMonthSummary.byTab.seed)} />
+              <ReportItem label="꽃" value={formatMeso(gatheringMonthSummary.byTab.flower)} />
+              <ReportItem label="원석" value={formatMeso(gatheringMonthSummary.byTab.ore)} />
+              <ReportItem label="총합" value={formatMeso(gatheringMonthSummary.totalRevenue)} />
+            </div>
         </Card>
-      )}
 
-      {/* 주간 비교 */}
-      <Card>
-        <p className="text-sm font-semibold text-t1 mb-4">주간 비교</p>
-        <div className="flex flex-col gap-2">
-          {weeks.map((w, i) => (
-            <WeekRow key={w.startDate} week={w} isThis={i === 0} />
-          ))}
-        </div>
-      </Card>
-
-      <Card>
-        <p className="mb-4 text-sm font-semibold text-t1">요일별 성과</p>
-        <div className="grid grid-cols-2 gap-2">
-          {weekdayStats.map((d) => (
-            <div key={d.label} className="rounded-xl border border-line bg-surface/35 p-3">
-              <div className="mb-1 flex items-center justify-between">
-                <p className="text-xs font-semibold text-t2">{d.label}</p>
-                <p className="text-[10px] text-t3">{d.count}회</p>
-              </div>
-              <p className="text-sm font-bold text-t1">{formatMeso(d.totalNetRevenue)}</p>
-              <p className="mt-0.5 text-[10px] text-t3">{formatMeso(d.avgNetPerHour)}/h</p>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card>
-        <p className="mb-4 text-sm font-semibold text-t1">역대 최고 기록 TOP 3</p>
-        <div className="flex flex-col gap-2">
-          {topRecords.map((r, idx) => (
-            <div key={r.id} className="rounded-xl border border-line bg-surface/35 px-3 py-2.5">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-amber-600">#{idx + 1}</p>
-                <p className="text-[11px] text-t3">{formatDateKorean(r.date)}</p>
-              </div>
-              <div className="mt-1 grid grid-cols-2 gap-1 text-xs">
-                <span className="text-t3">순수익</span>
-                <span className="text-right font-semibold text-t1">{formatMeso(r.net_revenue)}</span>
-                <span className="text-t3">시간당 순수익</span>
-                <span className="text-right text-t2">{formatMeso(r.net_per_hour)}/h</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* 이번 주 vs 저번 주 상세 비교 */}
-      {thisWeek.count > 0 && lastWeek.count > 0 && (
+        {/* 주간 비교 */}
         <Card>
-          <p className="text-sm font-semibold text-t1 mb-4">이번 주 vs 저번 주</p>
-          <CompareRow label="날짜당 순수익" this={thisWeek.avgDailyNetRevenue} last={lastWeek.avgDailyNetRevenue} format={formatMeso} />
-          <CompareRow label="시간당 순수익" this={thisWeek.avgNetPerHour} last={lastWeek.avgNetPerHour} format={formatMeso} />
+            <p className="mb-4 text-sm font-semibold text-t1">주간 비교</p>
+            <div className="flex flex-col gap-2">
+              {weeks.map((w, i) => (
+                <WeekRow key={w.startDate} week={w} isThis={i === 0} />
+              ))}
+            </div>
         </Card>
-      )}
+
+        <Card>
+            <p className="mb-4 text-sm font-semibold text-t1">요일별 성과</p>
+            <div className="grid grid-cols-2 gap-2">
+              {weekdayStats.map((d) => (
+                <div key={d.label} className="rounded-xl border border-line bg-surface/35 p-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-t2">{d.label}</p>
+                    <p className="text-[10px] text-t3">{d.count}회</p>
+                  </div>
+                  <p className="text-sm font-bold text-t1">{formatMeso(d.totalNetRevenue)}</p>
+                  <p className="mt-0.5 text-[10px] text-t3">{formatMeso(d.avgNetPerHour)}/h</p>
+                </div>
+              ))}
+            </div>
+        </Card>
+
+        <Card>
+            <p className="mb-4 text-sm font-semibold text-t1">역대 최고 기록 TOP 3</p>
+            <div className="flex flex-col gap-2">
+              {topRecords.map((r, idx) => (
+                <div key={r.id} className="rounded-xl border border-line bg-surface/35 px-3 py-2.5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-amber-600">#{idx + 1}</p>
+                    <p className="text-[11px] text-t3">{formatDateKorean(r.date)}</p>
+                  </div>
+                  <div className="mt-1 grid grid-cols-2 gap-1 text-xs">
+                    <span className="text-t3">순수익</span>
+                    <span className="text-right font-semibold text-t1">{formatMeso(r.net_revenue)}</span>
+                    <span className="text-t3">시간당 순수익</span>
+                    <span className="text-right text-t2">{formatMeso(r.net_per_hour)}/h</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+        </Card>
+
+        {/* 이번 주 vs 저번 주 상세 비교 */}
+        {thisWeek.count > 0 && lastWeek.count > 0 && (
+          <Card>
+              <p className="mb-4 text-sm font-semibold text-t1">이번 주 vs 저번 주</p>
+              <CompareRow label="날짜당 순수익" this={thisWeek.avgDailyNetRevenue} last={lastWeek.avgDailyNetRevenue} format={formatMeso} />
+              <CompareRow label="시간당 순수익" this={thisWeek.avgNetPerHour} last={lastWeek.avgNetPerHour} format={formatMeso} />
+          </Card>
+        )}
+      </div>
     </main>
   );
 }
@@ -299,6 +389,95 @@ function ReportItem({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-sm font-semibold text-t1">{value}</p>
     </div>
   );
+}
+
+function CharacterMixBadge({
+  characterCount,
+  characterNames,
+}: {
+  characterCount: number;
+  characterNames: string[];
+}) {
+  return (
+    <div className="group relative mt-1 inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-600">
+      <span>전체 합산</span>
+      <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] text-white">{characterCount}캐릭터</span>
+      <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-[min(80vw,280px)] opacity-0 transition duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="rounded-2xl border border-line bg-card p-3 text-left shadow-[0_18px_36px_rgba(15,23,42,0.16)]">
+          <p className="text-xs font-semibold text-t1">합산 대상 캐릭터</p>
+          <p className="mt-1 text-[11px] text-t3">전체 탭 수익은 아래 캐릭터들의 데이터가 더해진 값이에요</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {characterNames.map((name, index) => (
+              <span key={`${name}-${index}`} className="rounded-full bg-surface px-2 py-1 text-[11px] text-t2">
+                {name}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function mergeBossRevenueSummaries(...summaries: BossRevenueSummary[]): BossRevenueSummary {
+  const merged: BossRevenueSummary = {
+    totalRevenue: 0,
+    selectedBosses: 0,
+    selectedClears: 0,
+    lootRevenue: 0,
+    lootCount: 0,
+    byCategory: {
+      general: 0,
+      subboss: 0,
+      grandis: 0,
+    },
+    byCharacter: [],
+    entries: [],
+    weekKeys: [],
+  };
+
+  const byCharacter = new Map<string, BossRevenueCharacterSummary>();
+  const weekKeys = new Set<string>();
+
+  for (const summary of summaries) {
+    merged.totalRevenue += summary.totalRevenue;
+    merged.selectedBosses += summary.selectedBosses;
+    merged.selectedClears += summary.selectedClears;
+    merged.lootRevenue += summary.lootRevenue;
+    merged.lootCount += summary.lootCount;
+    merged.byCategory.general += summary.byCategory.general;
+    merged.byCategory.subboss += summary.byCategory.subboss;
+    merged.byCategory.grandis += summary.byCategory.grandis;
+    merged.entries.push(...summary.entries);
+    summary.weekKeys.forEach((weekKey) => weekKeys.add(weekKey));
+
+    for (const characterSummary of summary.byCharacter) {
+      const key = characterSummary.characterId ?? '__global__';
+      const existing = byCharacter.get(key);
+      if (!existing) {
+        byCharacter.set(key, {
+          ...characterSummary,
+          weekKeys: [...characterSummary.weekKeys],
+        });
+        continue;
+      }
+
+      existing.totalRevenue += characterSummary.totalRevenue;
+      existing.selectedBosses += characterSummary.selectedBosses;
+      existing.selectedClears += characterSummary.selectedClears;
+      existing.lootRevenue += characterSummary.lootRevenue;
+      existing.lootCount += characterSummary.lootCount;
+      existing.byCategory.general += characterSummary.byCategory.general;
+      existing.byCategory.subboss += characterSummary.byCategory.subboss;
+      existing.byCategory.grandis += characterSummary.byCategory.grandis;
+      existing.weekKeys = [...new Set([...existing.weekKeys, ...characterSummary.weekKeys])];
+    }
+  }
+
+  merged.weekKeys = [...weekKeys];
+  merged.byCharacter = [...byCharacter.values()].sort((a, b) => b.totalRevenue - a.totalRevenue);
+  merged.entries.sort((a, b) => b.revenue - a.revenue);
+  return merged;
 }
 
 function StatItem({ label, value, compare, compareFormatter = formatMeso }: {

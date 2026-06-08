@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: '/records', label: '사냥', icon: <ListIcon /> },
   { href: '/expenses', label: '지출', icon: <WalletIcon /> },
   { href: '/boss', label: '보스', icon: <BossIcon /> },
+  { href: '/gathering', label: '채집', icon: <LeafIcon /> },
   { href: '/analysis', label: '분석', icon: <ChartIcon /> },
   { href: '/goals', label: '목표', icon: <TargetIcon /> },
 ];
@@ -97,6 +98,17 @@ function ChartIcon() {
         <path d="M4 19.2h16" />
         <path d="M7 16.5v-4.1M12 16.5V8M17 16.5V10.2" />
         <path d="M6 7.5l3.7-2.3 3.3 2.1 5-3.2" />
+      </svg>
+    </NavIcon>
+  );
+}
+
+function LeafIcon() {
+  return (
+    <NavIcon>
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19.3 4.7c-4.9.2-8.8 1.6-11.5 4.3C5 11.8 4.2 15.2 4.4 19.3c4.1.2 7.5-.6 10.3-2.4 2.7-1.7 4.1-4.8 4.6-9.1-.1-1-.1-2.1 0-3.1z" />
+        <path d="M7.2 16.8c2.1-2.5 4.6-4.4 7.5-5.6" />
       </svg>
     </NavIcon>
   );
