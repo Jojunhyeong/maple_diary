@@ -213,6 +213,7 @@ export default function GatheringPage() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [saveError, setSaveError] = useState('');
+  const [openActionRecordId, setOpenActionRecordId] = useState<string | null>(null);
 
   const visibleItems = activeTab === 'favorite' ? recentItems : ITEMS[activeTab];
 
@@ -335,6 +336,39 @@ export default function GatheringPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDeleteRecord = async (record: SavedGatheringRevenue) => {
+    if (!isLoggedIn || !activeCharacterId) {
+      setSaveError('로그인하고 활성 캐릭터를 선택한 뒤 삭제할 수 있어요.');
+      return;
+    }
+
+    if (!window.confirm(`"${record.item_name}" 채집 기록을 삭제할까요?`)) return;
+
+    setSaving(true);
+    setSaveError('');
+    setSaveMessage('');
+
+    try {
+      const res = await fetch(`/api/gathering-revenues/${record.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) throw new Error(await readApiError(res, '채집 삭제에 실패했어요.'));
+
+      setOpenActionRecordId((current) => (current === record.id ? null : current));
+      setSaveMessage('채집 기록을 삭제했어요.');
+      void loadRecords();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : '채집 삭제에 실패했어요.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleRecordActions = (recordId: string) => {
+    setOpenActionRecordId((current) => (current === recordId ? null : recordId));
   };
 
   return (
@@ -609,6 +643,39 @@ export default function GatheringPage() {
                           <p className="text-[10px] text-t3">합계</p>
                           <p className="mt-1 text-base font-bold text-amber-600">{formatMeso(record.total_amount)}</p>
                         </div>
+                      </div>
+                      <div className="border-t border-line bg-surface/35 px-3 py-2">
+                        <div className="flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => toggleRecordActions(record.id)}
+                            className="rounded-full border border-line bg-white px-2.5 py-1 text-[10px] font-semibold text-t2 transition-colors hover:border-amber-500/30 hover:text-t1"
+                          >
+                            편집
+                          </button>
+                        </div>
+                        {openActionRecordId === record.id && (
+                          <div className="mt-2 flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="danger"
+                              fullWidth
+                              onClick={() => void handleDeleteRecord(record)}
+                            >
+                              삭제
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              fullWidth
+                              onClick={() => setOpenActionRecordId(null)}
+                            >
+                              닫기
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
