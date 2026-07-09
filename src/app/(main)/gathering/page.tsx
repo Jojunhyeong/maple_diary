@@ -213,7 +213,6 @@ export default function GatheringPage() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [saveError, setSaveError] = useState('');
-  const [openActionRecordId, setOpenActionRecordId] = useState<string | null>(null);
 
   const visibleItems = activeTab === 'favorite' ? recentItems : ITEMS[activeTab];
 
@@ -339,12 +338,12 @@ export default function GatheringPage() {
   };
 
   const handleDeleteRecord = async (record: SavedGatheringRevenue) => {
-    if (!isLoggedIn || !activeCharacterId) {
-      setSaveError('로그인하고 활성 캐릭터를 선택한 뒤 삭제할 수 있어요.');
+    if (!isLoggedIn) {
+      setSaveError('로그인한 뒤 삭제할 수 있어요.');
       return;
     }
 
-    if (!window.confirm(`"${record.item_name}" 채집 기록을 삭제할까요?`)) return;
+    if (!window.confirm(`"${record.item_name}" 채집 기록을 삭제하시겠습니까?`)) return;
 
     setSaving(true);
     setSaveError('');
@@ -357,7 +356,6 @@ export default function GatheringPage() {
 
       if (!res.ok) throw new Error(await readApiError(res, '채집 삭제에 실패했어요.'));
 
-      setOpenActionRecordId((current) => (current === record.id ? null : current));
       setSaveMessage('채집 기록을 삭제했어요.');
       void loadRecords();
     } catch (error) {
@@ -365,10 +363,6 @@ export default function GatheringPage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const toggleRecordActions = (recordId: string) => {
-    setOpenActionRecordId((current) => (current === recordId ? null : recordId));
   };
 
   return (
@@ -623,11 +617,11 @@ export default function GatheringPage() {
                   return (
                     <div
                       key={record.id}
-                      className="overflow-hidden rounded-2xl border border-line bg-white/90 shadow-[var(--shadow-sm)]"
+                      className="relative overflow-hidden rounded-2xl border border-line bg-white/90 shadow-[var(--shadow-sm)]"
                     >
                       <div className={`h-1 w-full ${tone.softClass}`} />
                       <div className="flex items-start justify-between gap-3 p-3">
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-[11px] text-t3">{formatDateKorean(record.date)}</p>
                             <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tone.badgeClass}`}>
@@ -639,43 +633,20 @@ export default function GatheringPage() {
                             {formatNumber(record.quantity)}개 · {formatMeso(record.unit_price)} / 개
                           </p>
                         </div>
-                        <div className="shrink-0 text-right">
+                        <div className="relative shrink-0 self-start pt-2 pb-5 text-right">
                           <p className="text-[10px] text-t3">합계</p>
                           <p className="mt-1 text-base font-bold text-amber-600">{formatMeso(record.total_amount)}</p>
-                        </div>
-                      </div>
-                      <div className="border-t border-line bg-surface/35 px-3 py-2">
-                        <div className="flex items-center justify-end">
                           <button
                             type="button"
-                            onClick={() => toggleRecordActions(record.id)}
-                            className="rounded-full border border-line bg-white px-2.5 py-1 text-[10px] font-semibold text-t2 transition-colors hover:border-amber-500/30 hover:text-t1"
+                            onClick={() => void handleDeleteRecord(record)}
+                            disabled={saving}
+                            aria-label={`${record.item_name} 삭제`}
+                            title="삭제"
+                            className="absolute right-0 bottom-0 inline-flex h-4 w-4 items-center justify-center rounded-full border border-red-500/10 bg-white/70 text-red-400 opacity-45 backdrop-blur-sm transition-all hover:opacity-100 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-20 disabled:hover:opacity-20"
                           >
-                            편집
+                            <TrashIcon />
                           </button>
                         </div>
-                        {openActionRecordId === record.id && (
-                          <div className="mt-2 flex gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="danger"
-                              fullWidth
-                              onClick={() => void handleDeleteRecord(record)}
-                            >
-                              삭제
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="secondary"
-                              fullWidth
-                              onClick={() => setOpenActionRecordId(null)}
-                            >
-                              닫기
-                            </Button>
-                          </div>
-                        )}
                       </div>
                     </div>
                   );
@@ -691,4 +662,25 @@ export default function GatheringPage() {
 
 function tabLabel(tab: Exclude<GatheringTabKey, 'favorite'>) {
   return tab === 'seed' ? '씨앗' : tab === 'flower' ? '꽃' : '원석';
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-3 w-3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4.8A1.8 1.8 0 0 1 9.8 3h4.4A1.8 1.8 0 0 1 16 4.8V6" />
+      <path d="M6 6l1 14h10l1-14" />
+      <path d="M10 10v6" />
+      <path d="M14 10v6" />
+    </svg>
+  );
 }
