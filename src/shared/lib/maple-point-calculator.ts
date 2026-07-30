@@ -3,7 +3,7 @@ import type { MaplePointMultiplier, MaplePointRunId } from '@/shared/lib/maple-p
 export type MaplePointShopItemId = 'meka-berry-farm-ticket' | 'soul-etra';
 
 export interface MaplePointCalculatorState {
-  selectedRunId: MaplePointRunId;
+  selectedRunId: MaplePointRunId | null;
   selectedMultiplier: MaplePointMultiplier;
   vipCharges: string;
   monsterParkCount: string;
@@ -12,10 +12,10 @@ export interface MaplePointCalculatorState {
 
 export function createDefaultMaplePointCalculatorState(): MaplePointCalculatorState {
   return {
-    selectedRunId: 'highmountain',
+    selectedRunId: null,
     selectedMultiplier: 1,
     vipCharges: '',
-    monsterParkCount: '1',
+    monsterParkCount: '0',
     shopQuantities: {
       'meka-berry-farm-ticket': '',
       'soul-etra': '',
