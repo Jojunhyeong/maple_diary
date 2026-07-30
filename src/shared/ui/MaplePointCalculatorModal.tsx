@@ -87,7 +87,7 @@ export function MaplePointCalculatorModal({
   const { addExpense, error, clearError } = useExpenseStore();
   const defaultState = createDefaultMaplePointCalculatorState();
   const [mounted, setMounted] = useState(false);
-  const [selectedRunId, setSelectedRunId] = useState<MaplePointRunId>(defaultState.selectedRunId);
+  const [selectedRunId, setSelectedRunId] = useState<MaplePointRunId | null>(defaultState.selectedRunId);
   const [selectedMultiplier, setSelectedMultiplier] = useState<MaplePointMultiplier>(defaultState.selectedMultiplier);
   const [vipCharges, setVipCharges] = useState(defaultState.vipCharges);
   const [monsterParkCount, setMonsterParkCount] = useState(defaultState.monsterParkCount);
@@ -110,11 +110,11 @@ export function MaplePointCalculatorModal({
   }, [isOpen]);
 
   const selectedRun = useMemo(
-    () => RUN_OPTIONS.find((run) => run.id === selectedRunId) ?? RUN_OPTIONS[0],
+    () => RUN_OPTIONS.find((run) => run.id === selectedRunId),
     [selectedRunId],
   );
 
-  const contentTotal = selectedRun.basePoint * selectedMultiplier;
+  const contentTotal = selectedRun ? selectedRun.basePoint * selectedMultiplier : 0;
 
   const vipChargeCount = useMemo(() => {
     const parsed = Number(vipCharges.replace(/,/g, ''));
@@ -125,7 +125,7 @@ export function MaplePointCalculatorModal({
   const vipTotal = vipChargeCount * VIP_SAUNA_POINT_PER_HOUR;
   const monsterParkCountValue = useMemo(() => {
     const parsed = Number(monsterParkCount.replace(/,/g, ''));
-    if (!Number.isFinite(parsed) || parsed < 1) return 1;
+    if (!Number.isFinite(parsed) || parsed < 0) return 0;
     return Math.min(Math.floor(parsed), 5);
   }, [monsterParkCount]);
   const monsterParkTotal = monsterParkCountValue * 700;
@@ -145,7 +145,9 @@ export function MaplePointCalculatorModal({
 
   const buildExpenseMemo = () => {
     const parts: string[] = [];
-    parts.push(`에픽 던전 · ${selectedRun.title} · ${selectedMultiplier}배 · ${formatPoint(contentTotal)}`);
+    if (selectedRun) {
+      parts.push(`에픽 던전 · ${selectedRun.title} · ${selectedMultiplier}배 · ${formatPoint(contentTotal)}`);
+    }
 
     if (vipChargeCount > 0) {
       parts.push(`VIP 사우나 · ${vipChargeCount}회 · ${formatPoint(vipTotal)}`);
@@ -213,7 +215,7 @@ export function MaplePointCalculatorModal({
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-t1">에픽 던전</p>
-                  <p className="mt-1 text-xs text-t3">선택한 콘텐츠와 배율을 조합해 메포 소모를 계산해요.</p>
+                  <p className="mt-1 text-xs text-t3">이용한 경우에만 콘텐츠와 배율을 선택해 주세요.</p>
                   <p className="mt-3 text-3xl font-extrabold tracking-[-0.04em] text-amber-600">
                     {formatPoint(contentTotal)}
                   </p>
@@ -221,7 +223,7 @@ export function MaplePointCalculatorModal({
                 <div className="rounded-2xl bg-[#f7efe1] px-4 py-3 text-right">
                   <p className="text-[11px] text-t3">조합</p>
                   <p className="mt-1 text-sm font-semibold text-t1">
-                    {selectedRun.title} · {selectedMultiplier}배
+                    {selectedRun ? `${selectedRun.title} · ${selectedMultiplier}배` : '선택 안 함'}
                   </p>
                 </div>
               </div>
@@ -229,6 +231,18 @@ export function MaplePointCalculatorModal({
               <div className="mt-5 grid gap-5 xl:grid-cols-[1.25fr_0.85fr]">
                 <div className="space-y-3">
                   <p className="text-xs font-semibold text-t2">콘텐츠 선택</p>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRunId(null)}
+                    aria-pressed={!selectedRun}
+                    className={`w-full rounded-2xl border px-4 py-3 text-center text-sm font-semibold transition-all duration-200 ${
+                      !selectedRun
+                        ? 'border-amber-500/60 bg-amber-500 text-white shadow-[0_12px_24px_rgba(217,119,6,0.18)]'
+                        : 'border-line/80 bg-white/92 text-t2 shadow-[0_8px_18px_rgba(0,0,0,0.04)] hover:border-amber-500/35'
+                    }`}
+                  >
+                    선택 안 함 · 0 메포
+                  </button>
                   <div className="grid gap-3 sm:grid-cols-3">
                     {RUN_OPTIONS.map((run) => {
                       const selected = run.id === selectedRunId;
@@ -279,8 +293,11 @@ export function MaplePointCalculatorModal({
                           type="button"
                           onClick={() => setSelectedMultiplier(multiplier)}
                           aria-pressed={selected}
+                          disabled={!selectedRun}
                           className={`rounded-2xl border px-3 py-4 text-center transition-all duration-200 ${
-                            selected
+                            !selectedRun
+                              ? 'cursor-not-allowed border-line/60 bg-surface/60 text-t3 opacity-60'
+                              : selected
                               ? 'border-amber-500/60 bg-amber-500 text-white shadow-[0_12px_24px_rgba(217,119,6,0.22)]'
                               : 'border-line/80 bg-white/92 text-t1 shadow-[0_8px_18px_rgba(0,0,0,0.04)] hover:-translate-y-0.5 hover:border-amber-500/35'
                           }`}
@@ -296,7 +313,7 @@ export function MaplePointCalculatorModal({
                       <div>
                         <p className="text-xs text-t3">선택 조합</p>
                         <p className="mt-1 text-sm font-semibold text-t1">
-                          {selectedRun.title} · {selectedMultiplier}배
+                          {selectedRun ? `${selectedRun.title} · ${selectedMultiplier}배` : '선택 안 함'}
                         </p>
                       </div>
                       <div className="text-right">
@@ -308,11 +325,15 @@ export function MaplePointCalculatorModal({
                     <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                       <div className="rounded-2xl bg-[#f7efe1] px-3 py-3">
                         <p className="text-[11px] text-t3">기본</p>
-                        <p className="mt-1 text-sm font-bold text-t1">{formatPoint(selectedRun.basePoint)}</p>
+                        <p className="mt-1 text-sm font-bold text-t1">
+                          {formatPoint(selectedRun?.basePoint ?? 0)}
+                        </p>
                       </div>
                       <div className="rounded-2xl bg-[#f7efe1] px-3 py-3">
                         <p className="text-[11px] text-t3">배율</p>
-                        <p className="mt-1 text-sm font-bold text-t1">{selectedMultiplier}배</p>
+                        <p className="mt-1 text-sm font-bold text-t1">
+                          {selectedRun ? `${selectedMultiplier}배` : '-'}
+                        </p>
                       </div>
                       <div className="rounded-2xl bg-[#f7efe1] px-3 py-3">
                         <p className="text-[11px] text-t3">합계</p>
@@ -447,12 +468,12 @@ export function MaplePointCalculatorModal({
                   <div className="mt-4 rounded-3xl border border-amber-500/15 bg-[#fbf2e3] p-4">
                     <p className="text-[11px] text-t3">몬스터 파크 총 소모</p>
                     <p className="mt-1 text-3xl font-extrabold tracking-[-0.03em] text-amber-600">{formatPoint(monsterParkTotal)}</p>
-                    <p className="mt-2 text-xs text-t3">1회당 700 메포 · 1회~5회</p>
+                    <p className="mt-2 text-xs text-t3">1회당 700 메포 · 0회~5회</p>
                   </div>
 
                   <div className="mt-4">
-                    <div className="grid grid-cols-5 gap-2">
-                      {[1, 2, 3, 4, 5].map((count) => {
+                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                      {[0, 1, 2, 3, 4, 5].map((count) => {
                         const selected = count === monsterParkCountValue;
                         return (
                           <button
