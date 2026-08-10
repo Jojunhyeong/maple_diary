@@ -13,16 +13,12 @@ import {
 import { BOSS_DROP_ITEM_OPTIONS, getBossDropItemOption } from '@/shared/data/boss-drop-items';
 import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import {
-  BOSS_STORAGE_PREFIX,
   getBossThursday,
   getBossMonthKey,
-  getBossPreviousWeekKey,
   getBossWeekKey,
   filterBossChecklistStateByCycle,
   removeBossChecklistStatesByCycles,
   mergeBossChecklistStates,
-  readBossChecklistState,
-  splitBossChecklistState,
   type BossLootItem,
   type ChecklistState,
   type BossSelection,
@@ -37,7 +33,6 @@ export default function BossPage() {
   const activeCharacterId = useActiveCharacterId();
   const weekKey = getBossWeekKey();
   const monthKey = getBossMonthKey();
-  const previousWeekKey = getBossPreviousWeekKey();
   const [activeCategory, setActiveCategory] = useState<BossCategoryKey>('grandis');
   const [state, setState] = useState<ChecklistState>({});
   const [isHydrated, setIsHydrated] = useState(false);
@@ -47,22 +42,11 @@ export default function BossPage() {
   const [isWeeklyLocked, setIsWeeklyLocked] = useState(false);
   const [isMonthlyLocked, setIsMonthlyLocked] = useState(false);
   const [isEditingSavedCycles, setIsEditingSavedCycles] = useState(false);
-  const [loadedCharacterId, setLoadedCharacterId] = useState<string | null>(null);
-  const canPersist = isHydrated && isReady && loadedCharacterId === activeCharacterId && !!activeCharacterId;
+  const [expandedBossId, setExpandedBossId] = useState<string | null>(null);
 
   useEffect(() => {
     setIsHydrated(true);
   }, []);
-
-  useEffect(() => {
-    if (!canPersist || typeof window === 'undefined' || !activeCharacterId) return;
-    const { weekly, monthly, lootItems } = splitBossChecklistState(state);
-    localStorage.setItem(
-      `${BOSS_STORAGE_PREFIX}:${activeCharacterId}:${weekKey}`,
-      JSON.stringify({ ...weekly, __lootItems: lootItems }),
-    );
-    localStorage.setItem(`${BOSS_STORAGE_PREFIX}:${activeCharacterId}:${monthKey}`, JSON.stringify(monthly));
-  }, [canPersist, activeCharacterId, weekKey, monthKey, state]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -70,7 +54,6 @@ export default function BossPage() {
 
     const run = async () => {
       setIsReady(false);
-      setLoadedCharacterId(null);
       setSaveMessage('');
       setIsWeeklyLocked(false);
       setIsMonthlyLocked(false);
@@ -85,13 +68,8 @@ export default function BossPage() {
       }
 
       if (!isLoggedIn) {
-        const weekly = readBossChecklistState(activeCharacterId, weekKey);
-        const fallbackWeekly =
-          Object.keys(weekly).length > 0 ? weekly : readBossChecklistState(activeCharacterId, previousWeekKey);
-        const monthly = readBossChecklistState(activeCharacterId, monthKey);
         if (!cancelled) {
-          setState(mergeBossChecklistStates(fallbackWeekly, monthly));
-          setLoadedCharacterId(activeCharacterId);
+          setSaveMessage('로그인 후 보스 수익을 기록할 수 있어요');
           setIsReady(true);
         }
         return;
@@ -135,17 +113,12 @@ export default function BossPage() {
         }
 
         if (!cancelled) {
-          setLoadedCharacterId(activeCharacterId);
           setIsReady(true);
         }
       } catch {
         if (!cancelled) {
-          const weekly = readBossChecklistState(activeCharacterId, weekKey);
-          const fallbackWeekly =
-            Object.keys(weekly).length > 0 ? weekly : readBossChecklistState(activeCharacterId, previousWeekKey);
-          const monthly = readBossChecklistState(activeCharacterId, monthKey);
-          setState(mergeBossChecklistStates(fallbackWeekly, monthly));
-          setLoadedCharacterId(activeCharacterId);
+          setState({});
+          setSaveMessage('보스 수익을 불러오지 못했어요');
           setIsReady(true);
         }
       }
@@ -155,9 +128,10 @@ export default function BossPage() {
     return () => {
       cancelled = true;
     };
-  }, [isHydrated, isLoggedIn, activeCharacterId, weekKey, monthKey, previousWeekKey]);
+  }, [isHydrated, isLoggedIn, activeCharacterId, weekKey, monthKey]);
 
   const getBossLockState = (bossId: string) => {
+    if (!isLoggedIn) return true;
     const boss = BOSS_CATALOG.flatMap((group) => group.bosses).find((entry) => entry.id === bossId);
     return boss?.resetCycle === 'monthly' ? isMonthlyLocked : isWeeklyLocked;
   };
@@ -242,7 +216,7 @@ export default function BossPage() {
     return entries.sort((a, b) => b.revenue - a.revenue);
   }, [state]);
 
-  const canEditLoot = !isWeeklyLocked || isEditingSavedCycles;
+  const canEditLoot = isLoggedIn && (!isWeeklyLocked || isEditingSavedCycles);
 
   const updateLootItems = (updater: (items: BossLootItem[]) => BossLootItem[]) => {
     if (!isHydrated || !canEditLoot) return;
@@ -284,7 +258,7 @@ export default function BossPage() {
   };
 
   const handleToggle = (bossId: string, difficulty: BossDifficultyKey, checked: boolean) => {
-    if (!isHydrated) return;
+    if (!isHydrated || !isLoggedIn) return;
     if (getBossLockState(bossId)) return;
     setState((prev) => {
       const boss = BOSS_CATALOG.flatMap((group) => group.bosses).find((entry) => entry.id === bossId);
@@ -340,7 +314,7 @@ export default function BossPage() {
   };
 
   const handleCountChange = (bossId: string, difficulty: BossDifficultyKey, count: number) => {
-    if (!isHydrated) return;
+    if (!isHydrated || !isLoggedIn) return;
     if (getBossLockState(bossId)) return;
     setState((prev) => {
       const boss = BOSS_CATALOG.flatMap((group) => group.bosses).find((entry) => entry.id === bossId);
@@ -364,7 +338,7 @@ export default function BossPage() {
   };
 
   const handleClearCategory = (category: BossCategoryKey) => {
-    if (!isHydrated) return;
+    if (!isHydrated || !isLoggedIn) return;
     setState((prev) => {
       const next = { ...prev };
       const group = getBossCategory(category);
@@ -447,6 +421,10 @@ export default function BossPage() {
   };
 
   const handleEditAll = () => {
+    if (!isLoggedIn) {
+      setSaveMessage('로그인 후 수정할 수 있어요');
+      return;
+    }
     if (!isWeeklyLocked && !isMonthlyLocked) {
       setSaveMessage('이미 수정 가능한 상태예요');
       return;
@@ -459,6 +437,10 @@ export default function BossPage() {
   };
 
   const handleDeleteAll = async () => {
+    if (!isLoggedIn) {
+      setSaveMessage('로그인 후 삭제할 수 있어요');
+      return;
+    }
     if (!activeCharacterId) {
       setSaveMessage('캐릭터를 먼저 선택해주세요');
       return;
@@ -468,25 +450,23 @@ export default function BossPage() {
     if (!shouldDelete) return;
 
     try {
-      if (isLoggedIn) {
-        const res = await fetch(
-          `/api/boss-revenues?${new URLSearchParams({
-            weekKey,
-            monthKey,
-            characterId: activeCharacterId,
-          }).toString()}`,
-          { method: 'DELETE' },
-        );
+      const res = await fetch(
+        `/api/boss-revenues?${new URLSearchParams({
+          weekKey,
+          monthKey,
+          characterId: activeCharacterId,
+        }).toString()}`,
+        { method: 'DELETE' },
+      );
 
-        if (!res.ok) {
-          const payload = (await res.json().catch(() => null)) as
-            | { error?: string; dbError?: { code?: string; message?: string; hint?: string; details?: string } }
-            | null;
-          const detail = payload?.dbError
-            ? [payload.dbError.message, payload.dbError.hint, payload.dbError.details].filter(Boolean).join(' | ')
-            : payload?.error;
-          throw new Error(detail || 'boss revenue delete failed');
-        }
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as
+          | { error?: string; dbError?: { code?: string; message?: string; hint?: string; details?: string } }
+          | null;
+        const detail = payload?.dbError
+          ? [payload.dbError.message, payload.dbError.hint, payload.dbError.details].filter(Boolean).join(' | ')
+          : payload?.error;
+        throw new Error(detail || 'boss revenue delete failed');
       }
 
       setState((prev) => removeBossChecklistStatesByCycles(prev, ['weekly', 'monthly']));
@@ -518,7 +498,7 @@ export default function BossPage() {
         <div>
           <h1 className="maple-title text-2xl font-bold text-t1">보스 수익</h1>
           <p className="mt-1 text-xs text-t3">체크한 보스와 보스별 드랍템을 기준으로 주간(목~수)과 월간 검마 수익을 합산해요</p>
-          <p className="mt-1 text-[11px] text-t3">임시 저장은 자동, 서버 저장은 주간/월간 각각 1회만 가능해요</p>
+          <p className="mt-1 text-[11px] text-t3">로그인 후 서버에 주간/월간 수익을 저장할 수 있어요</p>
           <p className="mt-2 text-[11px] text-t3">주간 기준 · {weekLabel}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -526,7 +506,7 @@ export default function BossPage() {
           <button
             type="button"
             onClick={handleSave}
-            disabled={isSaving || (!isEditingSavedCycles && (isWeeklyLocked || isMonthlyLocked))}
+            disabled={!isLoggedIn || isSaving || (!isEditingSavedCycles && (isWeeklyLocked || isMonthlyLocked))}
             className="rounded-full border border-amber-500/30 bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSaving ? '저장 중...' : '저장'}
@@ -534,11 +514,12 @@ export default function BossPage() {
           <button
             type="button"
             onClick={isEditingSavedCycles ? () => void handleDeleteAll() : handleEditAll}
+            disabled={!isLoggedIn}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
               isEditingSavedCycles
                 ? 'border border-red-500/25 bg-red-500/10 text-red-600 hover:bg-red-500/15'
                 : 'border border-amber-500/25 bg-amber-500/10 text-amber-600 hover:bg-amber-500/15'
-            }`}
+            } disabled:cursor-not-allowed disabled:opacity-50`}
           >
             {isEditingSavedCycles ? '삭제' : '수정'}
           </button>
@@ -563,7 +544,10 @@ export default function BossPage() {
             <button
               key={group.key}
               type="button"
-              onClick={() => setActiveCategory(group.key)}
+              onClick={() => {
+                setActiveCategory(group.key);
+                setExpandedBossId(null);
+              }}
               className={`rounded-2xl border px-3 py-3 text-left transition-all ${
                 active
                   ? 'border-amber-500 bg-amber-500/10 shadow-[0_10px_18px_rgba(245,158,11,0.12)]'
@@ -611,13 +595,88 @@ export default function BossPage() {
             return (
               <div
                 key={boss.id}
-                className={`rounded-2xl border p-3.5 transition-all ${
+                className={`rounded-2xl border p-3 transition-all sm:p-3.5 ${
                   checkedRevenue > 0
                     ? 'border-amber-500/40 bg-amber-500/5 shadow-[0_10px_18px_rgba(245,158,11,0.08)]'
                     : 'border-line bg-surface/35'
                 }`}
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex w-full items-center gap-2 sm:hidden">
+                  <button
+                    type="button"
+                    aria-expanded={expandedBossId === boss.id}
+                    aria-controls={`boss-difficulties-${boss.id}`}
+                    onClick={() => setExpandedBossId((current) => (current === boss.id ? null : boss.id))}
+                    className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-card text-[10px] font-bold text-t2">
+                      {boss.name.slice(0, 2)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-t1">{boss.name}</p>
+                        {boss.resetCycle === 'monthly' && (
+                          <span className="rounded-full bg-green-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-green-600">
+                            월간
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-t3">{availableDifficulties.length}개 난이도</p>
+                    </div>
+                  </button>
+
+                  <select
+                    value={activeDifficulty ?? ''}
+                    onChange={(event) => {
+                      const nextDifficulty = event.target.value as BossDifficultyKey | '';
+                      if (!nextDifficulty) {
+                        if (activeDifficulty) handleToggle(boss.id, activeDifficulty, false);
+                        return;
+                      }
+                      handleToggle(boss.id, nextDifficulty, true);
+                    }}
+                    disabled={getBossLockState(boss.id)}
+                    aria-label={`${boss.name} 난이도 선택`}
+                    className={`w-[72px] shrink-0 appearance-none bg-transparent text-right text-sm font-bold focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${
+                      activeDifficulty ? 'text-amber-600' : 'text-t3'
+                    }`}
+                  >
+                    <option value="">선택</option>
+                    {availableDifficulties.map((difficulty) => (
+                      <option key={difficulty} value={difficulty}>
+                        {difficulty.toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    aria-label={`${boss.name} 가격 상세 ${expandedBossId === boss.id ? '접기' : '펼치기'}`}
+                    aria-expanded={expandedBossId === boss.id}
+                    aria-controls={`boss-difficulties-${boss.id}`}
+                    onClick={() => setExpandedBossId((current) => (current === boss.id ? null : boss.id))}
+                    className="flex h-9 w-7 shrink-0 items-center justify-end text-t3"
+                  >
+                    <svg
+                      viewBox="0 0 20 20"
+                      aria-hidden="true"
+                      className={`h-4 w-4 text-t3 transition-transform ${
+                        expandedBossId === boss.id ? 'rotate-180' : ''
+                      }`}
+                    >
+                      <path
+                        d="m5 7.5 5 5 5-5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.8"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="hidden items-start justify-between gap-3 sm:flex">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-card text-[10px] font-bold text-t2">
@@ -670,62 +729,100 @@ export default function BossPage() {
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  {availableDifficulties.map((difficulty) => {
-                    const price = boss.difficulties[difficulty];
-                    if (price === undefined) return null;
-                    const entryState = selection.difficulties[difficulty] ?? { checked: false, partySize: 1 };
-                    const selected = activeDifficulty === difficulty && !!entryState.checked;
-                    const personalShare = selected ? Math.floor(price / Math.max(1, entryState.partySize ?? 1)) : price;
-                    return (
-                      <div
-                        key={difficulty}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => handleToggle(boss.id, difficulty, !selected)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            handleToggle(boss.id, difficulty, !selected);
-                          }
-                        }}
-                        className={`flex cursor-pointer flex-col gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${
-                          selected
-                            ? 'border-amber-500 bg-amber-500/10 shadow-[0_8px_16px_rgba(245,158,11,0.12)] -translate-y-0.5 scale-[1.01]'
-                            : 'border-line bg-card'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span
-                            className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold tracking-[0.06em] text-white"
-                            style={{ background: difficultyColor(difficulty) }}
-                          >
-                            {difficulty.toUpperCase()}
-                          </span>
-                          {selected ? (
-                            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-600">
-                              선택됨
-                            </span>
-                          ) : (
-                            <span className="text-[11px] text-t3"></span>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-bold text-t1">{formatMeso(personalShare)}</p>
-                          <p className="mt-0.5 text-[11px] text-t3">
-                            {selected ? `${formatMeso(price)} ÷ ${Math.max(1, entryState.partySize ?? 1)}` : formatMeso(price)}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                <div
+                  id={`boss-difficulties-${boss.id}`}
+                  className={`${expandedBossId === boss.id ? 'block' : 'hidden'} sm:block`}
+                >
+                  <div className="mt-3 flex items-center justify-between rounded-xl bg-card px-3 py-2 sm:hidden">
+                    <div>
+                      <p className="text-xs font-semibold text-t1">파티원 수</p>
+                      <p className="text-[10px] text-t3">
+                        {activeDifficulty ? `${activeDifficulty.toUpperCase()} 난이도 기준` : '난이도를 먼저 선택해 주세요'}
+                      </p>
+                    </div>
+                    <select
+                      value={activeDifficulty ? selection.difficulties[activeDifficulty]?.partySize ?? 1 : 1}
+                      onChange={(event) => {
+                        if (!activeDifficulty) return;
+                        handleCountChange(boss.id, activeDifficulty, Number(event.target.value));
+                      }}
+                      disabled={!activeDifficulty}
+                      aria-label={`${boss.name} 파티원 수`}
+                      className="h-9 rounded-xl border border-line bg-surface px-3 text-sm font-semibold text-t1 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
+                    >
+                      {Array.from(
+                        {
+                          length:
+                            activeDifficulty && selection.difficulties[activeDifficulty]
+                              ? boss.difficultyMaxPartySize?.[activeDifficulty] ?? boss.maxPartySize ?? 6
+                              : boss.maxPartySize ?? 6,
+                        },
+                        (_, idx) => idx + 1,
+                      ).map((count) => (
+                        <option key={count} value={count}>
+                          {count}명
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="mt-3 flex items-center justify-between gap-2 border-t border-line/70 pt-3">
-                  <p className="text-[11px] text-t3">{availableDifficulties.length}개 난이도</p>
-                  <p className="text-sm font-bold text-t1">
-                    {checkedRevenue > 0 ? formatMeso(checkedRevenue) : '-'}
-                  </p>
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:mt-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {availableDifficulties.map((difficulty) => {
+                      const price = boss.difficulties[difficulty];
+                      if (price === undefined) return null;
+                      const entryState = selection.difficulties[difficulty] ?? { checked: false, partySize: 1 };
+                      const selected = activeDifficulty === difficulty && !!entryState.checked;
+                      const personalShare = selected ? Math.floor(price / Math.max(1, entryState.partySize ?? 1)) : price;
+                      return (
+                        <div
+                          key={difficulty}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleToggle(boss.id, difficulty, !selected)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              handleToggle(boss.id, difficulty, !selected);
+                            }
+                          }}
+                          className={`flex cursor-pointer flex-col gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                            selected
+                              ? 'border-amber-500 bg-amber-500/10 shadow-[0_8px_16px_rgba(245,158,11,0.12)] -translate-y-0.5 scale-[1.01]'
+                              : 'border-line bg-card'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold tracking-[0.06em] text-white"
+                              style={{ background: difficultyColor(difficulty) }}
+                            >
+                              {difficulty.toUpperCase()}
+                            </span>
+                            {selected ? (
+                              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-600">
+                                선택됨
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-t3"></span>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-t1">{formatMeso(personalShare)}</p>
+                            <p className="mt-0.5 text-[11px] text-t3">
+                              {selected ? `${formatMeso(price)} ÷ ${Math.max(1, entryState.partySize ?? 1)}` : formatMeso(price)}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-line/70 pt-3">
+                    <p className="text-[11px] text-t3">{availableDifficulties.length}개 난이도</p>
+                    <p className="text-sm font-bold text-t1">
+                      {checkedRevenue > 0 ? formatMeso(checkedRevenue) : '-'}
+                    </p>
+                  </div>
                 </div>
 
               </div>
