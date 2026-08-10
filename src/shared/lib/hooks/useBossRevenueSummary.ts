@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import {
-  summarizeBossRevenueInRange,
   summarizeBossRevenueRows,
   type BossCycleType,
   type BossRevenueRow,
@@ -46,7 +45,7 @@ export function useBossRevenueSummary(
   characterId?: string | null,
 ) {
   const [summary, setSummary] = useState<BossRevenueSummary>(() =>
-    isLoggedIn ? createEmptyBossRevenueSummary() : summarizeBossRevenueInRange(startDate, endDate, cycleType, characterId),
+    createEmptyBossRevenueSummary(),
   );
 
   useEffect(() => {
@@ -59,7 +58,7 @@ export function useBossRevenueSummary(
       }
 
       if (!isLoggedIn) {
-        setSummary(summarizeBossRevenueInRange(startDate, endDate, cycleType, characterId));
+        setSummary(createEmptyBossRevenueSummary());
         return;
       }
 
@@ -80,7 +79,7 @@ export function useBossRevenueSummary(
         }
       } catch {
         if (!cancelled) {
-          setSummary(summarizeBossRevenueInRange(startDate, endDate, cycleType, characterId));
+          setSummary(createEmptyBossRevenueSummary());
         }
       }
     };

@@ -1,6 +1,4 @@
 import { BOSS_CATALOG, type BossCategoryKey, type BossDifficultyKey } from '@/shared/data/boss-catalog';
-import { BOSS_DROP_ITEM_OPTIONS } from '@/shared/data/boss-drop-items';
-import { readLocalCharacters } from '@/shared/lib/character-storage';
 import { formatDate } from '@/shared/lib/utils/formatters';
 
 export type BossCycleType = 'weekly' | 'monthly';
@@ -83,8 +81,6 @@ export type BossRevenueRow = {
   };
 };
 
-export const BOSS_STORAGE_PREFIX = 'maple_diary:boss-checklist:v1';
-
 export function getBossThursday(date = new Date()) {
   const d = new Date(date);
   const day = d.getDay();
@@ -98,26 +94,8 @@ export function getBossWeekKey(date = new Date()) {
   return formatDate(getBossThursday(date));
 }
 
-export function getBossPreviousWeekKey(date = new Date()) {
-  const previous = new Date(date);
-  previous.setDate(previous.getDate() - 7);
-  return getBossWeekKey(previous);
-}
-
 export function getBossMonthKey(date = new Date()) {
   return formatDate(new Date(date.getFullYear(), date.getMonth(), 1));
-}
-
-export function getBossWeekRange(weekKey: string) {
-  const end = new Date(weekKey);
-  end.setHours(0, 0, 0, 0);
-  const start = new Date(end);
-  start.setDate(end.getDate() - 6);
-  return { start, end };
-}
-
-function storageKeyByCharacter(characterId: string | null, weekKey: string) {
-  return `${BOSS_STORAGE_PREFIX}:${characterId ?? 'global'}:${weekKey}`;
 }
 
 export function splitBossChecklistState(state: ChecklistState) {
@@ -179,142 +157,6 @@ export function mergeBossChecklistStates(...states: Array<ChecklistState | undef
     if (!state) return acc;
     return { ...acc, ...state };
   }, {});
-}
-
-function normalizeSelection(value: unknown): BossSelection | null {
-  if (!value || typeof value !== 'object') return null;
-  const selection = value as Partial<BossSelection> & {
-    difficulties?: Partial<Record<BossDifficultyKey, { checked?: boolean; partySize?: number }>>;
-  };
-
-  if (selection.activeDifficulty && selection.difficulties) {
-    return {
-      activeDifficulty: selection.activeDifficulty,
-      difficulties: Object.fromEntries(
-        Object.entries(selection.difficulties).map(([difficulty, entry]) => [
-          difficulty,
-          {
-            checked: difficulty === selection.activeDifficulty && !!entry?.checked,
-            partySize: Math.max(1, entry?.partySize ?? 1),
-          },
-        ]),
-      ) as BossSelection['difficulties'],
-    };
-  }
-
-  if (selection.difficulties) {
-    const activeEntry = Object.entries(selection.difficulties).find(([, entry]) => entry?.checked);
-    if (!activeEntry) return null;
-    const [difficulty, entry] = activeEntry as [BossDifficultyKey, { checked?: boolean; partySize?: number }];
-    return {
-      activeDifficulty: difficulty,
-      difficulties: {
-        [difficulty]: {
-          checked: true,
-          partySize: Math.max(1, entry.partySize ?? 1),
-        },
-      },
-    };
-  }
-
-  return null;
-}
-
-function normalizeLootItem(value: unknown): BossLootItem | null {
-  if (!value || typeof value !== 'object') return null;
-  const item = value as Partial<BossLootItem>;
-  const rawItemId = (item.itemId || '').trim();
-  const rawName = (item.name || '').trim();
-  const matchedByName = BOSS_DROP_ITEM_OPTIONS.find((option) => option.label === rawName);
-  const matchedById = BOSS_DROP_ITEM_OPTIONS.find((option) => option.id === rawItemId);
-  const itemId = rawItemId || matchedByName?.id || '';
-  const name = rawName || matchedById?.label || matchedByName?.label || itemId;
-  return {
-    id: item.id || crypto.randomUUID(),
-    itemId,
-    name: name || itemId || '드랍템',
-    sellPrice: Math.max(0, Number(item.sellPrice ?? 0) || 0),
-    checked: !!item.checked,
-  };
-}
-
-export function readBossChecklistState(characterId: string | null, weekKey: string): ChecklistState {
-  if (typeof window === 'undefined') return {};
-  if (characterId === '') return {};
-  try {
-    const raw = localStorage.getItem(storageKeyByCharacter(characterId, weekKey));
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (!parsed || typeof parsed !== 'object') return {};
-
-    const normalized: ChecklistState = {};
-    const lootItems: BossLootItem[] = [];
-    if (Array.isArray(parsed.__lootItems)) {
-      parsed.__lootItems
-        .map((item) => normalizeLootItem(item))
-        .filter((item): item is BossLootItem => !!item)
-        .forEach((item) => lootItems.push(item));
-    }
-    for (const [bossId, value] of Object.entries(parsed)) {
-      if (bossId.startsWith('__')) continue;
-      if (value && typeof value === 'object' && 'dropItems' in value) {
-        const legacySelection = value as { dropItems?: Partial<Record<string, { checked?: boolean; sellPrice?: number; name?: string }>> };
-        for (const [itemId, item] of Object.entries(legacySelection.dropItems ?? {})) {
-          const normalizedItem = normalizeLootItem({
-            id: crypto.randomUUID(),
-            itemId,
-            name: item?.name || itemId,
-            sellPrice: item?.sellPrice ?? 0,
-            checked: !!item?.checked,
-          });
-          if (normalizedItem) lootItems.push(normalizedItem);
-        }
-      }
-      const selection = normalizeSelection(value);
-      if (selection) normalized[bossId] = selection;
-    }
-    if (lootItems.length > 0) normalized.__lootItems = lootItems;
-    return normalized;
-  } catch {
-    return {};
-  }
-}
-
-export function migrateBossChecklistCharacterId(fromCharacterId: string, toCharacterId: string) {
-  if (typeof window === 'undefined' || !fromCharacterId || !toCharacterId || fromCharacterId === toCharacterId) return;
-
-  const fromPrefix = `${BOSS_STORAGE_PREFIX}:${fromCharacterId}:`;
-  const toPrefix = `${BOSS_STORAGE_PREFIX}:${toCharacterId}:`;
-
-  for (const key of Object.keys(localStorage)) {
-    if (!key.startsWith(fromPrefix)) continue;
-    const nextKey = `${toPrefix}${key.slice(fromPrefix.length)}`;
-    const value = localStorage.getItem(key);
-    if (value !== null) {
-      localStorage.setItem(nextKey, value);
-    }
-  }
-}
-
-export function removeBossChecklistCharacterId(characterId: string) {
-  if (typeof window === 'undefined' || !characterId) return;
-
-  const prefix = `${BOSS_STORAGE_PREFIX}:${characterId}:`;
-  for (const key of Object.keys(localStorage)) {
-    if (key.startsWith(prefix)) {
-      localStorage.removeItem(key);
-    }
-  }
-}
-
-export function listStoredBossWeekKeys(characterId: string | null = null) {
-  if (typeof window === 'undefined') return [];
-  const scope = characterId ?? 'global';
-  const prefix = `${BOSS_STORAGE_PREFIX}:${scope}:`;
-  return Object.keys(localStorage)
-    .filter((key) => key.startsWith(prefix))
-    .map((key) => key.slice(prefix.length))
-    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 }
 
 export function summarizeBossChecklistState(state: ChecklistState, weekKey: string): Omit<BossRevenueSummary, 'weekKeys'> {
@@ -395,8 +237,9 @@ export function buildBossRevenueSnapshot(
 export function buildBossRevenueSnapshots(state: ChecklistState, weekKey: string, monthKey: string, characterId: string | null) {
   const { weekly, monthly, lootItems } = splitBossChecklistState(state);
   const snapshots: BossRevenueSnapshot[] = [];
+  const hasCheckedLoot = lootItems.some((item) => item.checked);
 
-  if (Object.keys(weekly).length > 0) {
+  if (Object.keys(weekly).length > 0 || hasCheckedLoot) {
     snapshots.push(
       buildBossRevenueSnapshot(
         { ...weekly, __lootItems: lootItems } as ChecklistState,
@@ -410,7 +253,7 @@ export function buildBossRevenueSnapshots(state: ChecklistState, weekKey: string
   if (Object.keys(monthly).length > 0) {
     snapshots.push(
       buildBossRevenueSnapshot(
-        { ...monthly, __lootItems: lootItems } as ChecklistState,
+        monthly,
         monthKey,
         'monthly',
         characterId,
@@ -497,9 +340,12 @@ export function summarizeBossRevenueRows(
     merged.byCategory.general += row.by_category?.general ?? 0;
     merged.byCategory.subboss += row.by_category?.subboss ?? 0;
     merged.byCategory.grandis += row.by_category?.grandis ?? 0;
-    const lootRevenue = lootRevenueFromState(row.state);
+    // Older saves copied the same loot into weekly and monthly rows. Loot belongs
+    // to the week it was obtained, so monthly rows must not add it a second time.
+    const lootRevenue = rowCycleType === 'monthly' ? 0 : lootRevenueFromState(row.state);
+    const lootCount = rowCycleType === 'monthly' ? 0 : countCheckedLootItems(row.state);
     merged.lootRevenue += lootRevenue;
-    merged.lootCount += countCheckedLootItems(row.state);
+    merged.lootCount += lootCount;
     merged.totalRevenue += lootRevenue;
     if (row.week_key) uniqueWeekKeys.add(row.week_key);
 
@@ -508,7 +354,7 @@ export function summarizeBossRevenueRows(
     characterSummary.selectedBosses += row.selected_bosses ?? 0;
     characterSummary.selectedClears += row.selected_clears ?? 0;
     characterSummary.lootRevenue += lootRevenue;
-    characterSummary.lootCount += countCheckedLootItems(row.state);
+    characterSummary.lootCount += lootCount;
     characterSummary.byCategory.general += row.by_category?.general ?? 0;
     characterSummary.byCategory.subboss += row.by_category?.subboss ?? 0;
     characterSummary.byCategory.grandis += row.by_category?.grandis ?? 0;
@@ -567,82 +413,4 @@ function countCheckedLootItems(state: ChecklistState | undefined) {
   }
 
   return legacyCount;
-}
-
-export function summarizeBossRevenueInRange(startDate: Date, endDate: Date, cycleType?: BossCycleType, characterId?: string | null) {
-  if (characterId === '') {
-    return createEmptyBossRevenueSummary();
-  }
-
-  const merged = createEmptyBossRevenueSummary();
-  const characterScopes = characterId !== null && characterId !== undefined
-    ? [characterId]
-    : [
-        ...readLocalCharacters()
-          .map((character) => character.id)
-          .filter((id): id is string => !!id),
-        ...(listStoredBossWeekKeys(null).length > 0 ? [null] : []),
-      ];
-
-  const seenScopeKeys = new Set<string | null>();
-  const activeScopes = characterScopes.filter((scope) => {
-    if (seenScopeKeys.has(scope)) return false;
-    seenScopeKeys.add(scope);
-    return true;
-  });
-
-  const weekKeys = new Set<string>();
-  const characterSummaries = new Map<string, BossRevenueCharacterSummary>();
-  const getCharacterSummary = (scopeCharacterId: string | null) => {
-    const mapKey = scopeCharacterId ?? '__global__';
-    const existing = characterSummaries.get(mapKey);
-    if (existing) return existing;
-    const next = createEmptyBossRevenueCharacterSummary(scopeCharacterId);
-    characterSummaries.set(mapKey, next);
-    return next;
-  };
-
-  for (const scopeCharacterId of activeScopes) {
-    const storedWeekKeys = listStoredBossWeekKeys(scopeCharacterId).filter((weekKey) => {
-      const { start, end } = getBossWeekRange(weekKey);
-      return start <= endDate && end >= startDate;
-    });
-
-    for (const weekKey of storedWeekKeys) {
-      const weekState = readBossChecklistState(scopeCharacterId ?? null, weekKey);
-      const filteredState = cycleType ? filterBossChecklistStateByCycle(weekState, cycleType) : weekState;
-      const summary = summarizeBossChecklistState(filteredState, weekKey);
-      merged.totalRevenue += summary.totalRevenue + summary.lootRevenue;
-      merged.selectedBosses += summary.selectedBosses;
-      merged.selectedClears += summary.selectedClears;
-      merged.lootRevenue += summary.lootRevenue;
-      merged.lootCount += summary.lootCount;
-      merged.byCategory.general += summary.byCategory.general;
-      merged.byCategory.subboss += summary.byCategory.subboss;
-      merged.byCategory.grandis += summary.byCategory.grandis;
-      merged.entries.push(...summary.entries);
-      weekKeys.add(weekKey);
-
-      const characterSummary = getCharacterSummary(scopeCharacterId);
-      characterSummary.totalRevenue += summary.totalRevenue + summary.lootRevenue;
-      characterSummary.selectedBosses += summary.selectedBosses;
-      characterSummary.selectedClears += summary.selectedClears;
-      characterSummary.lootRevenue += summary.lootRevenue;
-      characterSummary.lootCount += summary.lootCount;
-      characterSummary.byCategory.general += summary.byCategory.general;
-      characterSummary.byCategory.subboss += summary.byCategory.subboss;
-      characterSummary.byCategory.grandis += summary.byCategory.grandis;
-      characterSummary.weekKeys.push(weekKey);
-    }
-  }
-
-  merged.entries.sort((a, b) => b.revenue - a.revenue);
-  merged.weekKeys = [...weekKeys];
-  merged.byCharacter = [...characterSummaries.values()]
-    .map((summary) => ({
-      ...summary,
-      weekKeys: [...new Set(summary.weekKeys)],
-    }))
-    .sort((a, b) => b.totalRevenue - a.totalRevenue);
-  return merged;
 }

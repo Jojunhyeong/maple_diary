@@ -24,7 +24,6 @@ import {
   writeLocalCharacters,
   type LocalCharacterProfile,
 } from '@/shared/lib/character-storage';
-import { migrateBossChecklistCharacterId, removeBossChecklistCharacterId } from '@/shared/lib/boss-checklist';
 
 type ManagedCharacter = LocalCharacterProfile & {
   id: string;
@@ -283,10 +282,7 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
 
           if (localOwnerId && idMap.size > 0) {
             for (const [fromId, toId] of idMap.entries()) {
-              await Promise.all([
-                migrateRecordsCharacterId(localOwnerId, fromId, toId),
-                Promise.resolve(migrateBossChecklistCharacterId(fromId, toId)),
-              ]);
+              await migrateRecordsCharacterId(localOwnerId, fromId, toId);
             }
           }
 
@@ -532,10 +528,6 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
         for (const targetKey of matchingCharacterKeys) {
           await deleteRecordsByCharacterId(localOwnerId, targetKey);
         }
-      }
-
-      for (const targetKey of matchingCharacterKeys) {
-        removeBossChecklistCharacterId(targetKey);
       }
 
       useRecordStore.setState((state) => ({
