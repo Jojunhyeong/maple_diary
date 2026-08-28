@@ -9,6 +9,9 @@ export type BossCatalogEntry = {
   maxPartySize?: number;
   difficultyMaxPartySize?: Partial<Record<BossDifficultyKey, number>>;
   resetCycle?: 'weekly' | 'monthly';
+  rewardKind?: 'crystal' | 'fixed';
+  accountWide?: boolean;
+  seasonal?: boolean;
   dropItems?: Array<{
     id: string;
     name: string;
@@ -27,7 +30,7 @@ export const BOSS_CATALOG: BossCatalogGroup[] = [
   {
     key: 'grandis',
     label: '그란디스',
-    description: '세렌부터 유피테르까지 그란디스 레이드 보스',
+    description: '세렌부터 유피테르까지 그란디스 레이드와 시즌 보스',
     columns: ['easy', 'normal', 'hard', 'extreme'],
     bosses: [
       {
@@ -54,6 +57,13 @@ export const BOSS_CATALOG: BossCatalogGroup[] = [
         maxPartySize: 6,
         difficulties: { easy: 377000000, normal: 678000000, hard: 1739000000, extreme: 5387000000 },
         dropItems: [{ id: 'estella_earring', name: '에스텔라 이어링' }],
+      },
+      {
+        id: 'bellona',
+        name: '벨로나',
+        category: 'grandis',
+        maxPartySize: 3,
+        difficulties: { easy: 440000000, normal: 850000000, hard: 2950000000 },
       },
       {
         id: 'radiant_horn',
@@ -86,6 +96,16 @@ export const BOSS_CATALOG: BossCatalogGroup[] = [
         maxPartySize: 3,
         difficulties: { normal: 1615000000, hard: 4845000000 },
         dropItems: [{ id: 'estella_earring', name: '에스텔라 이어링' }],
+      },
+      {
+        id: 'meirin',
+        name: '메이린',
+        category: 'grandis',
+        maxPartySize: 1,
+        rewardKind: 'fixed',
+        accountWide: true,
+        seasonal: true,
+        difficulties: { normal: 300000000, hard: 600000000 },
       },
     ],
   },

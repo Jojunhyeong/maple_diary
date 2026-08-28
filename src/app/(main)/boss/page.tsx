@@ -16,6 +16,7 @@ import {
   getBossThursday,
   getBossMonthKey,
   getBossWeekKey,
+  calculateBossRevenue,
   filterBossChecklistStateByCycle,
   removeBossChecklistStatesByCycles,
   mergeBossChecklistStates,
@@ -169,9 +170,8 @@ export default function BossPage() {
         if (!activeDifficulty) continue;
         totals.selectedBosses += 1;
         totals.selectedClears += 1;
-        const price = boss.difficulties[activeDifficulty] ?? 0;
         const partySize = Math.max(1, selection.difficulties[activeDifficulty]?.partySize ?? 1);
-        const revenue = Math.floor(price / partySize);
+        const revenue = calculateBossRevenue(boss, activeDifficulty, partySize);
         totals.totalRevenue += revenue;
         totals.byCategory[group.key] += revenue;
       }
@@ -189,6 +189,7 @@ export default function BossPage() {
       difficulty: BossDifficultyKey;
       partySize: number;
       revenue: number;
+      fixedReward: boolean;
     }> = [];
 
     for (const group of BOSS_CATALOG) {
@@ -208,7 +209,8 @@ export default function BossPage() {
           category: group.key,
           difficulty: activeDifficulty,
           partySize,
-          revenue: Math.floor(price / partySize),
+          revenue: calculateBossRevenue(boss, activeDifficulty, partySize),
+          fixedReward: boss.rewardKind === 'fixed',
         });
       }
     }
@@ -586,7 +588,7 @@ export default function BossPage() {
             const activePartySize = activeDifficulty ? Math.max(1, selection.difficulties[activeDifficulty]?.partySize ?? 1) : 1;
             const checkedRevenue =
               activeDifficulty && boss.difficulties[activeDifficulty]
-                ? Math.floor(boss.difficulties[activeDifficulty] / activePartySize)
+                ? calculateBossRevenue(boss, activeDifficulty, activePartySize)
                 : 0;
             const availableDifficulties = activeGroup.columns.filter(
               (difficulty) => boss.difficulties[difficulty] !== undefined,
@@ -618,6 +620,16 @@ export default function BossPage() {
                         {boss.resetCycle === 'monthly' && (
                           <span className="rounded-full bg-green-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-green-600">
                             월간
+                          </span>
+                        )}
+                        {boss.seasonal && (
+                          <span className="rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600">
+                            시즌
+                          </span>
+                        )}
+                        {boss.accountWide && (
+                          <span className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-sky-600">
+                            ID 주 1회
                           </span>
                         )}
                       </div>
@@ -690,12 +702,28 @@ export default function BossPage() {
                               월간
                             </span>
                           )}
+                          {boss.seasonal && (
+                            <span className="rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600">
+                              시즌
+                            </span>
+                          )}
+                          {boss.accountWide && (
+                            <span className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-sky-600">
+                              ID 주 1회
+                            </span>
+                          )}
                         </div>
                         <p className="text-[11px] text-t3">{activeGroup.label}</p>
                       </div>
                     </div>
                   </div>
 
+                  {boss.rewardKind === 'fixed' ? (
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <p className="text-[11px] text-t3">결정석 대신 지급</p>
+                      <p className="text-xs font-semibold text-t2">파티 분배 없는 고정 보상</p>
+                    </div>
+                  ) : (
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <p className="text-[11px] text-t3">난이도별 파티원 수</p>
                     <div className="flex items-center gap-2">
@@ -727,12 +755,14 @@ export default function BossPage() {
                       </select>
                     </div>
                   </div>
+                  )}
                 </div>
 
                 <div
                   id={`boss-difficulties-${boss.id}`}
                   className={`${expandedBossId === boss.id ? 'block' : 'hidden'} sm:block`}
                 >
+                  {boss.rewardKind !== 'fixed' && (
                   <div className="mt-3 flex items-center justify-between rounded-xl bg-card px-3 py-2 sm:hidden">
                     <div>
                       <p className="text-xs font-semibold text-t1">파티원 수</p>
@@ -765,6 +795,7 @@ export default function BossPage() {
                       ))}
                     </select>
                   </div>
+                  )}
 
                   <div className="mt-2 grid grid-cols-1 gap-2 sm:mt-3 sm:grid-cols-2 lg:grid-cols-4">
                     {availableDifficulties.map((difficulty) => {
@@ -772,12 +803,16 @@ export default function BossPage() {
                       if (price === undefined) return null;
                       const entryState = selection.difficulties[difficulty] ?? { checked: false, partySize: 1 };
                       const selected = activeDifficulty === difficulty && !!entryState.checked;
-                      const personalShare = selected ? Math.floor(price / Math.max(1, entryState.partySize ?? 1)) : price;
+                      const personalShare = selected
+                        ? calculateBossRevenue(boss, difficulty, entryState.partySize ?? 1)
+                        : price;
+                      const locked = getBossLockState(boss.id);
                       return (
                         <div
                           key={difficulty}
                           role="button"
                           tabIndex={0}
+                          aria-disabled={locked}
                           onClick={() => handleToggle(boss.id, difficulty, !selected)}
                           onKeyDown={(event) => {
                             if (event.key === 'Enter' || event.key === ' ') {
@@ -785,11 +820,11 @@ export default function BossPage() {
                               handleToggle(boss.id, difficulty, !selected);
                             }
                           }}
-                          className={`flex cursor-pointer flex-col gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                          className={`flex flex-col gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${
                             selected
                               ? 'border-amber-500 bg-amber-500/10 shadow-[0_8px_16px_rgba(245,158,11,0.12)] -translate-y-0.5 scale-[1.01]'
                               : 'border-line bg-card'
-                          }`}
+                          } ${locked ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'}`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span
@@ -809,7 +844,11 @@ export default function BossPage() {
                           <div className="min-w-0">
                             <p className="text-sm font-bold text-t1">{formatMeso(personalShare)}</p>
                             <p className="mt-0.5 text-[11px] text-t3">
-                              {selected ? `${formatMeso(price)} ÷ ${Math.max(1, entryState.partySize ?? 1)}` : formatMeso(price)}
+                              {boss.rewardKind === 'fixed'
+                                ? '파티 인원과 무관한 고정 보상'
+                                : selected
+                                  ? `${formatMeso(price)} ÷ ${Math.max(1, entryState.partySize ?? 1)}`
+                                  : formatMeso(price)}
                             </p>
                           </div>
                         </div>
@@ -977,7 +1016,7 @@ export default function BossPage() {
                 <div>
                   <p className="text-sm font-semibold text-t1">{entry.bossName}</p>
                   <p className="text-[11px] text-t3">
-                    {entry.category === 'general' ? '일반 보스' : entry.category === 'subboss' ? '검밑솔' : '그란디스'} · {entry.difficulty.toUpperCase()} · 파티원 {entry.partySize}
+                    {entry.category === 'general' ? '일반 보스' : entry.category === 'subboss' ? '검밑솔' : '그란디스'} · {entry.difficulty.toUpperCase()} · {entry.fixedReward ? '고정 보상' : `파티원 ${entry.partySize}`}
                   </p>
                 </div>
                 <p className="text-sm font-bold text-t1">{formatMeso(entry.revenue)}</p>

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/../auth';
 import { supabaseAdmin } from '@/shared/lib/supabase';
+import { BOSS_CATALOG } from '@/shared/data/boss-catalog';
 import {
   buildBossRevenueSnapshots,
+  isBossSelected,
   type ChecklistState,
   type BossCycleType,
 } from '@/shared/lib/boss-checklist';
@@ -113,6 +115,43 @@ export async function POST(req: NextRequest) {
   }
 
   const db = supabaseAdmin();
+  const selectedAccountWideBosses = BOSS_CATALOG
+    .flatMap((group) => group.bosses)
+    .filter((boss) => boss.accountWide && isBossSelected(body.state, boss.id));
+
+  if (selectedAccountWideBosses.length > 0) {
+    const { data: existingRows, error: accountBossLookupError } = await db
+      .from('boss_revenues')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .eq('week_key', body.weekKey);
+
+    if (accountBossLookupError) {
+      return NextResponse.json(
+        { error: 'account-wide boss lookup failed', dbError: serializeDbError(accountBossLookupError) },
+        { status: 500 },
+      );
+    }
+
+    for (const boss of selectedAccountWideBosses) {
+      const duplicate = (existingRows ?? []).find((row) => {
+        const rowState = row.state as ChecklistState & {
+          __bossMeta?: { cycleType?: BossCycleType; characterId?: string | null };
+        };
+        const rowCycleType = row.cycle_type ?? rowState?.__bossMeta?.cycleType;
+        const rowCharacterId = row.character_id ?? rowState?.__bossMeta?.characterId ?? null;
+        return rowCycleType === 'weekly' && rowCharacterId !== body.characterId && isBossSelected(rowState, boss.id);
+      });
+
+      if (duplicate) {
+        return NextResponse.json(
+          { error: `${boss.name}은 메이플ID당 주 1회만 기록할 수 있어요` },
+          { status: 409 },
+        );
+      }
+    }
+  }
+
   const snapshots = buildBossRevenueSnapshots(body.state, body.weekKey, body.monthKey, body.characterId);
 
   if (snapshots.length === 0) {
