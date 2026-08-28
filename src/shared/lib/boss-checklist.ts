@@ -1,4 +1,9 @@
-import { BOSS_CATALOG, type BossCategoryKey, type BossDifficultyKey } from '@/shared/data/boss-catalog';
+import {
+  BOSS_CATALOG,
+  type BossCatalogEntry,
+  type BossCategoryKey,
+  type BossDifficultyKey,
+} from '@/shared/data/boss-catalog';
 import { formatDate } from '@/shared/lib/utils/formatters';
 
 export type BossCycleType = 'weekly' | 'monthly';
@@ -80,6 +85,24 @@ export type BossRevenueRow = {
     };
   };
 };
+
+export function calculateBossRevenue(
+  boss: BossCatalogEntry,
+  difficulty: BossDifficultyKey,
+  partySize: number,
+) {
+  const reward = boss.difficulties[difficulty] ?? 0;
+  if (boss.rewardKind === 'fixed') return reward;
+  return Math.floor(reward / Math.max(1, partySize));
+}
+
+export function isBossSelected(state: ChecklistState | undefined, bossId: string) {
+  const selection = state?.[bossId];
+  return !!(
+    selection?.activeDifficulty &&
+    selection.difficulties[selection.activeDifficulty]?.checked
+  );
+}
 
 export function getBossThursday(date = new Date()) {
   const d = new Date(date);
@@ -184,9 +207,8 @@ export function summarizeBossChecklistState(state: ChecklistState, weekKey: stri
           : undefined;
       if (!activeDifficulty) continue;
 
-      const price = boss.difficulties[activeDifficulty] ?? 0;
       const partySize = Math.max(1, selection.difficulties[activeDifficulty]?.partySize ?? 1);
-      const revenue = Math.floor(price / partySize);
+      const revenue = calculateBossRevenue(boss, activeDifficulty, partySize);
 
       totals.selectedBosses += 1;
       totals.selectedClears += 1;
