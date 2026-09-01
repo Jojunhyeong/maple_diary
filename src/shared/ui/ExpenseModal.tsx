@@ -13,7 +13,7 @@ const CATEGORY_OPTIONS = ['아이템', '강화', '소모품', '이벤트', '기�
 
 export function ExpenseModal() {
   const { isOpen, close, editingExpense } = useExpenseModalStore();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const isLoggedIn = !!session?.user?.id;
   const { addExpense, updateExpense, error, clearError } = useExpenseStore();
 
@@ -142,8 +142,13 @@ export function ExpenseModal() {
 
         <div className="border-t border-line bg-app px-4 py-3.5">
           <Button type="button" size="lg" fullWidth onClick={handleSave} disabled={!isLoggedIn || !title.trim() || amount <= 0 || saving}>
-            {editingExpense ? '수정 저장' : '지출 저장'}
+            {sessionStatus === 'loading' ? '로그인 확인 중...' : editingExpense ? '수정 저장' : '지출 저장'}
           </Button>
+          {sessionStatus !== 'loading' && !isLoggedIn && (
+            <p className="mt-3 rounded-xl border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-sm text-rose-700">
+              로그인 세션을 확인할 수 없어요. 로그아웃 후 다시 로그인해주세요.
+            </p>
+          )}
           {error && (
             <p className="mt-3 rounded-xl border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-sm text-rose-700">
               {error}

@@ -21,7 +21,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         .from('users')
         .select('id')
         .eq('kakao_id', kakaoId)
-        .single();
+        .limit(1)
+        .maybeSingle();
 
       if (existing) {
         // 기존 유저 업데이트
@@ -51,13 +52,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
 
     async session({ session, token }) {
-      if (token.kakaoId) {
+      const kakaoId = token.kakaoId ?? token.sub;
+      if (kakaoId) {
         const db = supabaseAdmin();
         const { data } = await db
           .from('users')
           .select('id, kakao_id, nickname, character_name, character_class, character_level, character_image')
-          .eq('kakao_id', String(token.kakaoId))
-          .single();
+          .eq('kakao_id', String(kakaoId))
+          .limit(1)
+          .maybeSingle();
 
         if (data) {
           session.user.id = data.id;
@@ -67,7 +70,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             .from('characters')
             .select('id, character_name, class, level, image_url, is_active')
             .eq('user_id', data.id)
-            .eq('is_active', true)
+            .order('is_active', { ascending: false })
+            .order('updated_at', { ascending: false })
+            .limit(1)
             .maybeSingle();
 
           if (activeCharacter) {
@@ -91,6 +96,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, account }) {
       if (account?.provider === 'kakao') {
         token.kakaoId = account.providerAccountId;
+      } else if (!token.kakaoId && token.sub) {
+        // 기존 로그인 쿠키에는 kakaoId 커스텀 필드가 없을 수 있다.
+        token.kakaoId = token.sub;
       }
       return token;
     },

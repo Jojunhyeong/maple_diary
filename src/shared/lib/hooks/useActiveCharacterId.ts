@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import {
   CHARACTER_CHANGE_EVENT,
   isUuidLike,
@@ -8,16 +9,20 @@ import {
 } from '@/shared/lib/character-storage';
 
 export function useActiveCharacterId() {
-  const [activeCharacterId, setActiveCharacterId] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    const activeId = readActiveCharacterId();
-    return isUuidLike(activeId) ? activeId : null;
-  });
+  const { data: session } = useSession();
+  const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
+  const sessionActiveCharacterId = session?.user?.activeCharacterId;
 
   useEffect(() => {
     const sync = () => {
       const activeId = readActiveCharacterId();
-      setActiveCharacterId(isUuidLike(activeId) ? activeId : null);
+      setActiveCharacterId(
+        isUuidLike(activeId)
+          ? activeId
+          : isUuidLike(sessionActiveCharacterId)
+            ? sessionActiveCharacterId
+            : null,
+      );
     };
 
     sync();
@@ -28,7 +33,7 @@ export function useActiveCharacterId() {
       window.removeEventListener('storage', sync);
       window.removeEventListener(CHARACTER_CHANGE_EVENT, sync);
     };
-  }, []);
+  }, [sessionActiveCharacterId]);
 
   return activeCharacterId;
 }
