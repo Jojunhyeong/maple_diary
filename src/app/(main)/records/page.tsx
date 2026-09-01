@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
+import { useRecordMutations, useRecordsQuery } from '@/shared/lib/queries/useRecordsQuery';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import { useRecordModalStore } from '@/shared/lib/stores/useRecordModalStore';
@@ -48,21 +48,23 @@ export default function RecordsPage() {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId, initializeLocal } = useAuthStore();
-  const { records, loadRecords, deleteRecord, loading } = useRecordStore();
   const { open: openRecordModal, openForEdit } = useRecordModalStore();
   const [filter, setFilter] = useState<Filter>('month');
   const [selectedMonth, setSelectedMonth] = useState(() => toYearMonth(new Date()));
   const [page, setPage] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const activeCharacterId = useActiveCharacterId();
+  const { data: records = [], isLoading: loading } = useRecordsQuery({
+    localOwnerId,
+    userId: session?.user?.id,
+    isLoggedIn,
+    activeCharacterId,
+  });
+  const { deleteRecord } = useRecordMutations({ localOwnerId, isLoggedIn });
 
   useEffect(() => {
     initializeLocal();
   }, [initializeLocal]);
-
-  useEffect(() => {
-    if (localOwnerId) loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
-  }, [localOwnerId, loadRecords, isLoggedIn, activeCharacterId]);
 
   const changeMonth = (delta: number) => {
     const [y, m] = selectedMonth.split('-').map(Number);
@@ -195,7 +197,7 @@ export default function RecordsPage() {
             <div className="flex gap-3">
               <Button variant="secondary" fullWidth onClick={() => setConfirmDelete(null)}>취소</Button>
               <Button variant="danger" fullWidth onClick={async () => {
-                await deleteRecord(confirmDelete, isLoggedIn);
+                await deleteRecord(confirmDelete);
                 setConfirmDelete(null);
               }}>삭제</Button>
             </div>

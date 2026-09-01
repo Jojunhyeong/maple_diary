@@ -5,6 +5,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/shared/ui/ThemeProvider";
 import { SessionProvider } from "@/shared/ui/SessionProvider";
 import { GA4PageViewTracker } from "@/shared/ui/GA4PageViewTracker";
+import { QueryProvider } from "@/shared/ui/QueryProvider";
 
 export const metadata: Metadata = {
   title: "Maple Diary",
@@ -26,15 +27,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="ko" className="h-full">
-      <head>
-        {isDev && (
-          <Script
-            src="//unpkg.com/react-grab/dist/index.global.js"
-            crossOrigin="anonymous"
-            strategy="beforeInteractive"
-          />
-        )}
-      </head>
       <body className="min-h-full antialiased bg-app">
         {gaId && (
           <>
@@ -53,16 +45,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Script>
           </>
         )}
-        <SessionProvider>
-          <ThemeProvider>
-            {gaId && (
-              <Suspense fallback={null}>
-                <GA4PageViewTracker />
-              </Suspense>
-            )}
-            {children}
-          </ThemeProvider>
-        </SessionProvider>
+        <QueryProvider>
+          <SessionProvider>
+            <ThemeProvider>
+              {gaId && (
+                <Suspense fallback={null}>
+                  <GA4PageViewTracker />
+                </Suspense>
+              )}
+              {children}
+            </ThemeProvider>
+          </SessionProvider>
+        </QueryProvider>
+        {isDev && (
+          <Script
+            src="https://unpkg.com/react-grab/dist/index.global.js"
+            crossOrigin="anonymous"
+            strategy="afterInteractive"
+          />
+        )}
       </body>
     </html>
   );

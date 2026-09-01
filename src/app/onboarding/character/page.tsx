@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
@@ -57,9 +58,11 @@ function writeCachedCharacter(nickname: string, data: CharacterInfo) {
 
 export default function OnboardingCharacterPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [character, setCharacter] = useState<CharacterInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const nickname = sessionStorage.getItem('onboarding:nickname');
@@ -101,36 +104,58 @@ export default function OnboardingCharacterPage() {
     }
   };
 
-  const handleConfirm = () => {
-    if (!character) return;
+  const handleConfirm = async () => {
+    if (!character || saving) return;
+    setSaving(true);
+    setError('');
 
-    // local_owner_id 생성
-    const { initializeLocal } = useAuthStore.getState();
-    initializeLocal();
+    try {
+      // local_owner_id 생성
+      const { initializeLocal } = useAuthStore.getState();
+      initializeLocal();
 
-    // 프로필 저장
-    const profile = {
-      id: crypto.randomUUID(),
-      character_name: character.character_name,
-      character_ocid: character.ocid ?? null,
-      character_world: character.character_world ?? null,
-      character_class: character.character_class,
-      character_level: character.character_level,
-      character_exp_rate: character.character_exp_rate ?? null,
-      character_combat_power: character.character_combat_power ?? null,
-      image_url: character.character_image,
-      profile_set_at: new Date().toISOString(),
-    };
-    localStorage.setItem('maple_diary:user_profile', JSON.stringify(profile));
-    seedLocalCharactersFromProfile({
-      ...profile,
-      profile_set_at: profile.profile_set_at,
-    });
-    localStorage.setItem('maple_diary:onboarding_done', 'true');
+      const profile = {
+        id: crypto.randomUUID(),
+        character_name: character.character_name,
+        character_ocid: character.ocid ?? null,
+        character_world: character.character_world ?? null,
+        character_class: character.character_class,
+        character_level: character.character_level,
+        character_exp_rate: character.character_exp_rate ?? null,
+        character_combat_power: character.character_combat_power ?? null,
+        image_url: character.character_image,
+        profile_set_at: new Date().toISOString(),
+        is_active: true,
+      };
 
-    sessionStorage.removeItem('onboarding:nickname');
+      if (session?.user?.id) {
+        const response = await fetch('/api/characters', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(profile),
+        });
+        const result = (await response.json().catch(() => ({}))) as {
+          characterId?: string;
+          error?: string;
+        };
+        if (!response.ok || !result.characterId) {
+          throw new Error(result.error || '캐릭터를 계정에 저장하지 못했어요.');
+        }
+        profile.id = result.characterId;
+      }
 
-    router.push('/dashboard');
+      localStorage.setItem('maple_diary:user_profile', JSON.stringify(profile));
+      seedLocalCharactersFromProfile(profile);
+      localStorage.setItem('maple_diary:onboarding_done', 'true');
+
+      sessionStorage.removeItem('onboarding:nickname');
+
+      router.push('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '캐릭터를 저장하지 못했어요.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -195,8 +220,8 @@ export default function OnboardingCharacterPage() {
         <Button className="whitespace-nowrap" variant="secondary" size="lg" onClick={() => router.push('/onboarding/nickname')}>
           이전
         </Button>
-        <Button size="lg" fullWidth onClick={handleConfirm} disabled={!character || loading}>
-          시작하기
+        <Button size="lg" fullWidth onClick={handleConfirm} disabled={!character || loading || saving}>
+          {saving ? '저장 중...' : '시작하기'}
         </Button>
       </div>
     </div>

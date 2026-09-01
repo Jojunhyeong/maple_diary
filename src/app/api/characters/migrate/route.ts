@@ -122,9 +122,29 @@ export async function POST(req: NextRequest) {
   });
 
   const savedIds: string[] = [];
-  for (const character of normalized) {
+  const characterIdMap: Record<string, string> = {};
+  for (let index = 0; index < normalized.length; index += 1) {
+    const character = normalized[index];
     const savedId = await upsertCharacterForUser(db, userId, character);
     savedIds.push(savedId);
+
+    const incomingId = incoming[index]?.id;
+    if (incomingId && isUuidLike(incomingId)) {
+      characterIdMap[incomingId] = savedId;
+      if (incomingId !== savedId) {
+        for (const table of ["records", "gathering_revenues"] as const) {
+          const { error: remapError } = await db
+            .from(table)
+            .update({ character_id: savedId })
+            .eq("user_id", userId)
+            .eq("character_id", incomingId);
+
+          if (remapError) {
+            throw remapError;
+          }
+        }
+      }
+    }
   }
 
   const activeCharacter =
@@ -166,5 +186,6 @@ export async function POST(req: NextRequest) {
     ok: true,
     migratedCharacters: savedIds.length,
     activeCharacterId: activeSavedId || activeCharacter?.id || null,
+    characterIdMap,
   });
 }

@@ -14,7 +14,7 @@ export function CharacterSidebarSlot() {
 
   return (
     <aside
-      className="fixed top-[18vh] hidden w-[340px] xl:block"
+      className="fixed top-6 hidden max-h-[calc(100vh-3rem)] w-[340px] overflow-y-auto pb-6 xl:block"
       style={{ left: sidebarLeft }}
     >
       <CharacterSidebarCard />

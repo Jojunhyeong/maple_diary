@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import { Card } from '@/shared/ui/Card';
 import { Input } from '@/shared/ui/Input';
@@ -18,6 +19,7 @@ import {
   getBossWeekKey,
   calculateBossRevenue,
   filterBossChecklistStateByCycle,
+  isBossSelected,
   removeBossChecklistStatesByCycles,
   mergeBossChecklistStates,
   type BossLootItem,
@@ -25,6 +27,10 @@ import {
   type BossSelection,
 } from '@/shared/lib/boss-checklist';
 import { formatMeso, formatDate } from '@/shared/lib/utils/formatters';
+import {
+  useBossRevenueMutations,
+  useBossRevenuesQuery,
+} from '@/shared/lib/queries/useBossRevenuesQuery';
 
 const LOOT_PRICE_UNIT = 10_000_000;
 
@@ -34,6 +40,27 @@ export default function BossPage() {
   const activeCharacterId = useActiveCharacterId();
   const weekKey = getBossWeekKey();
   const monthKey = getBossMonthKey();
+  const weeklyQuery = useBossRevenuesQuery({
+    userId: session?.user?.id,
+    isLoggedIn,
+    characterId: activeCharacterId ?? '',
+    weekKey,
+    cycleType: 'weekly',
+  });
+  const monthlyQuery = useBossRevenuesQuery({
+    userId: session?.user?.id,
+    isLoggedIn,
+    characterId: activeCharacterId ?? '',
+    weekKey: monthKey,
+    cycleType: 'monthly',
+  });
+  const accountWeeklyQuery = useBossRevenuesQuery({
+    userId: session?.user?.id,
+    isLoggedIn,
+    weekKey,
+    cycleType: 'weekly',
+  });
+  const { saveBossRevenue, deleteBossRevenue } = useBossRevenueMutations({ isLoggedIn });
   const [activeCategory, setActiveCategory] = useState<BossCategoryKey>('grandis');
   const [state, setState] = useState<ChecklistState>({});
   const [isHydrated, setIsHydrated] = useState(false);
@@ -76,15 +103,12 @@ export default function BossPage() {
         return;
       }
 
-      try {
-        const [weeklyRes, monthlyRes] = await Promise.all([
-          fetch(`/api/boss-revenues?${new URLSearchParams({ weekKey, cycleType: 'weekly', characterId: activeCharacterId }).toString()}`),
-          fetch(`/api/boss-revenues?${new URLSearchParams({ weekKey: monthKey, cycleType: 'monthly', characterId: activeCharacterId }).toString()}`),
-        ]);
-        if (!weeklyRes.ok || !monthlyRes.ok) throw new Error('boss revenue load failed');
+      if (weeklyQuery.isLoading || monthlyQuery.isLoading) return;
 
-        const weeklyRows = (await weeklyRes.json()) as Array<{ state?: ChecklistState }>;
-        const monthlyRows = (await monthlyRes.json()) as Array<{ state?: ChecklistState }>;
+      try {
+        if (weeklyQuery.error || monthlyQuery.error) throw weeklyQuery.error ?? monthlyQuery.error;
+        const weeklyRows = weeklyQuery.data ?? [];
+        const monthlyRows = monthlyQuery.data ?? [];
 
         if (cancelled) return;
 
@@ -129,15 +153,41 @@ export default function BossPage() {
     return () => {
       cancelled = true;
     };
-  }, [isHydrated, isLoggedIn, activeCharacterId, weekKey, monthKey]);
+  }, [
+    activeCharacterId,
+    isHydrated,
+    isLoggedIn,
+    monthKey,
+    monthlyQuery.data,
+    monthlyQuery.error,
+    monthlyQuery.isLoading,
+    weekKey,
+    weeklyQuery.data,
+    weeklyQuery.error,
+    weeklyQuery.isLoading,
+  ]);
 
   const getBossLockState = (bossId: string) => {
     if (!isLoggedIn) return true;
     const boss = BOSS_CATALOG.flatMap((group) => group.bosses).find((entry) => entry.id === bossId);
+    if (boss?.accountWide) {
+      const ownerCharacterId = accountWideBossOwners.get(bossId);
+      if (ownerCharacterId !== undefined && ownerCharacterId !== activeCharacterId) return true;
+    }
     return boss?.resetCycle === 'monthly' ? isMonthlyLocked : isWeeklyLocked;
   };
 
   const activeGroup = useMemo(() => getBossCategory(activeCategory), [activeCategory]);
+  const accountWideBossOwners = useMemo(() => {
+    const owners = new Map<string, string | null>();
+    for (const row of accountWeeklyQuery.data ?? []) {
+      for (const boss of BOSS_CATALOG.flatMap((group) => group.bosses)) {
+        if (!boss.accountWide || owners.has(boss.id) || !isBossSelected(row.state, boss.id)) continue;
+        owners.set(boss.id, row.character_id ?? row.state?.__bossMeta?.characterId ?? null);
+      }
+    }
+    return owners;
+  }, [accountWeeklyQuery.data]);
   const dropItemOptions = BOSS_DROP_ITEM_OPTIONS.filter((option) => option.id !== 'misc_loot');
   const lootItems = useMemo(() => state.__lootItems ?? [], [state.__lootItems]);
   const lootRevenue = useMemo(
@@ -376,31 +426,12 @@ export default function BossPage() {
     setIsSaving(true);
     setSaveMessage('');
     try {
-      const res = await fetch('/api/boss-revenues', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ weekKey, monthKey, characterId: activeCharacterId, state: stateToSave }),
+      const data = await saveBossRevenue({
+        weekKey,
+        monthKey,
+        characterId: activeCharacterId,
+        state: stateToSave,
       });
-
-      if (res.status === 409) {
-        const message = isWeeklyLocked || isMonthlyLocked ? '저장할 수 있는 기간이 없어요' : '이미 저장된 상태예요';
-        setSaveMessage(message);
-        return;
-      }
-
-      if (!res.ok) {
-        const payload = (await res.json().catch(() => null)) as
-          | { error?: string; dbError?: { code?: string; message?: string; hint?: string; details?: string } }
-          | null;
-        const detail = payload?.dbError
-          ? [payload.dbError.message, payload.dbError.hint, payload.dbError.details].filter(Boolean).join(' | ')
-          : payload?.error;
-        throw new Error(detail || 'boss revenue save failed');
-      }
-
-      const data = (await res.json()) as { savedCycles?: Array<'weekly' | 'monthly'> };
       const savedCycles = new Set(data.savedCycles ?? []);
       if (savedCycles.has('weekly')) setIsWeeklyLocked(true);
       if (savedCycles.has('monthly')) setIsMonthlyLocked(true);
@@ -452,24 +483,7 @@ export default function BossPage() {
     if (!shouldDelete) return;
 
     try {
-      const res = await fetch(
-        `/api/boss-revenues?${new URLSearchParams({
-          weekKey,
-          monthKey,
-          characterId: activeCharacterId,
-        }).toString()}`,
-        { method: 'DELETE' },
-      );
-
-      if (!res.ok) {
-        const payload = (await res.json().catch(() => null)) as
-          | { error?: string; dbError?: { code?: string; message?: string; hint?: string; details?: string } }
-          | null;
-        const detail = payload?.dbError
-          ? [payload.dbError.message, payload.dbError.hint, payload.dbError.details].filter(Boolean).join(' | ')
-          : payload?.error;
-        throw new Error(detail || 'boss revenue delete failed');
-      }
+      await deleteBossRevenue({ weekKey, monthKey, characterId: activeCharacterId });
 
       setState((prev) => removeBossChecklistStatesByCycles(prev, ['weekly', 'monthly']));
       setIsWeeklyLocked(false);
@@ -1084,11 +1098,12 @@ function LootThumb({ itemId, label }: { itemId: string; label: string }) {
   return (
     <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-card text-[10px] font-bold text-t2">
       {imageUrl && !failed ? (
-        <img
+        <Image
           src={imageUrl}
           alt={option?.label ?? label ?? '드랍템'}
+          width={44}
+          height={44}
           className="h-full w-full object-contain"
-          loading="lazy"
           referrerPolicy="no-referrer"
           onError={() => setFailed(true)}
         />

@@ -4,13 +4,14 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
-import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
+import { useRecordMutations, useRecordsQuery } from '@/shared/lib/queries/useRecordsQuery';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { useUserStore } from '@/shared/lib/stores/useUserStore';
 import { useRecordModalStore } from '@/shared/lib/stores/useRecordModalStore';
 import { enrichRecordWithCalculations } from '@/shared/lib/utils/calculations';
 import { formatMeso, formatDate, fromManInput, toManDisplay } from '@/shared/lib/utils/formatters';
 import { readActiveCharacterId } from '@/shared/lib/character-storage';
+import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import type { Record as RecordType } from '@/shared/types';
 
 const MINUTES_PER_SOJAE = 30;
@@ -34,7 +35,14 @@ export function RecordModal() {
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId } = useAuthStore();
   const { settings, updateSettings } = useUserStore();
-  const { records, addRecord, updateRecord } = useRecordStore();
+  const activeCharacterId = useActiveCharacterId();
+  const { data: records = [] } = useRecordsQuery({
+    localOwnerId,
+    userId: session?.user?.id,
+    isLoggedIn,
+    activeCharacterId,
+  });
+  const { addRecord, updateRecord } = useRecordMutations({ localOwnerId, isLoggedIn });
 
   const panelRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<number | null>(null);
@@ -167,7 +175,7 @@ export function RecordModal() {
         await updateSettings({ shard_price: shardPrice });
       }
       if (editingRecord) {
-        await updateRecord(baseRecord, localOwnerId, shardPrice, isLoggedIn);
+        await updateRecord(baseRecord, shardPrice);
         showToast('사냥을 수정했어요', 'success');
       } else {
         await addRecord(
@@ -181,9 +189,7 @@ export function RecordModal() {
             character_id: characterId ?? undefined,
             sync_status: 'local',
           },
-          localOwnerId,
           shardPrice,
-          isLoggedIn,
         );
         showToast('사냥이 저장됐어요', 'success');
       }

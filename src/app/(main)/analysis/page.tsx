@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
+import { useRecordsQuery } from '@/shared/lib/queries/useRecordsQuery';
+import { useCharactersQuery } from '@/shared/lib/queries/useCharactersQuery';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import { Card } from '@/shared/ui/Card';
@@ -12,7 +13,7 @@ import { formatDateKorean, formatMeso, formatTime } from '@/shared/lib/utils/for
 import { CHARACTER_CHANGE_EVENT, readLocalCharacters } from '@/shared/lib/character-storage';
 import { filterRecordsByCharacter } from '@/shared/lib/utils/characterFilter';
 import { getBossThursday } from '@/shared/lib/boss-checklist';
-import { useBossRevenueSummary } from '@/shared/lib/hooks/useBossRevenueSummary';
+import { useBossRevenueAnalysis } from '@/shared/lib/hooks/useBossRevenueAnalysis';
 import { useGatheringRevenueSummary } from '@/shared/lib/hooks/useGatheringRevenueSummary';
 import type { BossRevenueCharacterSummary, BossRevenueSummary } from '@/shared/lib/boss-checklist';
 import type { RecordWithCalculations } from '@/shared/types';
@@ -43,8 +44,17 @@ export default function AnalysisPage() {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId, initializeLocal } = useAuthStore();
-  const { records, loadRecords } = useRecordStore();
   const activeCharacterId = useActiveCharacterId();
+  const { data: records = [] } = useRecordsQuery({
+    localOwnerId,
+    userId: session?.user?.id,
+    isLoggedIn,
+    activeCharacterId,
+  });
+  const { data: charactersPayload } = useCharactersQuery({
+    userId: session?.user?.id,
+    isLoggedIn,
+  });
   const [scope, setScope] = useState<ScopeTabValue>('all');
   const [characterProfiles, setCharacterProfiles] = useState<Array<{ id: string; character_name: string }>>([]);
   const today = useMemo(() => new Date(), []);
@@ -52,11 +62,26 @@ export default function AnalysisPage() {
   const monthStart = useMemo(() => new Date(today.getFullYear(), today.getMonth(), 1), [today]);
   const bossWeekStart = useMemo(() => getBossThursday(today), [today]);
   const bossCharacterId = scope === 'character' ? (activeCharacterId ?? '') : null;
-  const bossMonthWeeklySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'weekly', bossCharacterId);
-  const bossMonthMonthlySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'monthly', bossCharacterId);
-  const bossWeekSummary = useBossRevenueSummary(bossWeekStart, today, isLoggedIn, 'weekly', bossCharacterId);
+  const {
+    monthWeeklySummary: bossMonthWeeklySummary,
+    monthMonthlySummary: bossMonthMonthlySummary,
+    weekSummary: bossWeekSummary,
+  } = useBossRevenueAnalysis(
+    monthStart,
+    today,
+    bossWeekStart,
+    isLoggedIn,
+    bossCharacterId,
+    session?.user?.id,
+  );
   const gatheringCharacterId = scope === 'character' ? (activeCharacterId ?? '') : null;
-  const gatheringMonthSummary = useGatheringRevenueSummary(monthStart, today, isLoggedIn, gatheringCharacterId);
+  const gatheringMonthSummary = useGatheringRevenueSummary(
+    monthStart,
+    today,
+    isLoggedIn,
+    gatheringCharacterId,
+    session?.user?.id,
+  );
   const bossMonthSummary = useMemo(
     () => mergeBossRevenueSummaries(bossMonthWeeklySummary, bossMonthMonthlySummary),
     [bossMonthWeeklySummary, bossMonthMonthlySummary],
@@ -91,11 +116,8 @@ export default function AnalysisPage() {
       }
 
       try {
-        const res = await fetch('/api/characters');
-        if (!res.ok) throw new Error('character load failed');
-        const data = (await res.json()) as { characters?: Array<{ id?: string; character_name?: string }> };
-        const nextCharacters = Array.isArray(data.characters)
-          ? data.characters
+        const nextCharacters = Array.isArray(charactersPayload?.characters)
+          ? charactersPayload.characters
               .map((character) => ({
                 id: typeof character.id === 'string' ? character.id : '',
                 character_name: typeof character.character_name === 'string' ? character.character_name : '캐릭터',
@@ -134,11 +156,7 @@ export default function AnalysisPage() {
       window.removeEventListener('storage', syncCharacters);
       window.removeEventListener(CHARACTER_CHANGE_EVENT, syncCharacters);
     };
-  }, [isLoggedIn]);
-
-  useEffect(() => {
-    if (localOwnerId) loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
-  }, [localOwnerId, loadRecords, isLoggedIn, activeCharacterId]);
+  }, [charactersPayload, isLoggedIn]);
 
   const visibleRecords = useMemo(
     () => {

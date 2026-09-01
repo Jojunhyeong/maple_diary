@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/../auth';
 import { supabaseAdmin } from '@/shared/lib/supabase';
+import { resolveOwnedCharacterId } from '@/shared/lib/server/owned-character';
 import { BOSS_CATALOG } from '@/shared/data/boss-catalog';
 import {
   buildBossRevenueSnapshots,
@@ -115,6 +116,15 @@ export async function POST(req: NextRequest) {
   }
 
   const db = supabaseAdmin();
+  const characterId = await resolveOwnedCharacterId(
+    db,
+    session.user.id,
+    body.characterId,
+  ).catch(() => null);
+  if (!characterId) {
+    return NextResponse.json({ error: '저장할 캐릭터를 찾지 못했어요.' }, { status: 400 });
+  }
+
   const selectedAccountWideBosses = BOSS_CATALOG
     .flatMap((group) => group.bosses)
     .filter((boss) => boss.accountWide && isBossSelected(body.state, boss.id));
@@ -140,7 +150,7 @@ export async function POST(req: NextRequest) {
         };
         const rowCycleType = row.cycle_type ?? rowState?.__bossMeta?.cycleType;
         const rowCharacterId = row.character_id ?? rowState?.__bossMeta?.characterId ?? null;
-        return rowCycleType === 'weekly' && rowCharacterId !== body.characterId && isBossSelected(rowState, boss.id);
+        return rowCycleType === 'weekly' && rowCharacterId !== characterId && isBossSelected(rowState, boss.id);
       });
 
       if (duplicate) {
@@ -152,7 +162,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const snapshots = buildBossRevenueSnapshots(body.state, body.weekKey, body.monthKey, body.characterId);
+  const snapshots = buildBossRevenueSnapshots(body.state, body.weekKey, body.monthKey, characterId);
 
   if (snapshots.length === 0) {
     return NextResponse.json({ error: 'Nothing to save' }, { status: 400 });

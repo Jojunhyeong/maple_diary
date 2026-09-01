@@ -3,15 +3,13 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useState } from 'react';
 import type { DragEvent } from 'react';
+import Image from 'next/image';
 import { useSession } from 'next-auth/react';
-import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
-import { useExpenseStore } from '@/shared/lib/stores/useExpenseStore';
+import { useGoalMutations, useGoalsQuery } from '@/shared/lib/queries/useGoalsQuery';
+import { useAccountMesoQuery } from '@/shared/lib/queries/useAccountMesoQuery';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
-import { useGoalStore } from '@/shared/lib/stores/useGoalStore';
-import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import { useStoredCharacterProfile } from '@/shared/lib/hooks/useStoredCharacterProfile';
-import { useBossRevenueSummary } from '@/shared/lib/hooks/useBossRevenueSummary';
-import { useGatheringRevenueSummary } from '@/shared/lib/hooks/useGatheringRevenueSummary';
+import { useEquipmentCatalogQuery } from '@/shared/lib/queries/useEquipmentCatalogQuery';
 import { Card } from '@/shared/ui/Card';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
@@ -101,9 +99,7 @@ type TargetView = GoalTarget & {
   goalStartStr: string;
 };
 
-type GoalRevenueMode = 'gross' | 'net';
-
-const GOAL_REVENUE_MODE_KEY = 'maple_diary:goal_revenue_mode';
+const EMPTY_GOALS: Goal[] = [];
 
 function catalogItemKey(item: Pick<EquipmentCatalogItem, 'id' | 'slug'>) {
   return item.slug || item.id;
@@ -116,7 +112,16 @@ function CatalogThumb({ src, className }: { src: string | null; className: strin
     return <span className="text-[10px] text-t3">IMG</span>;
   }
 
-  return <img src={src} alt="" className={className} onError={() => setFailed(true)} />;
+  return (
+    <Image
+      src={src}
+      alt=""
+      width={44}
+      height={44}
+      className={className}
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 function createDraft(kind: GoalDraft['kind'], equipment?: EquipmentCatalogItem | null): GoalDraft {
@@ -349,81 +354,47 @@ function EquipmentCatalogPicker({
   characterClass?: string | null;
   compact?: boolean;
 }) {
-  const [catalogItems, setCatalogItems] = useState<EquipmentCatalogItem[]>([]);
-  const [catalogParts, setCatalogParts] = useState<string[]>([...EQUIPMENT_PART_OPTIONS]);
   const [catalogQuery, setCatalogQuery] = useState('');
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [catalogLoaded, setCatalogLoaded] = useState(false);
-  const [catalogError, setCatalogError] = useState('');
+  const [debouncedCatalogQuery, setDebouncedCatalogQuery] = useState('');
   const [sortMode, setSortMode] = useState<'level' | 'name'>('level');
   const selectedPart = draft.equipmentPart || DEFAULT_EQUIPMENT_PART;
   const defaultJobGroup = useMemo(() => {
     if (draft.kind !== 'equipment') return null;
     return deriveJobGroup(characterClass);
   }, [characterClass, draft.kind]);
-  const [selectedJobGroup, setSelectedJobGroup] = useState<string>('all');
+  const [selectedJobGroup, setSelectedJobGroup] = useState<string>(() => defaultJobGroup ?? 'all');
 
   useEffect(() => {
-    setSelectedJobGroup((current) => {
-      if (current === 'all' || current === defaultJobGroup) {
-        return defaultJobGroup ?? 'all';
-      }
-      return current;
-    });
-  }, [defaultJobGroup]);
+    const timer = window.setTimeout(() => setDebouncedCatalogQuery(catalogQuery), 180);
+    return () => window.clearTimeout(timer);
+  }, [catalogQuery]);
+
+  const {
+    data: catalogResponse,
+    isLoading: catalogLoading,
+    error: catalogQueryError,
+  } = useEquipmentCatalogQuery({
+    part: selectedPart,
+    job: selectedJobGroup,
+    characterClass,
+    query: debouncedCatalogQuery,
+    enabled: draft.kind === 'equipment',
+  });
+  const catalogItems = useMemo(
+    () => catalogResponse ? normalizeCatalogItems(catalogResponse) : [],
+    [catalogResponse],
+  );
+  const catalogParts = useMemo(
+    () => Array.from(new Set(catalogResponse?.parts?.filter(Boolean) ?? [])),
+    [catalogResponse?.parts],
+  );
+  const catalogLoaded = !!catalogResponse && !catalogLoading;
+  const catalogError = catalogQueryError?.message ?? '';
 
   const partOptions = useMemo(
     () => Array.from(new Set([DEFAULT_EQUIPMENT_PART, ...EQUIPMENT_PART_OPTIONS, ...catalogParts])),
     [catalogParts],
   );
-
-  useEffect(() => {
-    if (draft.kind !== 'equipment') return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      setCatalogLoading(true);
-      setCatalogLoaded(false);
-      setCatalogError('');
-      try {
-        const params = new URLSearchParams();
-        params.set('part', selectedPart);
-        if (selectedJobGroup !== 'all') {
-          params.set('job', selectedJobGroup);
-        }
-        if (characterClass?.trim()) {
-          params.set('class', characterClass.trim());
-        }
-        const trimmed = catalogQuery.trim();
-        if (trimmed) params.set('q', trimmed);
-
-        const res = await fetch(`/api/equipment-catalog?${params.toString()}`, {
-          signal: controller.signal,
-        });
-        const data = (await res.json().catch(() => ({}))) as EquipmentCatalogResponse;
-        if (!res.ok) throw new Error(data.error || '장비 후보를 불러오지 못했습니다');
-
-        setCatalogItems(normalizeCatalogItems(data));
-        if (Array.isArray(data.parts) && data.parts.length > 0) {
-          setCatalogParts(Array.from(new Set(data.parts.filter(Boolean))));
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          setCatalogItems([]);
-          setCatalogError(error instanceof Error ? error.message : '장비 후보를 불러오지 못했습니다');
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setCatalogLoading(false);
-          setCatalogLoaded(true);
-        }
-      }
-    }, 180);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [catalogQuery, characterClass, draft.kind, selectedJobGroup, selectedPart]);
 
   useEffect(() => {
     if (draft.kind !== 'equipment') return;
@@ -731,10 +702,21 @@ export default function GoalsPage() {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId, initializeLocal } = useAuthStore();
-  const { records, loadRecords } = useRecordStore();
-  const { expenses, loadExpenses } = useExpenseStore();
-  const { currentGoals, loadGoal, saveGoals, error: goalError, clearError } = useGoalStore();
-  const activeCharacterId = useActiveCharacterId();
+  const { data: currentGoals = EMPTY_GOALS } = useGoalsQuery({
+    localOwnerId,
+    userId: session?.user?.id,
+    isLoggedIn,
+  });
+  const { saveGoals, error: goalMutationError, resetError } = useGoalMutations({
+    localOwnerId,
+    isLoggedIn,
+  });
+  const goalError = goalMutationError?.message ?? null;
+  const { data: accountMeso } = useAccountMesoQuery({
+    localOwnerId,
+    userId: session?.user?.id,
+    isLoggedIn,
+  });
   const profile = useStoredCharacterProfile();
 
   const [draftGoals, setDraftGoals] = useState<GoalDraft[]>([]);
@@ -745,8 +727,6 @@ export default function GoalsPage() {
   const [formError, setFormError] = useState('');
   const [draggingGoalId, setDraggingGoalId] = useState<string | null>(null);
   const [dragOverGoalId, setDragOverGoalId] = useState<string | null>(null);
-  const [goalRevenueMode, setGoalRevenueMode] = useState<GoalRevenueMode>('gross');
-  const [goalRevenueModeReady, setGoalRevenueModeReady] = useState(false);
 
   useEffect(() => {
     initializeLocal();
@@ -756,60 +736,7 @@ export default function GoalsPage() {
     setIsMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (localOwnerId) {
-      loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
-      loadGoal(localOwnerId, isLoggedIn);
-      loadExpenses(isLoggedIn);
-    }
-  }, [localOwnerId, loadRecords, loadGoal, loadExpenses, isLoggedIn, activeCharacterId]);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(GOAL_REVENUE_MODE_KEY);
-      if (stored === 'gross' || stored === 'net') {
-        setGoalRevenueMode(stored);
-      }
-    } catch {
-      // ignore storage errors
-    } finally {
-      setGoalRevenueModeReady(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!goalRevenueModeReady) return;
-    try {
-      localStorage.setItem(GOAL_REVENUE_MODE_KEY, goalRevenueMode);
-    } catch {
-      // ignore storage errors
-    }
-  }, [goalRevenueMode, goalRevenueModeReady]);
-
-  const today = useMemo(() => new Date(), []);
-  const monthStart = useMemo(() => new Date(today.getFullYear(), today.getMonth(), 1), [today]);
-
-  const todayStr = useMemo(() => formatDate(today), [today]);
-  const currentMonthStartStr = useMemo(() => formatDate(monthStart), [monthStart]);
-  const currentMonthRecords = useMemo(
-    () => records.filter((r) => r.date >= currentMonthStartStr && r.date <= todayStr),
-    [records, currentMonthStartStr, todayStr],
-  );
-  const currentMonthExpenses = useMemo(
-    () => expenses.filter((expense) => expense.date >= currentMonthStartStr && expense.date <= todayStr),
-    [expenses, currentMonthStartStr, todayStr],
-  );
-  const bossWeeklySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'weekly');
-  const bossMonthlySummary = useBossRevenueSummary(monthStart, today, isLoggedIn, 'monthly');
-  const gatheringMonthlySummary = useGatheringRevenueSummary(monthStart, today, isLoggedIn);
-
-  const totalHunting = currentMonthRecords.reduce((sum, r) => sum + r.net_revenue, 0);
-  const totalBoss = bossWeeklySummary.totalRevenue + bossMonthlySummary.totalRevenue;
-  const totalGrossRevenue = totalHunting + totalBoss + gatheringMonthlySummary.totalRevenue;
-  const currentExpenseTotal = currentMonthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const totalNetRevenue = totalGrossRevenue - currentExpenseTotal;
-  const selectedGoalRevenue = goalRevenueMode === 'gross' ? totalGrossRevenue : totalNetRevenue;
-  const effectiveGoalRevenue = Math.max(selectedGoalRevenue, 0);
+  const ownedMeso = accountMeso?.amount ?? 0;
 
   const goalCards = useMemo(() => normalizeGoalCards(currentGoals), [currentGoals]);
   const totalTargetAmount = useMemo(
@@ -826,7 +753,7 @@ export default function GoalsPage() {
     }, 0),
     [goalCards],
   );
-  const progressPct = totalTargetAmount > 0 ? Math.min((effectiveGoalRevenue / totalTargetAmount) * 100, 100) : 0;
+  const progressPct = totalTargetAmount > 0 ? Math.min((ownedMeso / totalTargetAmount) * 100, 100) : 0;
   const targetViews = useMemo<TargetView[]>(
     () => {
       let runningTotal = 0;
@@ -841,7 +768,7 @@ export default function GoalsPage() {
           : null);
         if (!target) return [];
         const previousTargetTotal = runningTotal;
-        const allocatedCurrent = clampAllocation(effectiveGoalRevenue, previousTargetTotal, target.target_amount);
+        const allocatedCurrent = clampAllocation(ownedMeso, previousTargetTotal, target.target_amount);
         runningTotal += target.target_amount;
         return {
           ...target,
@@ -851,11 +778,11 @@ export default function GoalsPage() {
           previousTargetTotal,
           cumulativeTarget: runningTotal,
           allocatedCurrent,
-          isActive: effectiveGoalRevenue > previousTargetTotal,
+          isActive: ownedMeso > previousTargetTotal,
         };
       });
     },
-    [goalCards, effectiveGoalRevenue],
+    [goalCards, ownedMeso],
   );
 
   const currentCharacterLabel = useMemo(() => {
@@ -865,7 +792,27 @@ export default function GoalsPage() {
 
   useEffect(() => {
     if (editingGoalId || creatingGoalDraft) return;
-    setDraftGoals(goalCards.map((goal) => goalToDraft(goal)));
+    const nextDraftGoals = goalCards.map((goal) => goalToDraft(goal));
+    setDraftGoals((currentDraftGoals) => {
+      if (currentDraftGoals.length !== nextDraftGoals.length) return nextDraftGoals;
+
+      const isSame = currentDraftGoals.every((currentDraft, index) => {
+        const nextDraft = nextDraftGoals[index];
+        return (
+          currentDraft.id === nextDraft.id &&
+          currentDraft.kind === nextDraft.kind &&
+          currentDraft.amountMan === nextDraft.amountMan &&
+          currentDraft.equipmentPart === nextDraft.equipmentPart &&
+          currentDraft.equipmentKey === nextDraft.equipmentKey &&
+          currentDraft.equipmentName === nextDraft.equipmentName &&
+          currentDraft.equipmentSlot === nextDraft.equipmentSlot &&
+          currentDraft.equipmentIconUrl === nextDraft.equipmentIconUrl &&
+          currentDraft.equipmentShapeIconUrl === nextDraft.equipmentShapeIconUrl
+        );
+      });
+
+      return isSame ? currentDraftGoals : nextDraftGoals;
+    });
   }, [creatingGoalDraft, editingGoalId, goalCards]);
 
   const addDraft = (kind: GoalDraft['kind']) => {
@@ -889,7 +836,7 @@ export default function GoalsPage() {
   };
 
   const persistGoals = async (nextDraftGoals: GoalDraft[], focusDraftId?: string) => {
-    clearError();
+    resetError();
     setFormError('');
 
     if (!localOwnerId) {
@@ -900,7 +847,9 @@ export default function GoalsPage() {
     if (nextDraftGoals.length === 0) {
       setSaving(true);
       try {
-        await saveGoals([], localOwnerId, isLoggedIn);
+        await saveGoals([]);
+      } catch {
+        return false;
       } finally {
         setSaving(false);
       }
@@ -970,9 +919,11 @@ export default function GoalsPage() {
 
     setSaving(true);
     try {
-      await saveGoals(nextGoals, localOwnerId, isLoggedIn);
+      await saveGoals(nextGoals);
       setEditingGoalId(null);
       return true;
+    } catch {
+      return false;
     } finally {
       setSaving(false);
     }
@@ -1147,39 +1098,17 @@ export default function GoalsPage() {
                 <p className="text-[11px] text-t3">목표 현황</p>
                 <p className="mt-1 text-2xl font-black tracking-tight text-t1">목표 카드를 하나씩 쌓아갑니다</p>
                 <p className="mt-2 text-xs text-t3">카드 추가 버튼으로 목표를 한 장씩 만들고, 각 카드에서 바로 수정과 삭제를 할 수 있어요.</p>
-                <p className="mt-1 text-xs font-medium text-amber-600">드래그해서 우선순위를 변경할 수 있어요.</p>
+                <p className="mt-1 text-xs font-medium text-amber-600">전체 보유 메소를 기준으로 계산하며, 드래그해서 우선순위를 변경할 수 있어요.</p>
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-2 self-start">
-                <div className="inline-flex rounded-full border border-line bg-white/80 p-1 shadow-[var(--shadow-sm)]">
-                  <button
-                    type="button"
-                    onClick={() => setGoalRevenueMode('gross')}
-                    className={[
-                      'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
-                      goalRevenueMode === 'gross' ? 'bg-amber-500 text-white shadow-sm' : 'text-t3 hover:text-t1',
-                    ].join(' ')}
-                  >
-                    총수익
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setGoalRevenueMode('net')}
-                    className={[
-                      'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
-                      goalRevenueMode === 'net' ? 'bg-amber-500 text-white shadow-sm' : 'text-t3 hover:text-t1',
-                    ].join(' ')}
-                  >
-                    순수익
-                  </button>
-                </div>
+              <div className="flex w-full shrink-0 flex-col items-end gap-3 self-start lg:w-auto">
                 <div className="grid w-full min-w-[240px] grid-cols-3 gap-2">
                   <div className="rounded-2xl border border-line bg-card/80 p-3">
                     <p className="text-[11px] text-t3">총 목표액</p>
                     <p className="mt-1 text-base font-bold text-t1">{formatMeso(totalTargetAmount)}</p>
                   </div>
                   <div className="rounded-2xl border border-line bg-card/80 p-3">
-                    <p className="text-[11px] text-t3">{goalRevenueMode === 'gross' ? '총수익' : '순수익'}</p>
-                    <p className="mt-1 text-base font-bold text-t1">{formatMeso(effectiveGoalRevenue)}</p>
+                    <p className="text-[11px] text-t3">보유 메소</p>
+                    <p className="mt-1 text-base font-bold text-t1">{formatMeso(ownedMeso)}</p>
                   </div>
                   <div className="rounded-2xl border border-line bg-card/80 p-3">
                     <p className="text-[11px] text-t3">목표 진행</p>

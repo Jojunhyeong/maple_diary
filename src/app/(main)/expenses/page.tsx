@@ -1,10 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Card } from '@/shared/ui/Card';
 import { Button } from '@/shared/ui/Button';
-import { useExpenseStore } from '@/shared/lib/stores/useExpenseStore';
+import {
+  useExpenseMutations,
+  useExpensesQuery,
+} from '@/shared/lib/queries/useExpensesQuery';
+import {
+  useNexonConnectionMutations,
+  useNexonConnectionQuery,
+} from '@/shared/lib/queries/useNexonConnectionQuery';
 import { useExpenseModalStore } from '@/shared/lib/stores/useExpenseModalStore';
 import { MaplePointCalculatorModal } from '@/shared/ui/MaplePointCalculatorModal';
 import { MaplePointManualExpenseModal } from '@/shared/ui/MaplePointManualExpenseModal';
@@ -56,24 +64,24 @@ function groupExpensesByDate(expenses: Expense[]): ExpenseGroup[] {
 export default function ExpensesPage() {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
-  const { expenses, loadExpenses, deleteExpense, loading, error, clearError } =
-    useExpenseStore();
+  const { data: expenses = [], isLoading: loading } = useExpensesQuery({
+    userId: session?.user?.id,
+    isLoggedIn,
+  });
+  const { deleteExpense } = useExpenseMutations({ isLoggedIn });
+  const { data: nexonConnection, isLoading: isNexonStatusLoading } = useNexonConnectionQuery({
+    userId: session?.user?.id,
+    isLoggedIn,
+  });
+  const { syncStarforce, isStarforceSyncing } = useNexonConnectionMutations({ isLoggedIn });
+  const isNexonConnected = !!nexonConnection?.connected;
   const { open, openForEdit } = useExpenseModalStore();
   const [isMaplePointOpen, setIsMaplePointOpen] = useState(false);
   const [isMaplePointManualOpen, setIsMaplePointManualOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'meso' | 'maple-point'>('meso');
+  const [starforceSyncMessage, setStarforceSyncMessage] = useState('');
 
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth(new Date()));
-
-  useEffect(() => {
-    loadExpenses(isLoggedIn);
-  }, [loadExpenses, isLoggedIn]);
-
-  useEffect(() => {
-    if (!error) return;
-    const timer = window.setTimeout(() => clearError(), 2200);
-    return () => window.clearTimeout(timer);
-  }, [error, clearError]);
 
   const visibleExpenses = useMemo(
     () =>
@@ -98,11 +106,39 @@ export default function ExpensesPage() {
   const averageAmountLabel = isMaplePointTab ? formatPointAmount(averageExpense) : formatMeso(averageExpense);
 
   const handleDelete = async (expenseId: string) => {
-    await deleteExpense(expenseId, isLoggedIn);
+    try {
+      await deleteExpense(expenseId);
+    } catch (error) {
+      setStarforceSyncMessage(error instanceof Error ? error.message : '지출을 삭제하지 못했어요.');
+    }
   };
 
   const handleTabChange = (tab: 'meso' | 'maple-point') => {
     setActiveTab(tab);
+  };
+
+  const handleStarforceSync = async () => {
+    setStarforceSyncMessage('');
+    try {
+      const payload = await syncStarforce();
+
+      const importedAttempts = payload.importedAttempts ?? 0;
+      const totalAmount = payload.totalAmount ?? 0;
+      const skippedCount = payload.skippedCount ?? 0;
+      if (importedAttempts === 0 && skippedCount === 0) {
+        setStarforceSyncMessage('새로운 스타포스 강화 내역이 없어요.');
+      } else {
+        const importedMessage =
+          importedAttempts > 0
+            ? `${importedAttempts}회, ${formatMeso(totalAmount)}의 계산 강화비를 반영했어요.`
+            : '계산 가능한 신규 강화비가 없어요.';
+        const skippedMessage =
+          skippedCount > 0 ? ` 정확히 계산할 수 없는 ${skippedCount}회는 제외했어요.` : '';
+        setStarforceSyncMessage(`${importedMessage}${skippedMessage}`);
+      }
+    } catch (error) {
+      setStarforceSyncMessage(error instanceof Error ? error.message : '강화비를 동기화하지 못했어요.');
+    }
   };
 
   return (
@@ -151,9 +187,54 @@ export default function ExpensesPage() {
           </button>
         </div>
       ) : (
-        <Button type="button" size="lg" fullWidth onClick={open}>
-          + 지출 추가
-        </Button>
+        <>
+          <Button type="button" size="lg" fullWidth onClick={open}>
+            + 지출 추가
+          </Button>
+
+          <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.12),rgba(245,158,11,0.03)_65%,transparent)] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-t1">스타포스 강화비</p>
+                  {isNexonConnected && (
+                    <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] font-semibold text-green-600">
+                      연결됨
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-[11px] leading-5 text-t3">
+                  넥슨 강화 이력에서 계산 가능한 신규 지출을 가져와요.
+                </p>
+              </div>
+
+              {isNexonStatusLoading ? (
+                <span className="shrink-0 text-xs text-t3">확인 중...</span>
+              ) : isNexonConnected ? (
+                <button
+                  type="button"
+                  onClick={() => void handleStarforceSync()}
+                  disabled={isStarforceSyncing}
+                  className="shrink-0 rounded-full bg-amber-500 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-amber-500/90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isStarforceSyncing ? '동기화 중...' : '지금 동기화'}
+                </button>
+              ) : (
+                <Link
+                  href="/settings"
+                  className="shrink-0 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-600"
+                >
+                  API 연결
+                </Link>
+              )}
+            </div>
+            {starforceSyncMessage && (
+              <p className="mt-2 border-t border-line/70 pt-2 text-xs leading-5 text-t2">
+                {starforceSyncMessage}
+              </p>
+            )}
+          </Card>
+        </>
       )}
 
     
