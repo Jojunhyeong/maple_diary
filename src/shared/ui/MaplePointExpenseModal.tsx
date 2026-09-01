@@ -7,8 +7,7 @@ import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
 import { Input } from '@/shared/ui/Input';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
-import { useExpenseStore } from '@/shared/lib/stores/useExpenseStore';
-import { formatDateKorean } from '@/shared/lib/utils/formatters';
+import { useExpenseMutations } from '@/shared/lib/queries/useExpensesQuery';
 import type { Expense } from '@/shared/types';
 import {
   MAPLE_POINT_KIND_META,
@@ -22,7 +21,6 @@ import {
   clearMaplePointAutoSaveConfig,
   formatPointAmount,
   getLocalDateKey,
-  getMaplePointAutoSaveStorageKey,
   getTemplateKey,
   getTemplateNextRunLabel,
   makeMaplePointTemplate,
@@ -40,7 +38,7 @@ export function MaplePointExpenseModal({
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId } = useAuthStore();
-  const { addExpense } = useExpenseStore();
+  const { addExpense } = useExpenseMutations({ isLoggedIn });
   const [templates, setTemplates] = useState<MaplePointTemplate[]>(
     MAPLE_POINT_SEEDS.map(makeMaplePointTemplate),
   );
@@ -159,14 +157,6 @@ export function MaplePointExpenseModal({
     setNote('');
   };
 
-  const applySeed = (seed: MaplePointSeedTemplate) => {
-    setTitle(seed.title);
-    setAmountText(String(seed.amount));
-    setKind(seed.kind);
-    setSchedule(seed.schedule);
-    setNote(seed.note);
-  };
-
   const persistAutoSaveConfig = (enabled: boolean, selectedTemplates: MaplePointSeedTemplate[], lastRunDate?: string) => {
     const ownerKey = localOwnerId ?? session?.user?.id;
     if (!ownerKey) return;
@@ -232,7 +222,7 @@ export function MaplePointExpenseModal({
         ),
       };
 
-      await addExpense(expense, isLoggedIn);
+      await addExpense(expense);
       if (autoSaveEnabled) {
         persistAutoSaveConfig(
           true,
@@ -250,6 +240,8 @@ export function MaplePointExpenseModal({
       }
       setTemplates((current) => current.map((template) => ({ ...template, selected: false })));
       onClose();
+    } catch {
+      // keep the modal open when saving fails
     } finally {
       setSaving(false);
     }

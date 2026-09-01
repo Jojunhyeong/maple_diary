@@ -2,12 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import { useQueryClient } from '@tanstack/react-query';
 import Image from 'next/image';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
 import { Input } from '@/shared/ui/Input';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
-import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
+import { recordQueryKeys } from '@/shared/lib/queries/useRecordsQuery';
+import {
+  useCharacterMutations,
+  useCharactersQuery,
+} from '@/shared/lib/queries/useCharactersQuery';
 import {
   backfillRecordsCharacterId,
   deleteRecordsByCharacterId,
@@ -192,7 +197,13 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId } = useAuthStore();
-  const { loadRecords } = useRecordStore();
+  const queryClient = useQueryClient();
+  const {
+    data: charactersPayload,
+    isLoading: isCharactersLoading,
+    error: charactersQueryError,
+  } = useCharactersQuery({ userId: session?.user?.id, isLoggedIn });
+  const { saveCharacter, deleteCharacter } = useCharacterMutations({ isLoggedIn });
   const [characters, setCharacters] = useState<ManagedCharacter[]>([]);
   const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -211,16 +222,19 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
   );
 
   useEffect(() => {
+    if (isLoggedIn && !charactersPayload) {
+      setLoading(isCharactersLoading);
+      if (charactersQueryError) setError(charactersQueryError.message);
+      return;
+    }
+
     const load = async () => {
       setLoading(true);
       setError('');
 
       try {
         if (isLoggedIn) {
-          const res = await fetch('/api/characters');
-          if (!res.ok) throw new Error('캐릭터를 불러오지 못했습니다');
-
-          const data = await res.json();
+          const data = charactersPayload!;
           const loaded: ManagedCharacter[] = Array.isArray(data.characters)
             ? data.characters.map(toLocalCharacter)
             : [];
@@ -303,12 +317,7 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
     };
 
     load();
-  }, [isLoggedIn, localOwnerId]);
-
-  useEffect(() => {
-    if (!localOwnerId) return;
-    void loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
-  }, [activeCharacterId, isLoggedIn, loadRecords, localOwnerId]);
+  }, [charactersPayload, charactersQueryError, isCharactersLoading, isLoggedIn, localOwnerId]);
 
   useEffect(() => {
     if (drawerPhase === 'closed') return;
@@ -372,19 +381,7 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
 
     try {
       if (isLoggedIn) {
-        const res = await fetch('/api/characters', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...character,
-            is_active: true,
-          }),
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || '캐릭터 선택에 실패했습니다');
-        }
+        await saveCharacter({ ...character, is_active: true });
       }
 
       const nextCharacters = characters.map((item) => ({
@@ -435,21 +432,7 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
       };
 
       if (isLoggedIn) {
-        const res = await fetch('/api/characters', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...nextCharacter,
-            is_active: true,
-          }),
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || '캐릭터 저장에 실패했습니다');
-        }
-
-        const data = await res.json().catch(() => ({}));
+        const data = await saveCharacter({ ...nextCharacter, is_active: true });
         if (data?.characterId && typeof data.characterId === 'string') {
           nextCharacter.id = data.characterId;
         }
@@ -488,19 +471,11 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
       const matchingCharacterKeys = matchingCharacters.map((item) => getCharacterKey(item)).filter(Boolean);
 
       if (isLoggedIn) {
-        const res = await fetch(`/api/characters/${encodeURIComponent(characterKey)}`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            characterName: character.character_name,
-            characterOcid: character.character_ocid ?? null,
-          }),
+        await deleteCharacter({
+          characterId: characterKey,
+          characterName: character.character_name,
+          characterOcid: character.character_ocid ?? null,
         });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || '캐릭터 삭제에 실패했습니다');
-        }
       }
 
       const remaining = characters.filter((item) => getCharacterKey(item) !== characterKey);
@@ -509,19 +484,7 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
       const nextActive = wasActive ? nextRemaining[0] || null : nextRemaining.find((item) => item.is_active) || nextRemaining[0] || null;
 
       if (isLoggedIn && wasActive && nextActive) {
-        const activateRes = await fetch('/api/characters', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...nextActive,
-            is_active: true,
-          }),
-        });
-
-        if (!activateRes.ok) {
-          const data = await activateRes.json().catch(() => ({}));
-          setError(data.error || '캐릭터는 삭제했지만 다음 캐릭터 활성화에 실패했어요');
-        }
+        await saveCharacter({ ...nextActive, is_active: true });
       }
 
       if (!isLoggedIn && localOwnerId) {
@@ -530,9 +493,7 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
         }
       }
 
-      useRecordStore.setState((state) => ({
-        records: state.records.filter((record) => !matchingCharacterKeys.includes(record.character_id ?? '')),
-      }));
+      await queryClient.invalidateQueries({ queryKey: recordQueryKeys.all });
 
       syncAfterDelete(nextRemaining, nextActive);
     } catch (err) {
@@ -546,8 +507,6 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
     variant === 'compact'
       ? 'maple-panel rounded-[32px] border border-[#ead9bf] bg-card/96 p-4 shadow-[0_12px_30px_rgba(92,63,31,0.12)]'
       : 'maple-panel rounded-[28px] border border-line bg-card/90 p-5 shadow-[var(--shadow-md)]';
-  const expRateValue = parsePercentValue(activeCharacter?.character_exp_rate);
-  const expRateFill = Math.min(Math.max(expRateValue, 0), 100);
   const expHistory = useMemo(() => {
     if (activeCharacter?.character_exp_history?.length) {
       return activeCharacter.character_exp_history;

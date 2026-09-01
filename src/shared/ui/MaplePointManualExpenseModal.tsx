@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
-import { useExpenseStore } from '@/shared/lib/stores/useExpenseStore';
+import { useExpenseMutations } from '@/shared/lib/queries/useExpensesQuery';
 import { formatPointAmount } from '@/shared/lib/maple-point-expenses';
 import { formatDate } from '@/shared/lib/utils/formatters';
 import type { Expense } from '@/shared/types';
@@ -19,7 +19,7 @@ export function MaplePointManualExpenseModal({
 }) {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
-  const { addExpense, error, clearError } = useExpenseStore();
+  const { addExpense, error, resetError } = useExpenseMutations({ isLoggedIn });
   const [mounted, setMounted] = useState(false);
   const [date, setDate] = useState(formatDate(new Date()));
   const [title, setTitle] = useState('');
@@ -46,9 +46,9 @@ export function MaplePointManualExpenseModal({
     setTitle('');
     setAmount('');
     setMemo('');
-    clearError();
+    resetError();
     setSaving(false);
-  }, [isOpen, clearError]);
+  }, [isOpen, resetError]);
 
   const parsedAmount = useMemo(() => {
     const next = Number(amount.replace(/,/g, ''));
@@ -67,7 +67,7 @@ export function MaplePointManualExpenseModal({
     if (!isLoggedIn || !trimmedTitle || parsedAmount <= 0 || saving) return;
 
     setSaving(true);
-    clearError();
+    resetError();
     try {
       const expense: Omit<Expense, 'id' | 'created_at' | 'updated_at' | 'sync_status'> = {
         date,
@@ -77,9 +77,10 @@ export function MaplePointManualExpenseModal({
         memo: trimmedMemo || '메포 수동 지출',
       };
 
-      await addExpense(expense, isLoggedIn);
-      if (useExpenseStore.getState().error) return;
+      await addExpense(expense);
       onClose();
+    } catch {
+      // mutation error is rendered below
     } finally {
       setSaving(false);
     }
@@ -131,7 +132,7 @@ export function MaplePointManualExpenseModal({
           )}
           {error && (
             <p className="mt-3 rounded-xl border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-sm text-rose-700">
-              {error}
+              {error.message}
             </p>
           )}
         </div>

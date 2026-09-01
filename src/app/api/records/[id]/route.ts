@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/../auth';
 import { supabaseAdmin } from '@/shared/lib/supabase';
+import { resolveOwnedCharacterId } from '@/shared/lib/server/owned-character';
 
 export async function DELETE(
   _req: NextRequest,
@@ -35,17 +36,30 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const {
-    id: _recordId,
-    user_id: _userId,
-    local_owner_id: _localOwnerId,
-    created_at: _createdAt,
-    updated_at: _updatedAt,
-    sync_status: _syncStatus,
-    ...payload
-  } = body ?? {};
+  const payload = { ...(body ?? {}) };
+  for (const protectedField of [
+    'id',
+    'user_id',
+    'local_owner_id',
+    'created_at',
+    'updated_at',
+    'sync_status',
+  ]) {
+    delete payload[protectedField];
+  }
 
   const db = supabaseAdmin();
+  if ('character_id' in payload) {
+    const characterId = await resolveOwnedCharacterId(
+      db,
+      session.user.id,
+      payload.character_id as string | null | undefined,
+    ).catch(() => null);
+    if (!characterId) {
+      return NextResponse.json({ error: '저장할 캐릭터를 찾지 못했어요.' }, { status: 400 });
+    }
+    payload.character_id = characterId;
+  }
 
   const { data, error } = await db
     .from('records')

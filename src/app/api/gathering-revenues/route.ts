@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/../auth';
 import { supabaseAdmin } from '@/shared/lib/supabase';
 import { normalizeGatheringItemTab } from '@/shared/lib/gathering-revenue';
+import { resolveOwnedCharacterId } from '@/shared/lib/server/owned-character';
 
 type GatheringRevenueEntryBody = {
   itemName?: string;
@@ -74,6 +75,16 @@ export async function POST(req: NextRequest) {
   }
 
   const now = new Date().toISOString();
+  const db = supabaseAdmin();
+  const characterId = await resolveOwnedCharacterId(
+    db,
+    session.user.id,
+    body.characterId,
+  ).catch(() => null);
+  if (!characterId) {
+    return NextResponse.json({ error: '저장할 캐릭터를 찾지 못했어요.' }, { status: 400 });
+  }
+
   const rows = body.entries
     .map((entry) => {
       const itemName = typeof entry.itemName === 'string' ? entry.itemName.trim() : '';
@@ -83,7 +94,7 @@ export async function POST(req: NextRequest) {
 
       return {
         user_id: session.user.id,
-        character_id: body.characterId,
+        character_id: characterId,
         date: body.date,
         item_name: itemName,
         item_tab: normalizeGatheringItemTab(entry.itemTab || 'seed'),
@@ -100,7 +111,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Nothing to save' }, { status: 400 });
   }
 
-  const db = supabaseAdmin();
   const { data, error } = await db
     .from('gathering_revenues')
     .insert(rows)

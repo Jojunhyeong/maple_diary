@@ -1,12 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import { Card } from '@/shared/ui/Card';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
 import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
 import { formatDate, formatDateKorean, formatMeso, formatNumber } from '@/shared/lib/utils/formatters';
+import {
+  useGatheringRevenueMutations,
+  useGatheringRevenuesQuery,
+} from '@/shared/lib/queries/useGatheringRevenuesQuery';
 
 type GatheringTabKey = 'favorite' | 'seed' | 'flower' | 'ore';
 
@@ -122,24 +127,6 @@ function parseNumber(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
 }
 
-async function readApiError(res: Response, fallback: string) {
-  try {
-    const text = await res.text();
-    if (!text.trim()) return fallback;
-
-    try {
-      const body = JSON.parse(text);
-      if (body && typeof body.error === 'string' && body.error.trim()) return body.error;
-    } catch {
-      // raw text fallback
-    }
-
-    return text;
-  } catch {
-    return fallback;
-  }
-}
-
 function createEmptyRecordSummary(): RecordSummary {
   return {
     total: 0,
@@ -193,7 +180,7 @@ function getTabTone(tab: Exclude<GatheringTabKey, 'favorite'>): TabTone {
 }
 
 export default function GatheringPage() {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const isLoggedIn = !!session?.user?.id;
   const activeCharacterId = useActiveCharacterId();
   const [activeTab, setActiveTab] = useState<GatheringTabKey>('favorite');
@@ -205,14 +192,30 @@ export default function GatheringPage() {
     ITEMS.ore.find((item) => item.id === 'opal')!,
     ITEMS.ore.find((item) => item.id === 'power-crystal')!,
   ]);
-  const [records, setRecords] = useState<SavedGatheringRevenue[]>([]);
-  const [recordsLoading, setRecordsLoading] = useState(false);
-  const [recordsError, setRecordsError] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(formatDate(new Date()).slice(0, 7));
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
-  const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [saveError, setSaveError] = useState('');
+  const monthBounds = useMemo(() => getMonthBounds(selectedMonth), [selectedMonth]);
+  const {
+    data: records = [],
+    isLoading: recordsLoading,
+    error: recordsQueryError,
+  } = useGatheringRevenuesQuery({
+    userId: session?.user?.id,
+    isLoggedIn,
+    characterId: activeCharacterId ?? '',
+    start: formatDate(monthBounds.start),
+    end: formatDate(monthBounds.end),
+  });
+  const {
+    saveGatheringRevenue,
+    deleteGatheringRevenue,
+    isSaving: saving,
+  } = useGatheringRevenueMutations({ isLoggedIn });
+  const recordsError = !activeCharacterId && isLoggedIn
+    ? '활성 캐릭터를 선택하면 저장된 기록을 볼 수 있어요.'
+    : recordsQueryError?.message ?? '';
 
   const visibleItems = activeTab === 'favorite' ? recentItems : ITEMS[activeTab];
 
@@ -264,40 +267,6 @@ export default function GatheringPage() {
     setRows((current) => current.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
   };
 
-  const loadRecords = useCallback(async () => {
-    if (!isLoggedIn || !activeCharacterId) {
-      setRecords([]);
-      setRecordsError(isLoggedIn ? '활성 캐릭터를 선택하면 저장된 기록을 볼 수 있어요.' : '');
-      return;
-    }
-
-    setRecordsLoading(true);
-    setRecordsError('');
-
-    try {
-      const { start, end } = getMonthBounds(selectedMonth);
-      const params = new URLSearchParams({
-        characterId: activeCharacterId,
-        start: formatDate(start),
-        end: formatDate(end),
-      });
-      const res = await fetch(`/api/gathering-revenues?${params.toString()}`);
-      if (!res.ok) throw new Error(await readApiError(res, '채집 기록을 불러오지 못했어요.'));
-
-      const data = (await res.json()) as SavedGatheringRevenue[];
-      setRecords(data);
-    } catch (error) {
-      setRecords([]);
-      setRecordsError(error instanceof Error ? error.message : '채집 기록을 불러오지 못했어요.');
-    } finally {
-      setRecordsLoading(false);
-    }
-  }, [activeCharacterId, isLoggedIn, selectedMonth]);
-
-  useEffect(() => {
-    void loadRecords();
-  }, [loadRecords]);
-
   const handleSave = async () => {
     if (!isLoggedIn || !activeCharacterId) {
       setSaveError('로그인하고 활성 캐릭터를 선택한 뒤 저장할 수 있어요.');
@@ -309,31 +278,19 @@ export default function GatheringPage() {
       return;
     }
 
-    setSaving(true);
     setSaveError('');
     setSaveMessage('');
 
     try {
-      const res = await fetch('/api/gathering-revenues', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: selectedDate,
-          characterId: activeCharacterId,
-          entries: saveableRows,
-        }),
+      const saved = await saveGatheringRevenue({
+        date: selectedDate,
+        characterId: activeCharacterId,
+        entries: saveableRows,
       });
-
-      if (!res.ok) throw new Error(await readApiError(res, '채집 저장에 실패했어요.'));
-
-      const saved = (await res.json()) as Array<{ id?: string }>;
       setRows([createRow()]);
       setSaveMessage(`${saved.length}개 채집 기록을 저장했어요.`);
-      void loadRecords();
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : '채집 저장에 실패했어요.');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -345,23 +302,14 @@ export default function GatheringPage() {
 
     if (!window.confirm(`"${record.item_name}" 채집 기록을 삭제하시겠습니까?`)) return;
 
-    setSaving(true);
     setSaveError('');
     setSaveMessage('');
 
     try {
-      const res = await fetch(`/api/gathering-revenues/${record.id}`, {
-        method: 'DELETE',
-      });
-
-      if (!res.ok) throw new Error(await readApiError(res, '채집 삭제에 실패했어요.'));
-
+      await deleteGatheringRevenue(record.id);
       setSaveMessage('채집 기록을 삭제했어요.');
-      void loadRecords();
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : '채집 삭제에 실패했어요.');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -401,9 +349,16 @@ export default function GatheringPage() {
                 disabled={saving || saveableRows.length === 0 || !isLoggedIn || !activeCharacterId}
                 onClick={handleSave}
               >
-                {saving ? '저장 중...' : '채집 저장'}
+                {sessionStatus === 'loading' ? '로그인 확인 중...' : saving ? '저장 중...' : '채집 저장'}
               </Button>
             </div>
+            {sessionStatus !== 'loading' && (!isLoggedIn || !activeCharacterId) && (
+              <p className="mt-2 text-xs text-red-500">
+                {!isLoggedIn
+                  ? '로그인 세션을 확인할 수 없어요. 로그아웃 후 다시 로그인해주세요.'
+                  : '활성 캐릭터를 선택한 뒤 저장할 수 있어요.'}
+              </p>
+            )}
             {(saveMessage || saveError) && (
               <p className={`mt-2 text-xs ${saveError ? 'text-red-500' : 'text-emerald-600'}`}>
                 {saveError || saveMessage}
@@ -440,9 +395,11 @@ export default function GatheringPage() {
                 >
                   <div className="relative flex aspect-square items-center justify-center bg-[linear-gradient(135deg,rgba(250,244,232,0.96),rgba(255,255,255,0.94))] p-0.5">
                     {item.imageUrl ? (
-                      <img
+                      <Image
                         src={item.imageUrl}
                         alt={item.label}
+                        fill
+                        sizes="(max-width: 640px) 20vw, (max-width: 1024px) 16vw, 96px"
                         className="h-full w-full object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.1)]"
                       />
                     ) : (

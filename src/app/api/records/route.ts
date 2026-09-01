@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/../auth';
 import { supabaseAdmin } from '@/shared/lib/supabase';
+import { resolveOwnedCharacterId } from '@/shared/lib/server/owned-character';
 
 export async function GET() {
   const session = await auth();
@@ -28,10 +29,19 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const db = supabaseAdmin();
+  const characterId = await resolveOwnedCharacterId(
+    db,
+    session.user.id,
+    body?.character_id,
+  ).catch(() => null);
+
+  if (!characterId) {
+    return NextResponse.json({ error: '저장할 캐릭터를 찾지 못했어요.' }, { status: 400 });
+  }
 
   const { data, error } = await db
     .from('records')
-    .insert({ ...body, user_id: session.user.id })
+    .insert({ ...body, user_id: session.user.id, character_id: characterId })
     .select()
     .single();
 

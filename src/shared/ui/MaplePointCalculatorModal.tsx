@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
-import { useExpenseStore } from '@/shared/lib/stores/useExpenseStore';
+import { useExpenseMutations } from '@/shared/lib/queries/useExpensesQuery';
 import { formatNumber } from '@/shared/lib/utils/formatters';
 import type { Expense } from '@/shared/types';
 import { createDefaultMaplePointCalculatorState } from '@/shared/lib/maple-point-calculator';
@@ -84,7 +84,7 @@ export function MaplePointCalculatorModal({
 }) {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
-  const { addExpense, error, clearError } = useExpenseStore();
+  const { addExpense, error, resetError } = useExpenseMutations({ isLoggedIn });
   const defaultState = createDefaultMaplePointCalculatorState();
   const [mounted, setMounted] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<MaplePointRunId | null>(defaultState.selectedRunId);
@@ -174,7 +174,7 @@ export function MaplePointCalculatorModal({
 
     setSaving(true);
     try {
-      clearError();
+      resetError();
       const today = new Date();
       const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
         today.getDate(),
@@ -187,9 +187,10 @@ export function MaplePointCalculatorModal({
         memo: buildExpenseMemo(),
       };
 
-      await addExpense(expense, isLoggedIn);
-      if (useExpenseStore.getState().error) return;
+      await addExpense(expense);
       onClose();
+    } catch {
+      // mutation error is rendered below
     } finally {
       setSaving(false);
     }
@@ -567,7 +568,7 @@ export function MaplePointCalculatorModal({
               )}
               {error && (
                 <p className="mt-3 rounded-2xl border border-rose-500/20 bg-rose-500/8 px-4 py-3 text-sm text-rose-700">
-                  {error}
+                    {error.message}
                 </p>
               )}
             </section>

@@ -4,31 +4,20 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import {
-  Chart as ChartJS,
-  BarElement,
-  CategoryScale,
-  LinearScale,
-  Tooltip,
-  type ChartData,
-  type ChartOptions,
-} from 'chart.js';
-import { Bar } from 'react-chartjs-2';
 import { useMigrateOnLogin } from '@/shared/lib/hooks/useMigrateOnLogin';
-import { useRecordStore } from '@/shared/lib/stores/useRecordStore';
-import { useExpenseStore } from '@/shared/lib/stores/useExpenseStore';
+import { useRecordsQuery } from '@/shared/lib/queries/useRecordsQuery';
+import { useExpensesQuery } from '@/shared/lib/queries/useExpensesQuery';
+import { useGoalsQuery } from '@/shared/lib/queries/useGoalsQuery';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
-import { useGoalStore } from '@/shared/lib/stores/useGoalStore';
 import { useDashboardStore } from '@/shared/lib/stores/useDashboardStore';
 import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
-import { useBossRevenueSummary } from '@/shared/lib/hooks/useBossRevenueSummary';
+import { useStoredCharacterProfile } from '@/shared/lib/hooks/useStoredCharacterProfile';
+import { useBossRevenuePeriodSummaries } from '@/shared/lib/hooks/useBossRevenuePeriodSummaries';
 import { Card } from '@/shared/ui/Card';
-import { Button } from '@/shared/ui/Button';
 import { formatMeso, formatDate, formatDateKorean, formatTime } from '@/shared/lib/utils/formatters';
 import { filterRecordsByCharacter } from '@/shared/lib/utils/characterFilter';
 import type { Expense, RecordWithCalculations } from '@/shared/types';
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
+import { useDashboardInitialData } from './dashboard-initial-data-provider';
 
 function RevenueCard({ label, value }: { label: string; value: number }) {
   return (
@@ -46,10 +35,6 @@ function InfoCard({ label, value }: { label: string; value: string }) {
       <p className="truncate text-base font-bold text-t1">{value}</p>
     </Card>
   );
-}
-
-function getCurrentMonth(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function getMonthBounds(date: Date) {
@@ -131,20 +116,50 @@ export default function DashboardPage() {
   useMigrateOnLogin();
 
   const { data: session } = useSession();
-  const isLoggedIn = !!session?.user?.id;
+  const initialData = useDashboardInitialData();
+  const isLoggedIn = !!session?.user?.id || initialData !== null;
   const { initializeLocal, localOwnerId } = useAuthStore();
-  const { currentGoals, loadGoal } = useGoalStore();
-  const { records, loadRecords, loading } = useRecordStore();
-  const { expenses, loadExpenses } = useExpenseStore();
   const { todayRevenue, recentRecords, sevenDayStats } =
     useDashboardStore();
   const currentDate = useMemo(() => new Date(), []);
-  const currentMonth = useMemo(() => getCurrentMonth(currentDate), [currentDate]);
   const { start: currentMonthStart, end: currentMonthEnd } = useMemo(() => getMonthBounds(currentDate), [currentDate]);
-  const activeCharacterId = useActiveCharacterId();
+  const storedActiveCharacterId = useActiveCharacterId();
+  const activeCharacterId = storedActiveCharacterId ?? initialData?.activeCharacterId ?? null;
+  const { data: records = [], isLoading: recordsLoading } = useRecordsQuery({
+    localOwnerId,
+    userId: session?.user?.id,
+    isLoggedIn,
+    activeCharacterId,
+    initialData: initialData?.records,
+  });
+  const { data: expenses = [] } = useExpensesQuery({
+    userId: session?.user?.id,
+    isLoggedIn,
+    initialData: initialData?.expenses,
+  });
+  const { data: goals = [] } = useGoalsQuery({
+    localOwnerId,
+    userId: session?.user?.id,
+    isLoggedIn,
+    initialData: initialData?.goals,
+  });
   const bossCharacterId = activeCharacterId ?? null;
-  const currentBossWeeklySummary = useBossRevenueSummary(currentMonthStart, currentMonthEnd, isLoggedIn, 'weekly', bossCharacterId);
-  const currentBossMonthlySummary = useBossRevenueSummary(currentMonthStart, currentMonthEnd, isLoggedIn, 'monthly', bossCharacterId);
+  const {
+    weeklySummary: currentBossWeeklySummary,
+    monthlySummary: currentBossMonthlySummary,
+  } = useBossRevenuePeriodSummaries(
+    currentMonthStart,
+    currentMonthEnd,
+    isLoggedIn,
+    bossCharacterId,
+    initialData
+      ? {
+          weeklySummary: initialData.weeklyBossSummary,
+          monthlySummary: initialData.monthlyBossSummary,
+        }
+      : null,
+    session?.user?.id,
+  );
 
   useEffect(() => {
     if (initialized.current) return;
@@ -157,13 +172,6 @@ export default function DashboardPage() {
     }
     initializeLocal();
   }, [initializeLocal, router]);
-
-  useEffect(() => {
-    if (!localOwnerId) return;
-    loadRecords(localOwnerId, isLoggedIn, activeCharacterId);
-    loadGoal(localOwnerId, isLoggedIn);
-    loadExpenses(isLoggedIn);
-  }, [localOwnerId, loadRecords, loadGoal, loadExpenses, currentMonth, isLoggedIn, activeCharacterId]);
 
   const visibleRecords = useMemo(
     () => filterRecordsByCharacter(records, activeCharacterId),
@@ -202,11 +210,11 @@ export default function DashboardPage() {
   const monthActiveDays = useMemo(() => new Set(currentMonthRecords.map((r) => r.date)).size, [currentMonthRecords]);
 
   const currentGoalTargetAmount = useMemo(() => {
-    return currentGoals.reduce((sum, goal) => {
+    return goals.reduce((sum, goal) => {
       const targetAmount = goal.targets?.[0]?.target_amount ?? goal.meso_goal ?? 0;
       return sum + targetAmount;
     }, 0);
-  }, [currentGoals]);
+  }, [goals]);
 
   const goalProgressText = useMemo(() => {
     if (currentGoalTargetAmount <= 0) return '목표 미설정';
@@ -214,13 +222,7 @@ export default function DashboardPage() {
     return `${pct.toFixed(1)}%`;
   }, [currentGoalTargetAmount, currentNetIncome]);
 
-  const profile = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('maple_diary:user_profile') || 'null');
-    } catch {
-      return null;
-    }
-  }, []);
+  const profile = useStoredCharacterProfile();
 
   return (
     <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4">
@@ -311,11 +313,11 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {loading && (
+        {recordsLoading && (
           <p className="text-sm text-t3 py-4 text-center">불러오는 중...</p>
         )}
 
-        {!loading && recentGroups.length === 0 && (
+        {!recordsLoading && recentGroups.length === 0 && (
           <div className="rounded-xl bg-surface/60 px-4 py-8 text-center">
             <p className="text-sm text-t3">아직 사냥이 없어요. 첫 사냥을 추가해보세요!</p>
           </div>
@@ -340,53 +342,25 @@ function MiniBarChart({ data }: { data: { date: string; revenue: number }[] }) {
     );
   }
 
-  const labels = data.map((d) => d.date.slice(5));
-  const datasetData = data.map((d) => d.revenue);
-
-  const chartData: ChartData<'bar'> = {
-    labels,
-    datasets: [
-      {
-        data: datasetData,
-        backgroundColor: '#f59e0b',
-        borderRadius: 6,
-        borderSkipped: false,
-      },
-    ],
-  };
-
-  const maxValue = Math.max(...datasetData, 1);
-  const options: ChartOptions<'bar'> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: (ctx) => formatMeso(Number(ctx.raw ?? 0)),
-        },
-      },
-    },
-    scales: {
-      x: {
-        grid: { display: false },
-        border: { display: false },
-        ticks: {
-          color: '#a1a1aa',
-          font: { size: 9 },
-        },
-      },
-      y: {
-        display: false,
-        beginAtZero: true,
-        suggestedMax: maxValue * 1.1,
-      },
-    },
-  };
+  const maxValue = Math.max(...data.map((item) => Math.abs(item.revenue)), 1);
 
   return (
-    <div className="h-28">
-      <Bar data={chartData} options={options} />
+    <div className="flex h-28 items-end gap-2" role="img" aria-label="최근 7일 일자별 순수익 막대그래프">
+      {data.map((item) => {
+        const height = Math.max(4, Math.round((Math.abs(item.revenue) / maxValue) * 84));
+        return (
+          <div key={item.date} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+            <div className="flex min-h-0 w-full flex-1 items-end justify-center">
+              <div
+                className={`w-full max-w-7 rounded-t-md ${item.revenue < 0 ? 'bg-red-400' : 'bg-amber-500'}`}
+                style={{ height }}
+                title={`${item.date}: ${formatMeso(item.revenue)}`}
+              />
+            </div>
+            <span className="text-[9px] text-t3">{item.date.slice(5)}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

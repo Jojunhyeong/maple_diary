@@ -15,10 +15,10 @@ function readStoredProfile(): LocalCharacterProfile | null {
 
   try {
     const raw = localStorage.getItem(CHARACTER_STORAGE_KEYS.LEGACY_PROFILE);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as LocalCharacterProfile;
-    if (!parsed || typeof parsed.character_name !== 'string') return null;
-    return parsed;
+    if (raw) {
+      const parsed = JSON.parse(raw) as LocalCharacterProfile;
+      if (parsed && typeof parsed.character_name === 'string') return parsed;
+    }
   } catch {
     // fall through to the character list below
   }
@@ -36,7 +36,7 @@ function readStoredProfile(): LocalCharacterProfile | null {
 }
 
 export function useStoredCharacterProfile() {
-  const [profile, setProfile] = useState<LocalCharacterProfile | null>(() => readStoredProfile());
+  const [profile, setProfile] = useState<LocalCharacterProfile | null>(null);
 
   useEffect(() => {
     const sync = () => setProfile(readStoredProfile());

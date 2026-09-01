@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/shared/ui/Button';
 import { Input } from '@/shared/ui/Input';
-import { useExpenseStore } from '@/shared/lib/stores/useExpenseStore';
+import { useExpenseMutations } from '@/shared/lib/queries/useExpensesQuery';
 import { useExpenseModalStore } from '@/shared/lib/stores/useExpenseModalStore';
 import { formatDate, formatMeso, fromManInput, toManDisplay } from '@/shared/lib/utils/formatters';
 import type { Expense } from '@/shared/types';
@@ -15,7 +15,7 @@ export function ExpenseModal() {
   const { isOpen, close, editingExpense } = useExpenseModalStore();
   const { data: session, status: sessionStatus } = useSession();
   const isLoggedIn = !!session?.user?.id;
-  const { addExpense, updateExpense, error, clearError } = useExpenseStore();
+  const { addExpense, updateExpense, error, resetError } = useExpenseMutations({ isLoggedIn });
 
   const [date, setDate] = useState(formatDate(new Date()));
   const [title, setTitle] = useState('');
@@ -58,7 +58,7 @@ export function ExpenseModal() {
     if (!isLoggedIn || !trimmedTitle || amount <= 0) return;
 
     setSaving(true);
-    clearError();
+    resetError();
     try {
       const payload = {
         date,
@@ -75,14 +75,13 @@ export function ExpenseModal() {
             ...payload,
             created_at: editingExpense.created_at,
           } as Expense,
-          isLoggedIn,
         );
       } else {
-        await addExpense(payload, isLoggedIn);
+        await addExpense(payload);
       }
-
-      if (useExpenseStore.getState().error) return;
       close();
+    } catch {
+      // mutation error is rendered below
     } finally {
       setSaving(false);
     }
@@ -151,7 +150,7 @@ export function ExpenseModal() {
           )}
           {error && (
             <p className="mt-3 rounded-xl border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-sm text-rose-700">
-              {error}
+              {error.message}
             </p>
           )}
         </div>
