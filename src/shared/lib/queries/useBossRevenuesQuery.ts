@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { accountMesoQueryKeys } from '@/shared/lib/queries/useAccountMesoQuery';
 import type {
   BossCycleType,
   BossRevenueRow,
@@ -61,7 +62,10 @@ export function useBossRevenuesQuery({
 
 export function useBossRevenueMutations({ isLoggedIn = false }: { isLoggedIn?: boolean } = {}) {
   const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: bossRevenueQueryKeys.all });
+  const invalidate = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: bossRevenueQueryKeys.all }),
+    queryClient.invalidateQueries({ queryKey: accountMesoQueryKeys.all }),
+  ]);
   const saveMutation = useMutation({
     mutationFn: async ({
       weekKey,

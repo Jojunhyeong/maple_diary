@@ -503,7 +503,7 @@ export default function BossPage() {
   })();
 
   return (
-    <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4 md:relative md:left-1/2 md:w-[760px] md:max-w-none md:-translate-x-1/2 md:px-0">
+    <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4">
       {!isReady ? (
         <Card className="py-10 text-center">
           <p className="text-sm text-t3">보스 수익 불러오는 중...</p>

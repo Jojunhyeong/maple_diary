@@ -199,11 +199,11 @@ export function MaplePointCalculatorModal({
   if (!mounted || !isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-[2px]">
-      <div className="flex h-full w-full flex-col bg-[radial-gradient(circle_at_top,rgba(255,248,240,0.98),rgba(248,243,235,0.97)_42%,rgba(245,239,230,0.98)_100%)]">
+    <div className="maple-point-calculator-modal fixed inset-0 z-[100] bg-black/70">
+      <div className="maple-point-modal-surface flex h-full w-full flex-col bg-card">
         <div className="flex items-center justify-between border-b border-line/80 px-4 py-4">
           <div>
-            <h2 className="text-base font-bold text-t1">메포 계산기</h2>
+            <h2 className="text-base font-bold text-t1">메이플포인트 계산기</h2>
           </div>
           <button type="button" onClick={onClose} className="cursor-pointer text-sm font-medium text-t3">
             닫기

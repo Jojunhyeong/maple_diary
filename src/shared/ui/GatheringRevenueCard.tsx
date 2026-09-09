@@ -105,30 +105,30 @@ export function GatheringRevenueCard() {
   };
 
   return (
-    <Card className="border-amber-500/20 bg-[linear-gradient(135deg,rgba(255,250,241,0.96),rgba(255,255,255,0.92)_56%,rgba(250,244,232,0.97))]">
+    <Card className="gathering-revenue-tool">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-t1">채집/채광 전리품</p>
           <p className="mt-1 text-[11px] text-t3">씨앗, 꽃, 광물별로 단가와 수량을 적으면 총 수익을 바로 계산해요.</p>
         </div>
-        <div className="rounded-2xl bg-[#f7efe1] px-4 py-3 text-right">
+        <div className="text-right">
           <p className="text-[11px] text-t3">총 수익</p>
-          <p className="mt-1 text-lg font-bold text-amber-600">{formatMeso(grandTotal)}</p>
+          <p className="mt-1 text-lg font-bold text-gathering">{formatMeso(grandTotal)}</p>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      <div className="gathering-revenue-summary mt-4">
         {categoryTotals.map((item) => (
-          <div key={item.category} className="rounded-2xl border border-line bg-white/85 px-3 py-3">
+          <div key={item.category}>
             <p className="text-[11px] text-t3">{CATEGORY_META[item.category].label}</p>
             <p className="mt-1 text-sm font-bold text-t1">{formatMeso(item.total)}</p>
           </div>
         ))}
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-3">
+      <div className="mt-4 divide-y divide-line border-y border-line">
         {categoryTotals.map((entry) => (
-          <section key={entry.category} className="rounded-[24px] border border-line/80 bg-white/90 p-4 shadow-[0_10px_22px_rgba(0,0,0,0.04)]">
+          <section key={entry.category} className="py-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-t1">{CATEGORY_META[entry.category].label}</p>
@@ -137,7 +137,7 @@ export function GatheringRevenueCard() {
               <button
                 type="button"
                 onClick={() => addRow(entry.category)}
-                className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-500/15"
+                className="rounded-[8px] border border-line bg-card px-3 py-1.5 text-[11px] font-semibold text-brand transition-colors hover:bg-brand-soft"
               >
                 + 행 추가
               </button>
@@ -151,13 +151,13 @@ export function GatheringRevenueCard() {
                 <span>합계</span>
               </div>
               {entry.items.map((row) => (
-                <div key={row.id} className="rounded-2xl border border-line bg-surface/50 p-3">
+                <div key={row.id} className="border-t border-line py-3 first:border-t-0">
                   <div className="grid gap-2 md:grid-cols-[1.5fr_72px_112px_auto_auto] md:items-center">
                     <input
                       value={row.name}
                       onChange={(e) => updateRow(entry.category, row.id, { name: e.target.value })}
                       placeholder={CATEGORY_META[entry.category].placeholder}
-                      className="h-11 min-w-0 rounded-xl border border-line-str bg-field px-3 text-sm text-t1 shadow-[var(--shadow-sm)] placeholder:text-t3/70 focus:border-amber-500/80 focus:outline-none focus:ring-4 focus:ring-amber-500/10"
+                      className="h-11 min-w-0 rounded-[9px] border border-line-str bg-field px-3 text-sm text-t1 placeholder:text-t3/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15"
                     />
                     <input
                       value={row.quantity}
@@ -166,7 +166,7 @@ export function GatheringRevenueCard() {
                       }
                       placeholder="0"
                       inputMode="numeric"
-                      className="h-11 min-w-0 rounded-xl border border-line-str bg-field px-3 text-sm text-t1 shadow-[var(--shadow-sm)] placeholder:text-t3/70 focus:border-amber-500/80 focus:outline-none focus:ring-4 focus:ring-amber-500/10"
+                      className="h-11 min-w-0 rounded-[9px] border border-line-str bg-field px-3 text-sm text-t1 placeholder:text-t3/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15"
                     />
                     <input
                       value={row.unitPrice}
@@ -175,16 +175,16 @@ export function GatheringRevenueCard() {
                       }
                       placeholder="0"
                       inputMode="numeric"
-                      className="h-11 min-w-0 rounded-xl border border-line-str bg-field px-3 text-sm text-t1 shadow-[var(--shadow-sm)] placeholder:text-t3/70 focus:border-amber-500/80 focus:outline-none focus:ring-4 focus:ring-amber-500/10"
+                      className="h-11 min-w-0 rounded-[9px] border border-line-str bg-field px-3 text-sm text-t1 placeholder:text-t3/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15"
                     />
-                    <div className="rounded-xl bg-white px-3 py-2 text-right">
+                    <div className="px-3 py-2 text-right">
                       <p className="text-[10px] text-t3">합계</p>
                       <p className="mt-1 text-sm font-bold text-t1">{formatMeso(row.total)}</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => removeRow(entry.category, row.id)}
-                      className="h-11 rounded-xl border border-red-500/20 bg-red-500/8 px-3 text-xs font-semibold text-red-600 transition-colors hover:bg-red-500/15"
+                      className="h-11 rounded-[8px] px-3 text-xs font-semibold text-negative transition-colors hover:bg-surface"
                     >
                       삭제
                     </button>

@@ -250,8 +250,8 @@ export function MaplePointExpenseModal({
   if (!mounted || !isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] bg-black/60">
-      <div className="flex h-full w-full flex-col bg-app">
+    <div className="maple-point-expense-modal fixed inset-0 z-[100] bg-black/60">
+      <div className="maple-point-modal-surface flex h-full w-full flex-col bg-card">
         <div className="flex items-center justify-between border-b border-line px-4 py-4">
           <div>
             <h2 className="text-base font-bold text-t1">메이플 포인트 예약 입력</h2>

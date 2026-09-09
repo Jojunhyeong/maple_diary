@@ -20,9 +20,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           <input
             ref={ref}
             className={clsx(
-              'w-full rounded-xl bg-field border border-line-str px-4 py-3 text-t1 text-base shadow-[var(--shadow-sm)]',
-              'placeholder:text-t3/80 focus:outline-none focus:border-amber-500/80 focus:ring-4 focus:ring-amber-500/10 transition-all',
-              { 'border-red-500': error },
+              'w-full rounded-[9px] bg-field border border-line-str px-4 py-3 text-t1 text-base shadow-none',
+              'placeholder:text-t3/80 focus:outline-none focus:border-brand/70 focus:ring-2 focus:ring-brand/15 transition-colors',
+              { 'border-negative': error },
               { 'pr-14': suffix },
               className,
             )}
@@ -34,7 +34,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             </span>
           )}
         </div>
-        {error && <p className="text-xs text-red-500">{error}</p>}
+        {error && <p className="text-xs text-negative">{error}</p>}
       </div>
     );
   },

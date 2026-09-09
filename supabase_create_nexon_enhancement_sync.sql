@@ -1,4 +1,4 @@
--- Per-user NEXON Open API connection and Starforce expense synchronization.
+-- Per-user NEXON Open API connection and enhancement expense synchronization.
 -- encrypted_api_key is AES-256-GCM ciphertext created by the application server.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.nexon_api_connections (
 CREATE TABLE IF NOT EXISTS public.nexon_enhancement_sync_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL,
-  history_type TEXT NOT NULL DEFAULT 'starforce',
+  history_type TEXT NOT NULL DEFAULT 'starforce', -- starforce | potential
   nexon_history_id TEXT NOT NULL,
   expense_id UUID,
   occurred_at TIMESTAMPTZ NOT NULL,
@@ -31,10 +31,22 @@ CREATE TABLE IF NOT EXISTS public.nexon_enhancement_sync_records (
   after_starforce INTEGER,
   result TEXT,
   calculated_amount BIGINT NOT NULL DEFAULT 0,
+  base_amount BIGINT,
+  event_discount_rate NUMERIC,
+  personal_discount_rate NUMERIC,
+  protection_surcharge BIGINT,
+  pc_room_discount_applied BOOLEAN NOT NULL DEFAULT false,
   calculation_status TEXT NOT NULL DEFAULT 'calculated',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (user_id, history_type, nexon_history_id)
 );
+
+ALTER TABLE public.nexon_enhancement_sync_records
+  ADD COLUMN IF NOT EXISTS base_amount BIGINT,
+  ADD COLUMN IF NOT EXISTS event_discount_rate NUMERIC,
+  ADD COLUMN IF NOT EXISTS personal_discount_rate NUMERIC,
+  ADD COLUMN IF NOT EXISTS protection_surcharge BIGINT,
+  ADD COLUMN IF NOT EXISTS pc_room_discount_applied BOOLEAN NOT NULL DEFAULT false;
 
 CREATE INDEX IF NOT EXISTS idx_nexon_enhancement_sync_records_user
   ON public.nexon_enhancement_sync_records(user_id);

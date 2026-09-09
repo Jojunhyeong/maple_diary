@@ -4,11 +4,29 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useAccountMesoMutation, useAccountMesoQuery } from '@/shared/lib/queries/useAccountMesoQuery';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
-import { formatMeso, toManDisplay } from '@/shared/lib/utils/formatters';
+import { formatMeso, formatDateKorean, toManDisplay } from '@/shared/lib/utils/formatters';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
+import { MapleActivityIcon } from './MapleActivityIcon';
 
-export function AccountMesoCard() {
+const HISTORY_LABELS = {
+  initial_balance: '초기 잔액 설정',
+  manual_adjustment: '잔액 조정',
+  hunting: '사냥 기록',
+  expense: '지출 기록',
+  gathering: '채집 기록',
+  boss: '보스 기록',
+} as const;
+
+export function AccountMesoCard({
+  label = '현재 메소 잔액',
+  showHistory = false,
+  weekStart,
+}: {
+  label?: string;
+  showHistory?: boolean;
+  weekStart?: Date;
+}) {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId, initializeLocal } = useAuthStore();
@@ -24,6 +42,7 @@ export function AccountMesoCard() {
   });
   const [isEditing, setIsEditing] = useState(false);
   const [amountMan, setAmountMan] = useState('');
+  const [adjustmentNote, setAdjustmentNote] = useState('');
   const [formError, setFormError] = useState('');
 
   useEffect(() => {
@@ -33,6 +52,7 @@ export function AccountMesoCard() {
   const closeEditor = () => {
     setAmountMan(toManDisplay(data?.amount ?? 0));
     setFormError('');
+    setAdjustmentNote('');
     mutation.reset();
     setIsEditing(false);
   };
@@ -52,8 +72,9 @@ export function AccountMesoCard() {
     }
 
     try {
-      await mutation.mutateAsync(amount);
+      await mutation.mutateAsync({ amount, note: adjustmentNote });
       setIsEditing(false);
+      setAdjustmentNote('');
     } catch (error) {
       setFormError(error instanceof Error ? error.message : '보유 메소를 저장하지 못했어요.');
     }
@@ -61,13 +82,21 @@ export function AccountMesoCard() {
 
   const editorError = formError || mutation.error?.message || '';
 
+  const manualHistory = (data?.history ?? []).filter((entry) =>
+    entry.entryType === 'initial_balance' || entry.entryType === 'manual_adjustment',
+  );
+  const weeklyChange = weekStart
+    ? (data?.history ?? []).reduce((sum, entry) =>
+        Date.parse(entry.createdAt) >= weekStart.getTime() ? sum + entry.delta : sum, 0)
+    : null;
+
   return (
-    <Card className="border-amber-500/20 bg-[linear-gradient(135deg,rgba(245,158,11,0.16),rgba(245,158,11,0.04)_65%,transparent)] p-4">
+    <Card className="account-meso-card p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold text-amber-600">💰 전체 보유 메소</p>
+          <p className="text-[11px] font-semibold text-brand"><span className="diary-meso-label"><MapleActivityIcon kind="meso" /> {label}</span></p>
           {isEditing ? (
-            <div className="mt-1 flex h-9 max-w-[190px] items-center rounded-xl border border-amber-500/50 bg-field px-3 shadow-[var(--shadow-sm)] focus-within:ring-4 focus-within:ring-amber-500/10">
+            <div className="mt-1 flex h-9 max-w-[190px] items-center rounded-[9px] border border-brand/50 bg-field px-3 focus-within:ring-2 focus-within:ring-brand/15">
               <input
                 value={amountMan}
                 onChange={(event) => {
@@ -89,10 +118,22 @@ export function AccountMesoCard() {
             </div>
           ) : (
             <p className="mt-1 truncate text-xl font-black tracking-[-0.04em] text-t1">
-              {data ? formatMeso(data.amount) : '불러오는 중...'}
+              {queryError ? '확인 불가' : data ? data.updatedAt ? formatMeso(data.amount) : '미입력' : '불러오는 중...'}
             </p>
           )}
-          <p className="mt-1 text-[10px] text-t3">모든 캐릭터를 합산한 계정 기준</p>
+          <p className="mt-1 text-[10px] leading-5 text-t3">
+            <strong className="font-semibold text-t2">기록 기준 잔액</strong><span className="mx-1.5" aria-hidden="true">·</span>메이플스토리와 직접 동기화되지 않아요.
+          </p>
+          {isEditing && data?.updatedAt && (
+            <input
+              value={adjustmentNote}
+              onChange={(event) => setAdjustmentNote(event.target.value)}
+              maxLength={200}
+              placeholder="조정 사유 (선택)"
+              aria-label="잔액 조정 사유"
+              className="mt-2 w-full max-w-[260px] rounded-lg border border-line bg-field px-3 py-2 text-xs text-t1 outline-none focus:border-brand/60"
+            />
+          )}
         </div>
 
         {isEditing ? (
@@ -120,13 +161,30 @@ export function AccountMesoCard() {
               setIsEditing(true);
             }}
           >
-            수정
+            {data?.updatedAt ? '잔액 조정' : '초기 잔액 입력'}
           </Button>
         )}
       </div>
 
+      {!isEditing && weeklyChange !== null && data?.updatedAt && (
+        <div className="diary-balance-change"><span>최근 변화</span><strong className={weeklyChange < 0 ? 'diary-negative' : 'diary-positive'}>{weeklyChange > 0 ? '+' : weeklyChange < 0 ? '−' : ''}{formatMeso(Math.abs(weeklyChange))}</strong><small>이번 주</small></div>
+      )}
+
       {(editorError || queryError) && (
-        <p className="mt-2 text-xs text-red-500">{editorError || queryError?.message}</p>
+        <p className="mt-2 text-xs text-negative">{editorError || queryError?.message}</p>
+      )}
+      {showHistory && manualHistory.length > 0 && (
+        <details className="diary-balance-history">
+          <summary>잔액 조정 이력 {manualHistory.length}건</summary>
+          <div>
+            {manualHistory.slice(0, 5).map((entry) => (
+              <div key={entry.id}>
+                <span><strong>{HISTORY_LABELS[entry.entryType]}</strong><small>{formatDateKorean(entry.createdAt)}{entry.note ? ` · ${entry.note}` : ''}</small></span>
+                <span className={entry.delta < 0 ? 'diary-negative' : 'diary-positive'}>{entry.delta > 0 ? '+' : ''}{formatMeso(entry.delta)}</span>
+              </div>
+            ))}
+          </div>
+        </details>
       )}
     </Card>
   );

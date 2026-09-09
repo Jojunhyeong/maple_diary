@@ -107,16 +107,13 @@ export default function RecordsPage() {
 
   return (
     <main className="maple-fade-up flex flex-col gap-4 px-4 pt-6 pb-4">
-      <div>
-        <h1 className="maple-title text-2xl font-bold text-t1">사냥 기록</h1>
-        <p className="mt-1 text-xs text-t3">재획 기록을 기간별로 정리해보세요</p>
+      <div className="diary-record-toolbar">
+        <div><h2>사냥 기록</h2><p>기간별 기록과 순수익을 확인해 보세요.</p></div>
+        <button type="button" className="diary-secondary-action" onClick={openRecordModal}>＋ 기록 추가</button>
       </div>
-      <Button type="button" size="lg" fullWidth onClick={openRecordModal}>
-        + 사냥 추가
-      </Button>
 
       {/* 필터 탭 */}
-      <div className="flex flex-wrap gap-2">
+      <div className="diary-record-filters flex flex-wrap gap-2">
         {(['week', 'month', 'pick', 'all'] as Filter[]).map((f) => (
           <button
             key={f}
@@ -147,7 +144,7 @@ export default function RecordsPage() {
 
       {/* 요약 */}
       {filtered.length > 0 && (
-        <Card variant="highlight">
+        <Card className="diary-record-summary">
           <div className="grid grid-cols-3 gap-2 text-center">
             <div>
               <p className="text-[11px] text-t3">일수</p>
@@ -237,7 +234,7 @@ function DayGroupCard({
         <div className="text-right flex items-center gap-2">
           <div>
             <p className="text-sm font-bold text-t1">{formatMeso(group.totalNetRevenue)}</p>
-            <p className="text-xs text-t3">{formatMeso(group.netPerHour)}/h</p>
+            <p className="text-xs text-t3">{formatMeso(group.netPerHour)}/시간</p>
           </div>
           {multi && <span className="text-t3 text-xs">{expanded ? '▲' : '▼'}</span>}
         </div>

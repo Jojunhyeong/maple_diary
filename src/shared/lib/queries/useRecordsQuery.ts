@@ -8,6 +8,10 @@ import {
   saveRecord,
 } from '@/shared/lib/db/local';
 import { enrichRecordWithCalculations } from '@/shared/lib/utils/calculations';
+import {
+  accountMesoQueryKeys,
+  applyLocalAccountMesoDelta,
+} from '@/shared/lib/queries/useAccountMesoQuery';
 import type { Record, RecordWithCalculations } from '@/shared/types';
 
 type RecordDraft = Omit<Record, 'id' | 'created_at' | 'updated_at'>;
@@ -134,7 +138,9 @@ async function createRecord(
 
   if (!isLoggedIn) {
     await saveRecord(newRecord, localOwnerId);
-    return enrichRecordWithCalculations(newRecord, shardPrice);
+    const saved = enrichRecordWithCalculations(newRecord, shardPrice);
+    applyLocalAccountMesoDelta(localOwnerId, saved.net_revenue, 'hunting', saved.id, '사냥 기록');
+    return saved;
   }
 
   const response = await fetch('/api/records', {
@@ -192,10 +198,21 @@ async function updateRecord(
   };
 
   if (!isLoggedIn) {
+    const previous = (await getRecordsByOwner(localOwnerId)).find((item) => item.id === updatedRecord.id);
     await saveRecord(updatedRecord, localOwnerId);
-    return enrichRecordWithCalculations(updatedRecord, shardPrice);
+    const saved = enrichRecordWithCalculations(updatedRecord, shardPrice);
+    const previousNet = previous ? enrichRecordWithCalculations(previous, shardPrice).net_revenue : 0;
+    applyLocalAccountMesoDelta(
+      localOwnerId,
+      saved.net_revenue - previousNet,
+      'hunting',
+      saved.id,
+      '사냥 기록 수정',
+    );
+    return saved;
   }
 
+  const calculated = enrichRecordWithCalculations(updatedRecord, shardPrice);
   const response = await fetch(`/api/records/${updatedRecord.id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -207,6 +224,12 @@ async function updateRecord(
       material_cost: updatedRecord.material_cost,
       memo: updatedRecord.memo,
       character_id: updatedRecord.character_id ?? null,
+      shard_value: calculated.shard_value,
+      total_revenue: calculated.total_revenue,
+      net_revenue: calculated.net_revenue,
+      meso_per_hour: calculated.meso_per_hour,
+      net_per_hour: calculated.net_per_hour,
+      shard_per_hour: calculated.shard_per_hour,
     }),
   });
   if (!response.ok) throw new Error(await readApiError(response, '서버 수정 실패'));
@@ -215,9 +238,14 @@ async function updateRecord(
   return enrichRecordWithCalculations(savedRecord, shardPrice);
 }
 
-async function removeRecord(id: string, isLoggedIn: boolean) {
+async function removeRecord(id: string, localOwnerId: string, isLoggedIn: boolean) {
   if (!isLoggedIn) {
+    const previous = (await getRecordsByOwner(localOwnerId)).find((item) => item.id === id);
     await deleteLocalRecord(id);
+    if (previous) {
+      const previousNet = enrichRecordWithCalculations(previous, getShardPrice()).net_revenue;
+      applyLocalAccountMesoDelta(localOwnerId, -previousNet, 'hunting', id, '사냥 기록 삭제');
+    }
     return id;
   }
 
@@ -250,7 +278,10 @@ export function useRecordMutations({
   isLoggedIn = false,
 }: RecordMutationOptions) {
   const queryClient = useQueryClient();
-  const invalidateRecords = () => queryClient.invalidateQueries({ queryKey: recordQueryKeys.all });
+  const invalidateRecords = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: recordQueryKeys.all }),
+    queryClient.invalidateQueries({ queryKey: accountMesoQueryKeys.all }),
+  ]);
 
   const createMutation = useMutation({
     mutationFn: ({ record, shardPrice }: { record: RecordDraft; shardPrice: number }) => {
@@ -269,7 +300,10 @@ export function useRecordMutations({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => removeRecord(id, isLoggedIn),
+    mutationFn: (id: string) => {
+      if (!localOwnerId) throw new Error('로컬 사용자 정보가 준비되지 않았습니다');
+      return removeRecord(id, localOwnerId, isLoggedIn);
+    },
     onSuccess: invalidateRecords,
   });
 

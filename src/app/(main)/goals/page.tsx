@@ -1,6 +1,8 @@
 'use client';
 
 import { createPortal } from 'react-dom';
+import { useEconomy } from '@/shared/lib/hooks/useEconomy';
+import { estimateGoalWeeks } from '@/shared/lib/utils/economy';
 import { useEffect, useMemo, useState } from 'react';
 import type { DragEvent } from 'react';
 import Image from 'next/image';
@@ -109,7 +111,7 @@ function CatalogThumb({ src, className }: { src: string | null; className: strin
   const [failed, setFailed] = useState(false);
 
   if (!src || failed) {
-    return <span className="text-[10px] text-t3">IMG</span>;
+    return <span className="text-[10px] text-t3">장비</span>;
   }
 
   return (
@@ -156,11 +158,6 @@ function normalizeCatalogItems(data: EquipmentCatalogResponse): EquipmentCatalog
     : [];
 }
 
-function getElapsedDays(startDate: string) {
-  const start = new Date(startDate);
-  const diff = Date.now() - start.getTime();
-  return Math.max(1, Math.floor(diff / (1000 * 60 * 60 * 24)) + 1);
-}
 
 function clampAllocation(current: number, previousTargetTotal: number, targetAmount: number) {
   return Math.max(Math.min(current - previousTargetTotal, targetAmount), 0);
@@ -242,103 +239,65 @@ function jobGroupLabel(jobGroup: string) {
 
 function TargetCard({
   target,
+  estimatedWeeks,
+  averageWeeklyNet,
   onEdit,
   onDelete,
 }: {
   target: TargetView;
+  estimatedWeeks: number | null;
+  averageWeeklyNet: number;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const goal = target.target_amount;
   const pct = goal > 0 ? Math.min((target.allocatedCurrent / goal) * 100, 100) : 0;
   const remaining = Math.max(goal - target.allocatedCurrent, 0);
-  const elapsedDays = getElapsedDays(target.goalStartStr);
-  const start = new Date(target.goalStartStr);
-  const monthEnd = new Date(start.getFullYear(), start.getMonth() + 1, 0);
-  const totalDays = Math.max(1, Math.floor((monthEnd.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-  const expectedProgress = goal > 0 ? Math.min((elapsedDays / totalDays) * 100, 100) : 0;
-  const onTrack = goal > 0 ? pct >= expectedProgress : false;
-
-  let expectedDate: string | null = null;
-  const dailyAvg = target.allocatedCurrent > 0 ? target.allocatedCurrent / elapsedDays : 0;
-  if (remaining > 0 && dailyAvg > 0) {
-    const d = new Date();
-    d.setDate(d.getDate() + Math.ceil(remaining / dailyAvg));
-    expectedDate = `${d.getMonth() + 1}월 ${d.getDate()}일`;
-  }
-
   const icon = target.kind === 'meso'
     ? null
     : target.equipment_icon_url || target.equipment_shape_icon_url || null;
+  const completed = remaining === 0;
 
   return (
-    <Card className="overflow-hidden p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className={`flex h-12 w-12 flex-none items-center justify-center overflow-hidden rounded-2xl ${target.kind === 'meso' ? 'bg-amber-500/15 text-amber-600' : 'bg-surface/70'}`}>
+    <Card className={`goal-item overflow-hidden p-5 ${completed ? 'is-completed' : ''}`}>
+      <div className="goal-item-header">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="goal-item-icon">
             {icon ? (
               <CatalogThumb key={icon} src={icon} className="h-11 w-11 object-contain" />
             ) : (
-              <span className="text-sm font-black tracking-[0.18em]">MESO</span>
+              <span className="text-xs font-bold">{target.kind === 'meso' ? '메소' : '◎'}</span>
             )}
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="truncate text-sm font-semibold text-t1">{target.title}</p>
-              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-600">
-                {target.priority}순위
-              </span>
+              <h2 className="truncate text-base font-semibold text-t1">{target.title}</h2>
+              {target.priority === 1 && !completed && <span className="goal-priority-badge">다음 목표</span>}
+              {completed && <span className="goal-completed-badge">완료</span>}
             </div>
-            <p className="mt-0.5 text-[11px] text-t3">
-              {targetLabel(target)}{target.equipment_part ? ` · ${target.equipment_part}` : ''}
-            </p>
+            <p className="mt-1 text-xs text-t3">{targetLabel(target)}{target.equipment_part ? ` · ${target.equipment_part}` : ''}<span className="mx-1.5">·</span>목표 금액 {formatMeso(goal)}</p>
           </div>
         </div>
-        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${onTrack ? 'bg-green-500/15 text-green-500' : 'bg-amber-500/15 text-amber-500'}`}>
-          {target.isActive ? (onTrack ? '✓ 달성 예정' : '⚡ 진행 중') : '대기'}
-        </span>
+        <div className="goal-item-actions">
+          <button type="button" onClick={onEdit}>수정</button>
+          <button type="button" onClick={onDelete} className="danger">삭제</button>
+        </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={onEdit}
-          className="rounded-full border border-line bg-surface px-3 py-1.5 text-[11px] font-semibold text-t2 hover:border-amber-300 hover:text-t1"
-        >
-          수정
-        </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-semibold text-red-500 hover:border-red-300 hover:bg-red-100"
-        >
-          삭제
-        </button>
+      <div className="goal-progress-relation">
+        <div><span>현재 배분 메소</span><strong>{formatMeso(target.allocatedCurrent)}</strong></div>
+        <b aria-hidden="true">→</b>
+        <div><span>목표까지 남은 메소</span><strong>{formatMeso(remaining)}</strong></div>
+        <b aria-hidden="true">→</b>
+        <div className="goal-progress-percent"><span>진행률</span><strong>{pct.toFixed(0)}<small>%</small></strong></div>
       </div>
 
-      <div className="mt-4 h-3 w-full rounded-full bg-surface p-0.5">
-        <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${pct}%` }} />
+      <div className="goal-progress-track"><span style={{ width: `${pct}%` }} /></div>
+      <div className="goal-item-footer">
+        <div><span>최근 4주 평균 순수익</span><strong>{averageWeeklyNet > 0 ? `+${formatMeso(averageWeeklyNet)} / 주` : '집계 대기'}</strong></div>
+        <div><span>현재 페이스 기준</span><strong>{completed ? '목표 달성' : estimatedWeeks !== null ? `약 ${estimatedWeeks}주` : '계산 대기'}</strong></div>
+        {!target.isActive && !completed && <p>앞선 목표를 달성한 뒤 이 목표에 잔액이 배분돼요.</p>}
       </div>
-
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-t3">
-        <span>
-          {formatMeso(target.allocatedCurrent)} / {formatMeso(goal)}
-        </span>
-        {remaining > 0 ? <span>남은 {formatMeso(remaining)}</span> : <span className="font-semibold text-amber-400">🎉 달성!</span>}
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-t3">
-        <span>누적 목표액 {formatMeso(target.cumulativeTarget)}</span>
-        <span>이전 목표 {formatMeso(target.previousTargetTotal)}</span>
-      </div>
-
-      {expectedDate && remaining > 0 && target.isActive && (
-        <p className="mt-2 text-xs text-t3">목표 설정일({target.goalStartStr}) 기준 달성 예상: {expectedDate}</p>
-      )}
-
-      {!target.isActive && (
-        <p className="mt-2 text-xs text-t3">앞선 목표를 달성한 뒤 이 카드로 이어집니다.</p>
-      )}
     </Card>
   );
 }
@@ -444,8 +403,8 @@ function EquipmentCatalogPicker({
     });
   }, [catalogItems, sortMode]);
   const controlClass = compact
-    ? 'w-full rounded-xl border border-line bg-card px-3 py-2.5 text-sm text-t1 outline-none transition-colors focus:border-amber-400'
-    : 'w-full rounded-2xl border border-line bg-card px-3 py-3 text-sm text-t1 outline-none transition-colors focus:border-amber-400';
+    ? 'w-full rounded-[9px] border border-line bg-card px-3 py-2.5 text-sm text-t1 outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/15'
+    : 'w-full rounded-[9px] border border-line bg-card px-3 py-3 text-sm text-t1 outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/15';
   const labelClass = compact
     ? 'mb-1 block text-[10px] font-semibold text-t3'
     : 'mb-1 block text-[11px] font-semibold text-t3';
@@ -498,23 +457,23 @@ function EquipmentCatalogPicker({
             placeholder="예: 커맨더 포스 이어링"
             value={catalogQuery}
             onChange={(e) => setCatalogQuery(e.target.value)}
-            className={compact ? 'rounded-xl px-3 py-2 text-sm' : undefined}
+            className={compact ? 'rounded-[9px] px-3 py-2 text-sm' : undefined}
           />
 
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] font-semibold text-t3">정렬</p>
-            <div className="inline-flex rounded-full border border-line bg-surface/70 p-1">
+            <div className="inline-flex rounded-[9px] border border-line bg-surface p-1">
               <button
                 type="button"
                 onClick={() => setSortMode('level')}
-                className={`rounded-full px-3 py-1.5 text-[11px] font-semibold ${sortMode === 'level' ? 'bg-amber-500 text-white' : 'text-t2'}`}
+                className={`rounded-[7px] px-3 py-1.5 text-[11px] font-semibold ${sortMode === 'level' ? 'bg-brand-soft text-brand' : 'text-t2'}`}
               >
                 레벨순
               </button>
               <button
                 type="button"
                 onClick={() => setSortMode('name')}
-                className={`rounded-full px-3 py-1.5 text-[11px] font-semibold ${sortMode === 'name' ? 'bg-amber-500 text-white' : 'text-t2'}`}
+                className={`rounded-[7px] px-3 py-1.5 text-[11px] font-semibold ${sortMode === 'name' ? 'bg-brand-soft text-brand' : 'text-t2'}`}
               >
                 이름순
               </button>
@@ -522,15 +481,15 @@ function EquipmentCatalogPicker({
           </div>
 
           {catalogLoading && (
-            <div className="rounded-2xl border border-dashed border-line px-4 py-5 text-center text-xs text-t3">
+            <div className="rounded-[10px] border border-dashed border-line px-4 py-5 text-center text-xs text-t3">
               장비 후보를 불러오는 중...
             </div>
           )}
 
-          {catalogError && <p className="text-xs text-red-500">{catalogError}</p>}
+          {catalogError && <p className="text-xs text-negative">{catalogError}</p>}
 
           {!catalogLoading && catalogLoaded && catalogItems.length === 0 && !catalogError && (
-            <div className="rounded-2xl border border-dashed border-line px-4 py-5 text-center text-xs text-t3">
+            <div className="rounded-[10px] border border-dashed border-line px-4 py-5 text-center text-xs text-t3">
               조건에 맞는 장비가 없어요. 검색어를 바꾸거나 부위를 다시 선택해보세요.
             </div>
           )}
@@ -558,13 +517,13 @@ function EquipmentCatalogPicker({
                           equipmentShapeIconUrl: null,
                         })
                       }
-                      className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors ${
+                      className={`flex items-center gap-3 rounded-[10px] border px-3 py-2.5 text-left transition-colors ${
                         isSelected
-                          ? 'border-amber-400 bg-amber-50/70'
-                          : 'border-line bg-card hover:border-amber-200 hover:bg-amber-50/40'
+                          ? 'border-brand/50 bg-brand-soft'
+                          : 'border-line bg-card hover:border-brand/25 hover:bg-brand-soft/50'
                       }`}
                     >
-                      <div className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-xl bg-surface">
+                      <div className="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-[9px] bg-surface">
                         <CatalogThumb key={item.icon_url || item.id} src={item.icon_url} className="h-9 w-9 object-contain" />
                       </div>
                       <div className="min-w-0">
@@ -582,8 +541,8 @@ function EquipmentCatalogPicker({
           )}
 
           {selectedCatalogItem && (
-            <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface/45 px-3 py-3">
-              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-card">
+            <div className="flex items-center gap-3 rounded-[10px] border border-line bg-surface px-3 py-3">
+              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-[9px] bg-card">
                 <CatalogThumb key={selectedCatalogItem.icon_url || selectedCatalogItem.id} src={selectedCatalogItem.icon_url} className="h-11 w-11 object-contain" />
               </div>
               <div className="min-w-0">
@@ -597,7 +556,7 @@ function EquipmentCatalogPicker({
           )}
         </div>
       ) : (
-        <div className={compact ? 'mt-3 rounded-2xl border border-dashed border-line px-3 py-3 text-sm text-t3' : 'mt-3 rounded-2xl border border-dashed border-line px-3 py-4 text-sm text-t3'}>
+        <div className={compact ? 'mt-3 rounded-[10px] border border-dashed border-line px-3 py-3 text-sm text-t3' : 'mt-3 rounded-[10px] border border-dashed border-line px-3 py-4 text-sm text-t3'}>
           메소만 모으는 목표입니다.
         </div>
       )}
@@ -609,7 +568,7 @@ function EquipmentCatalogPicker({
           onChange={(e) => onUpdate({ amountMan: e.target.value.replace(/\D/g, '') })}
           suffix="만"
           inputMode="numeric"
-          className={compact ? 'rounded-xl px-3 py-2 text-sm' : undefined}
+          className={compact ? 'rounded-[9px] px-3 py-2 text-sm' : undefined}
         />
         {fromManInput(draft.amountMan) > 0 && (
           <p className="mt-1.5 ml-1 text-xs text-t3">= {formatMeso(fromManInput(draft.amountMan))}</p>
@@ -643,49 +602,49 @@ function DraftCard({
   showActions?: boolean;
 }) {
   const shellClass = compact
-    ? 'rounded-2xl border border-line bg-card/80 p-3 shadow-[0_8px_20px_rgba(148,111,66,0.04)]'
-    : 'rounded-2xl border border-line bg-card/80 p-4 shadow-[0_8px_24px_rgba(148,111,66,0.05)]';
+    ? 'rounded-[10px] border border-line bg-card p-3'
+    : 'rounded-[12px] border border-line bg-card p-4';
 
   return (
     <div className={shellClass}>
       <div className={compact ? 'mb-2 flex items-center justify-between gap-2' : 'mb-3 flex items-center justify-between gap-2'}>
-        <div className="inline-flex rounded-full border border-line bg-surface/60 p-1">
+        <div className="inline-flex rounded-[9px] border border-line bg-surface p-1">
           <button
             type="button"
             onClick={() => onUpdate({ kind: 'equipment' })}
-            className={`rounded-full px-3 py-1.5 text-[11px] font-semibold ${draft.kind === 'equipment' ? 'bg-amber-500 text-white' : 'text-t2'}`}
+            className={`rounded-[7px] px-3 py-1.5 text-[11px] font-semibold ${draft.kind === 'equipment' ? 'bg-brand-soft text-brand' : 'text-t2'}`}
           >
             장비
           </button>
           <button
             type="button"
             onClick={() => onUpdate({ kind: 'meso', equipmentKey: '', equipmentName: '', equipmentSlot: '', equipmentIconUrl: null, equipmentShapeIconUrl: null })}
-            className={`rounded-full px-3 py-1.5 text-[11px] font-semibold ${draft.kind === 'meso' ? 'bg-amber-500 text-white' : 'text-t2'}`}
+            className={`rounded-[7px] px-3 py-1.5 text-[11px] font-semibold ${draft.kind === 'meso' ? 'bg-brand-soft text-brand' : 'text-t2'}`}
           >
             메소
           </button>
         </div>
         {showActions && (
           <div className="flex items-center gap-1.5">
-            <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-600">
+            <span className="rounded-[6px] bg-brand-soft px-2 py-1 text-[10px] font-semibold text-brand">
               {index + 1}순위
             </span>
             <button
               type="button"
               onClick={onCancel}
-              className="rounded-full border border-line bg-surface px-2 py-1 text-[10px] font-semibold text-t2"
+              className="rounded-[7px] border border-line bg-surface px-2 py-1 text-[10px] font-semibold text-t2"
             >
               취소
             </button>
             <button
               type="button"
               onClick={onSave}
-              className="rounded-full border border-amber-300 bg-amber-500 px-3 py-1 text-[10px] font-semibold text-white"
+              className="rounded-[7px] border border-brand bg-brand px-3 py-1 text-[10px] font-semibold text-white"
             >
               저장
             </button>
             {showDelete && (
-              <button type="button" onClick={onDelete} className="text-[11px] font-semibold text-red-400 hover:text-red-500">
+              <button type="button" onClick={onDelete} className="text-[11px] font-semibold text-negative">
                 삭제
               </button>
             )}
@@ -699,6 +658,7 @@ function DraftCard({
 }
 
 export default function GoalsPage() {
+  const economy = useEconomy();
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId, initializeLocal } = useAuthStore();
@@ -739,21 +699,6 @@ export default function GoalsPage() {
   const ownedMeso = accountMeso?.amount ?? 0;
 
   const goalCards = useMemo(() => normalizeGoalCards(currentGoals), [currentGoals]);
-  const totalTargetAmount = useMemo(
-    () => goalCards.reduce((sum, goal) => {
-      const target = goal.targets?.[0] ?? (goal.meso_goal && goal.meso_goal > 0
-        ? {
-            id: goal.id,
-            kind: 'meso' as const,
-            title: '메소 목표',
-            target_amount: goal.meso_goal,
-          }
-        : null);
-      return sum + (target?.target_amount ?? 0);
-    }, 0),
-    [goalCards],
-  );
-  const progressPct = totalTargetAmount > 0 ? Math.min((ownedMeso / totalTargetAmount) * 100, 100) : 0;
   const targetViews = useMemo<TargetView[]>(
     () => {
       let runningTotal = 0;
@@ -784,11 +729,11 @@ export default function GoalsPage() {
     },
     [goalCards, ownedMeso],
   );
-
-  const currentCharacterLabel = useMemo(() => {
-    if (!profile) return '현재 캐릭터';
-    return `${profile.character_name} · ${profile.character_class ?? '직업 미상'}${profile.character_level ? ` Lv.${profile.character_level}` : ''}`;
-  }, [profile]);
+  const activeTargets = targetViews.filter(target => target.allocatedCurrent < target.target_amount);
+  const nearestTarget = activeTargets[0] ?? targetViews.at(-1);
+  const nearestProgress = nearestTarget && nearestTarget.target_amount > 0
+    ? Math.min(nearestTarget.allocatedCurrent / nearestTarget.target_amount * 100, 100)
+    : 0;
 
   useEffect(() => {
     if (editingGoalId || creatingGoalDraft) return;
@@ -1027,10 +972,10 @@ export default function GoalsPage() {
       ? createPortal(
           <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 px-3 py-6 backdrop-blur-[2px]">
             <div className="w-full max-w-[480px] my-auto">
-              <Card className="max-h-[calc(100vh-3rem)] overflow-hidden p-0 shadow-[0_24px_80px_rgba(0,0,0,0.25)]">
+              <Card className="max-h-[calc(100vh-3rem)] overflow-hidden p-0 shadow-[var(--shadow-md)]">
                 <div className="flex max-h-[calc(100vh-3rem)] flex-col">
                   <div className="shrink-0 border-b border-line/70 px-4 py-3">
-                    <p className="text-xs font-semibold text-amber-600">새 목표 카드</p>
+                    <p className="text-xs font-semibold text-brand">새 목표 카드</p>
                     <h2 className="mt-1 text-sm font-bold text-t1">
                       {creatingGoalDraft.kind === 'equipment' ? '장비 카드 추가' : '메소 카드 추가'}
                     </h2>
@@ -1038,7 +983,7 @@ export default function GoalsPage() {
                   </div>
 
                   <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-                    {formError && <p className="mb-3 text-xs text-red-500">{formError}</p>}
+                    {formError && <p className="mb-3 text-xs text-negative">{formError}</p>}
 
                     <DraftCard
                       draft={creatingGoalDraft}
@@ -1074,69 +1019,49 @@ export default function GoalsPage() {
 
   return (
     <>
-    <main className="maple-fade-up px-4 pt-6 pb-4 md:relative md:left-1/2 md:w-[760px] md:max-w-none md:-translate-x-1/2 md:px-0">
+    <main className="diary-goals maple-fade-up">
       <div className="flex flex-col gap-5">
-        <div className="flex items-start justify-between gap-3">
+        <div className="diary-page-heading">
           <div>
-            <h1 className="maple-title text-2xl font-bold text-t1">목표</h1>
-            <p className="mt-1 text-xs text-t3">{currentCharacterLabel}</p>
+            <div className="diary-eyebrow">나의 자산 계획</div>
+            <h1 className="maple-title">목표</h1>
+            <p>원하는 장비와 메소 목표를 정하고, 현재 잔액을 기준으로 진행 상황을 확인해요.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => addDraft('equipment')} disabled={!!editingGoalId || !!creatingGoalDraft || saving}>
-              + 장비 카드
+            <Button size="sm" onClick={() => addDraft('equipment')} disabled={!!editingGoalId || !!creatingGoalDraft || saving}>
+              + 장비 목표
             </Button>
             <Button variant="secondary" size="sm" onClick={() => addDraft('meso')} disabled={!!editingGoalId || !!creatingGoalDraft || saving}>
-              + 메소 카드
+              + 메소 목표
             </Button>
           </div>
         </div>
 
         <section className="flex min-w-0 flex-col gap-5">
-          <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.13),rgba(245,158,11,0.03)_55%,transparent)] p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0 flex-1">
-                <p className="text-[11px] text-t3">목표 현황</p>
-                <p className="mt-1 text-2xl font-black tracking-tight text-t1">목표 카드를 하나씩 쌓아갑니다</p>
-                <p className="mt-2 text-xs text-t3">카드 추가 버튼으로 목표를 한 장씩 만들고, 각 카드에서 바로 수정과 삭제를 할 수 있어요.</p>
-                <p className="mt-1 text-xs font-medium text-amber-600">전체 보유 메소를 기준으로 계산하며, 드래그해서 우선순위를 변경할 수 있어요.</p>
-              </div>
-              <div className="flex w-full shrink-0 flex-col items-end gap-3 self-start lg:w-auto">
-                <div className="grid w-full min-w-[240px] grid-cols-3 gap-2">
-                  <div className="rounded-2xl border border-line bg-card/80 p-3">
-                    <p className="text-[11px] text-t3">총 목표액</p>
-                    <p className="mt-1 text-base font-bold text-t1">{formatMeso(totalTargetAmount)}</p>
-                  </div>
-                  <div className="rounded-2xl border border-line bg-card/80 p-3">
-                    <p className="text-[11px] text-t3">보유 메소</p>
-                    <p className="mt-1 text-base font-bold text-t1">{formatMeso(ownedMeso)}</p>
-                  </div>
-                  <div className="rounded-2xl border border-line bg-card/80 p-3">
-                    <p className="text-[11px] text-t3">목표 진행</p>
-                    <p className="mt-1 text-base font-bold text-t1">{progressPct.toFixed(1)}%</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
+          <section className="goals-summary" aria-label="목표 현황">
+            <div><span>현재 메소 잔액</span><strong>{accountMeso?.updatedAt ? formatMeso(ownedMeso) : '미입력'}</strong><small>현재 잔액 기준</small></div>
+            <div><span>활성 목표</span><strong>{activeTargets.length}<small>개</small></strong><small>우선순위대로 잔액 배분</small></div>
+            <div><span>가장 가까운 목표</span><strong>{nearestTarget?.title ?? '목표 없음'}</strong><small>{nearestTarget ? `${nearestProgress.toFixed(0)}% 진행` : '새 목표를 추가해보세요'}</small></div>
+          </section>
 
-          {formError && <p className="text-xs text-red-500">{formError}</p>}
-          {goalError && <p className="text-xs text-red-500">{goalError}</p>}
+          {formError && <p className="text-xs text-negative">{formError}</p>}
+          {goalError && <p className="text-xs text-negative">{goalError}</p>}
 
           {goalCards.length === 0 && draftGoals.length === 0 && (
-            <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.18),rgba(245,158,11,0.04)_55%,transparent)] py-10">
+            <Card className="py-10">
               <div className="flex flex-col items-center gap-4 text-center">
                 <p className="text-4xl">🎯</p>
                 <p className="text-sm text-t2">장비 목표와 메소 목표를 카드로 모아둘 수 있어요.</p>
                 <div className="flex gap-2">
-                  <Button onClick={() => addDraft('equipment')} disabled={saving || !!editingGoalId || !!creatingGoalDraft}>+ 장비 카드</Button>
-                  <Button variant="secondary" onClick={() => addDraft('meso')} disabled={saving || !!editingGoalId || !!creatingGoalDraft}>+ 메소 카드</Button>
+                  <Button onClick={() => addDraft('equipment')} disabled={saving || !!editingGoalId || !!creatingGoalDraft}>+ 장비 목표</Button>
+                  <Button variant="secondary" onClick={() => addDraft('meso')} disabled={saving || !!editingGoalId || !!creatingGoalDraft}>+ 메소 목표</Button>
                 </div>
               </div>
             </Card>
           )}
 
           {draftGoals.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-3">
               {draftGoals.map((draft, index) => {
                 const targetView = targetViews.find((target) => target.goalId === draft.id);
                 const isEditingCard = editingGoalId === draft.id || !targetView;
@@ -1154,18 +1079,24 @@ export default function GoalsPage() {
                     onDrop={handleGoalDrop(draft.id)}
                     onDragEnd={handleGoalDragEnd}
                     className={[
-                      'relative rounded-2xl transition-all',
+                      'relative rounded-[12px] transition-all',
                       dragLocked ? '' : 'cursor-grab active:cursor-grabbing',
                       isDragging ? 'opacity-60 scale-[0.98]' : '',
-                      dragHintBefore ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-app' : '',
-                      dragHintAfter ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-app' : '',
+                      dragHintBefore ? 'ring-2 ring-brand ring-offset-2 ring-offset-app' : '',
+                      dragHintAfter ? 'ring-2 ring-brand ring-offset-2 ring-offset-app' : '',
                     ].join(' ')}
                   >
                     
 
+                    {!isEditingCard && <div className="goal-order-actions"><span>우선순위 {index + 1}</span>
+                      <button type="button" aria-label={`${index + 1}순위 목표 위로 이동`} disabled={dragLocked || index === 0} onClick={() => void reorderDraftGoals(draft.id, draftGoals[index - 1].id, 'before')} className="rounded-lg border border-line px-3 py-2 text-xs text-t2 disabled:opacity-30">↑ 위로</button>
+                      <button type="button" aria-label={`${index + 1}순위 목표 아래로 이동`} disabled={dragLocked || index === draftGoals.length - 1} onClick={() => void reorderDraftGoals(draft.id, draftGoals[index + 1].id, 'after')} className="rounded-lg border border-line px-3 py-2 text-xs text-t2 disabled:opacity-30">↓ 아래로</button>
+                    </div>}
                     {!isEditingCard && targetView ? (
                       <TargetCard
                         target={targetView}
+                        estimatedWeeks={accountMeso?.updatedAt && economy.canEstimate ? estimateGoalWeeks(Math.max(0, targetView.cumulativeTarget - ownedMeso), economy.averageWeeklyNet) : null}
+                        averageWeeklyNet={economy.averageWeeklyNet}
                         onEdit={() => startEdit(draft.id)}
                         onDelete={() => void handleDeleteGoal(draft.id)}
                       />

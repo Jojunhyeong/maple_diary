@@ -17,7 +17,7 @@ const tabs: Array<{ value: ScopeTabValue; label: string; subtitle: string }> = [
 
 export function ScopeTabs({ value, onChange, className }: ScopeTabsProps) {
   return (
-    <div className={clsx('grid grid-cols-2 rounded-2xl border border-line bg-card/80 p-1 shadow-[var(--shadow-sm)]', className)}>
+    <div className={clsx('grid grid-cols-2 rounded-[10px] border border-line bg-surface p-1', className)}>
       {tabs.map((tab) => {
         const active = value === tab.value;
         return (
@@ -26,16 +26,16 @@ export function ScopeTabs({ value, onChange, className }: ScopeTabsProps) {
             type="button"
             onClick={() => onChange(tab.value)}
             className={clsx(
-              'rounded-xl px-3 py-2 text-left transition-all',
+              'rounded-[7px] px-3 py-2 text-left transition-colors',
               active
-                ? 'bg-[linear-gradient(135deg,rgba(245,158,11,0.18),rgba(245,158,11,0.06))] shadow-[0_6px_16px_rgba(217,119,6,0.1)]'
-                : 'hover:bg-surface/60',
+                ? 'bg-brand-soft'
+                : 'hover:bg-card/70',
             )}
           >
-            <p className={clsx('text-sm font-semibold', active ? 'text-amber-600' : 'text-t2')}>
+            <p className={clsx('text-sm font-semibold', active ? 'text-brand' : 'text-t2')}>
               {tab.label}
             </p>
-            <p className={clsx('mt-0.5 text-[11px]', active ? 'text-amber-600/80' : 'text-t3')}>
+            <p className={clsx('mt-0.5 text-[11px]', active ? 'text-brand/80' : 'text-t3')}>
               {tab.subtitle}
             </p>
           </button>
