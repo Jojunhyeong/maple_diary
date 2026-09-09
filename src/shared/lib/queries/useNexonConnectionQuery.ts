@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { expenseQueryKeys } from '@/shared/lib/queries/useExpensesQuery';
+import { accountMesoQueryKeys } from '@/shared/lib/queries/useAccountMesoQuery';
 
 export type NexonConnection = {
   connected: boolean;
@@ -80,24 +81,45 @@ export function useNexonConnectionMutations({ isLoggedIn = false }: { isLoggedIn
     },
     onSuccess: invalidate,
   });
-  const starforceSyncMutation = useMutation({
+  const enhancementSyncMutation = useMutation({
     mutationFn: async () => {
       if (!isLoggedIn) throw new Error('로그인이 필요합니다');
-      const response = await fetch('/api/nexon/starforce/sync', { method: 'POST' });
-      const payload = (await response.json()) as {
+      const endpoints = ['/api/nexon/starforce/sync', '/api/nexon/potential/sync'];
+      const responses = await Promise.all(endpoints.map((endpoint) => fetch(endpoint, { method: 'POST' })));
+      const payloads = (await Promise.all(responses.map((response) => response.json()))) as Array<{
         error?: string;
         importedExpenses?: number;
         importedAttempts?: number;
         totalAmount?: number;
         skippedCount?: number;
+      }>;
+      const failedIndex = responses.findIndex((response) => !response.ok);
+      if (failedIndex >= 0) throw new Error(payloads[failedIndex].error || '강화비를 동기화하지 못했어요.');
+      const totals = payloads.reduce<{
+        importedExpenses: number;
+        importedAttempts: number;
+        totalAmount: number;
+        skippedCount: number;
+      }>(
+        (total, payload) => ({
+          importedExpenses: total.importedExpenses + (payload.importedExpenses ?? 0),
+          importedAttempts: total.importedAttempts + (payload.importedAttempts ?? 0),
+          totalAmount: total.totalAmount + (payload.totalAmount ?? 0),
+          skippedCount: total.skippedCount + (payload.skippedCount ?? 0),
+        }),
+        { importedExpenses: 0, importedAttempts: 0, totalAmount: 0, skippedCount: 0 },
+      );
+      return {
+        ...totals,
+        starforceAttempts: payloads[0].importedAttempts ?? 0,
+        potentialAttempts: payloads[1].importedAttempts ?? 0,
       };
-      if (!response.ok) throw new Error(payload.error || '강화비를 동기화하지 못했어요.');
-      return payload;
     },
     onSuccess: async () => {
       await Promise.all([
         invalidate(),
         queryClient.invalidateQueries({ queryKey: expenseQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: accountMesoQueryKeys.all }),
       ]);
     },
   });
@@ -106,12 +128,14 @@ export function useNexonConnectionMutations({ isLoggedIn = false }: { isLoggedIn
     connectNexon: connectMutation.mutateAsync,
     updateDiscountRate: updateMutation.mutateAsync,
     disconnectNexon: disconnectMutation.mutateAsync,
-    syncStarforce: starforceSyncMutation.mutateAsync,
+    syncEnhancements: enhancementSyncMutation.mutateAsync,
+    syncStarforce: enhancementSyncMutation.mutateAsync,
     isPending:
       connectMutation.isPending ||
       updateMutation.isPending ||
       disconnectMutation.isPending ||
-      starforceSyncMutation.isPending,
-    isStarforceSyncing: starforceSyncMutation.isPending,
+      enhancementSyncMutation.isPending,
+    isEnhancementSyncing: enhancementSyncMutation.isPending,
+    isStarforceSyncing: enhancementSyncMutation.isPending,
   };
 }

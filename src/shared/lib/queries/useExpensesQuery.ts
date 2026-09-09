@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import type { Expense } from '@/shared/types';
+import { accountMesoQueryKeys } from '@/shared/lib/queries/useAccountMesoQuery';
 
 type ExpenseDraft = Omit<Expense, 'id' | 'created_at' | 'updated_at' | 'sync_status'>;
 
@@ -66,6 +67,16 @@ async function deleteExpense(id: string) {
   return id;
 }
 
+async function togglePcRoomDiscount({ expenseId, applied }: { expenseId: string; applied: boolean }) {
+  const response = await fetch(`/api/nexon/starforce/${expenseId}/pc-room`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ applied }),
+  });
+  if (!response.ok) throw new Error(await readApiError(response, 'PC방 할인을 변경하지 못했어요.'));
+  return (await response.json()) as { expense: Expense; pcRoomDiscountApplied: boolean };
+}
+
 export function useExpensesQuery({
   userId,
   isLoggedIn = false,
@@ -86,7 +97,10 @@ export function useExpensesQuery({
 
 export function useExpenseMutations({ isLoggedIn = false }: { isLoggedIn?: boolean } = {}) {
   const queryClient = useQueryClient();
-  const invalidateExpenses = () => queryClient.invalidateQueries({ queryKey: expenseQueryKeys.all });
+  const invalidateExpenses = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: expenseQueryKeys.all }),
+    queryClient.invalidateQueries({ queryKey: accountMesoQueryKeys.all }),
+  ]);
 
   const createMutation = useMutation({
     mutationFn: (expense: ExpenseDraft) => {
@@ -109,6 +123,13 @@ export function useExpenseMutations({ isLoggedIn = false }: { isLoggedIn?: boole
     },
     onSuccess: invalidateExpenses,
   });
+  const pcRoomDiscountMutation = useMutation({
+    mutationFn: ({ expenseId, applied }: { expenseId: string; applied: boolean }) => {
+      if (!isLoggedIn) throw new Error('로그인이 필요합니다');
+      return togglePcRoomDiscount({ expenseId, applied });
+    },
+    onSuccess: invalidateExpenses,
+  });
   const resetCreateMutation = createMutation.reset;
   const resetUpdateMutation = updateMutation.reset;
   const resetDeleteMutation = deleteMutation.reset;
@@ -122,9 +143,11 @@ export function useExpenseMutations({ isLoggedIn = false }: { isLoggedIn?: boole
     addExpense: createMutation.mutateAsync,
     updateExpense: updateMutation.mutateAsync,
     deleteExpense: deleteMutation.mutateAsync,
+    togglePcRoomDiscount: pcRoomDiscountMutation.mutateAsync,
     error: createMutation.error ?? updateMutation.error ?? deleteMutation.error,
-    isSaving: createMutation.isPending || updateMutation.isPending,
+    isSaving: createMutation.isPending || updateMutation.isPending || pcRoomDiscountMutation.isPending,
     isDeleting: deleteMutation.isPending,
+    isTogglingPcRoomDiscount: pcRoomDiscountMutation.isPending,
     resetError,
   };
 }

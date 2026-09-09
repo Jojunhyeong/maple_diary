@@ -172,7 +172,7 @@ export default function SettingsPage() {
           <div>
             <p className="text-sm font-semibold text-t2">넥슨 강화 연동</p>
             <p className="mt-1 text-xs leading-5 text-t3">
-              개인 Open API 키로 스타포스 이력을 불러와 계산 가능한 강화비를 지출에 추가합니다.
+              개인 Open API 키로 스타포스와 잠재능력 재설정 이력을 불러와 계산 가능한 강화비를 지출에 추가합니다.
             </p>
           </div>
           {nexonConnection?.connected && (
@@ -301,7 +301,7 @@ export default function SettingsPage() {
 
         <div className="mt-3 rounded-xl bg-amber-500/8 px-3 py-2.5">
           <p className="text-[11px] leading-5 text-t3">
-            넥슨은 실제 차감 메소를 제공하지 않아 일반 스타포스 비용을 장비 레벨과 할인 조건으로 계산합니다.
+            넥슨은 실제 차감 메소를 제공하지 않아 스타포스와 잠재능력 재설정 비용을 공식 기준으로 계산합니다.
             슈페리얼·주문서 사용·레벨 미확인 장비는 자동 지출에서 제외돼요.
           </p>
         </div>

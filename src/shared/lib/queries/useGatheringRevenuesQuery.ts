@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { GatheringRevenue, GatheringItemTab } from '@/shared/types';
+import { accountMesoQueryKeys } from '@/shared/lib/queries/useAccountMesoQuery';
 
 type GatheringFilters = {
   userId?: string | null;
@@ -53,7 +54,10 @@ export function useGatheringRevenuesQuery({
 
 export function useGatheringRevenueMutations({ isLoggedIn = false }: { isLoggedIn?: boolean } = {}) {
   const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: gatheringRevenueQueryKeys.all });
+  const invalidate = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: gatheringRevenueQueryKeys.all }),
+    queryClient.invalidateQueries({ queryKey: accountMesoQueryKeys.all }),
+  ]);
   const saveMutation = useMutation({
     mutationFn: async ({
       date,

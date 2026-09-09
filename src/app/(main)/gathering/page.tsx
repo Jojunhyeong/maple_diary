@@ -155,27 +155,11 @@ function formatMonthLabel(monthKey: string) {
   return `${year}년 ${month}월`;
 }
 
-function getTabTone(tab: Exclude<GatheringTabKey, 'favorite'>): TabTone {
-  if (tab === 'seed') {
-    return {
-      labelClass: 'text-emerald-700',
-      badgeClass: 'bg-emerald-500/10 text-emerald-700',
-      softClass: 'bg-emerald-500/6',
-    };
-  }
-
-  if (tab === 'flower') {
-    return {
-      labelClass: 'text-fuchsia-700',
-      badgeClass: 'bg-fuchsia-500/10 text-fuchsia-700',
-      softClass: 'bg-fuchsia-500/6',
-    };
-  }
-
+function getTabTone(): TabTone {
   return {
-    labelClass: 'text-sky-700',
-    badgeClass: 'bg-sky-500/10 text-sky-700',
-    softClass: 'bg-sky-500/6',
+    labelClass: 'text-gathering',
+    badgeClass: 'bg-gathering/10 text-gathering',
+    softClass: 'bg-gathering/20',
   };
 }
 
@@ -315,37 +299,20 @@ export default function GatheringPage() {
 
   return (
     
-    <main className="maple-fade-up flex flex-col gap-4 px-4 pt-6 pb-4 md:relative md:left-1/2 md:w-[760px] md:max-w-none md:-translate-x-1/2 md:px-0">
+    <main className="diary-gathering-page maple-fade-up flex flex-col gap-4">
       <div className="w-full">
-        <div className="mb-4 px-0">
-          <h1 className="maple-title text-2xl font-bold text-t1">채집</h1>
-          <p className="mt-1 text-xs text-t3">쥬니퍼베리 씨앗, 꽃, 원석 전리품을 한 줄씩 적어서 수익을 계산해요.</p>
+        <div className="diary-record-toolbar">
+          <div><h2>채집 기록</h2><p>씨앗부터 원석까지, 모은 만큼 차곡차곡.</p></div>
+          <button type="button" className="diary-secondary-action" aria-expanded={isEditorOpen} aria-controls="gathering-editor" onClick={() => setIsEditorOpen(current => !current)}>{isEditorOpen ? '입력 닫기' : '＋ 기록 추가'}</button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsEditorOpen((current) => !current)}
-          className="mt-4 flex w-full items-start justify-between gap-3 rounded-2xl border border-line bg-white/90 px-4 py-4 text-left shadow-[var(--shadow-sm)] transition-colors hover:border-amber-500/30 hover:bg-white"
-        >
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-t1">채집 기록 추가</p>
-            <p className="mt-1 text-[11px] leading-5 text-t3">
-              버튼을 누르면 입력 폼이 펼쳐져요. 기록은 아래 카드와 함께 관리합니다.
-            </p>
-          </div>
-          <div className="shrink-0 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-500/15">
-            {isEditorOpen ? '접기' : '+ 추가'}
-          </div>
-        </button>
-
         {isEditorOpen ? (
-          <Card className="mt-4">
+          <Card id="gathering-editor" className="gathering-editor mt-4">
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
               <Input label="날짜" type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
               <Button
                 type="button"
                 size="md"
-                fullWidth
                 disabled={saving || saveableRows.length === 0 || !isLoggedIn || !activeCharacterId}
                 onClick={handleSave}
               >
@@ -353,19 +320,19 @@ export default function GatheringPage() {
               </Button>
             </div>
             {sessionStatus !== 'loading' && (!isLoggedIn || !activeCharacterId) && (
-              <p className="mt-2 text-xs text-red-500">
+              <p className="mt-2 text-xs text-negative">
                 {!isLoggedIn
                   ? '로그인 세션을 확인할 수 없어요. 로그아웃 후 다시 로그인해주세요.'
                   : '활성 캐릭터를 선택한 뒤 저장할 수 있어요.'}
               </p>
             )}
             {(saveMessage || saveError) && (
-              <p className={`mt-2 text-xs ${saveError ? 'text-red-500' : 'text-emerald-600'}`}>
+              <p className={`mt-2 text-xs ${saveError ? 'text-negative' : 'text-positive'}`}>
                 {saveError || saveMessage}
               </p>
             )}
 
-            <div className="mt-4 grid grid-cols-4 gap-1.5 rounded-2xl bg-surface p-1">
+            <div className="gathering-tabs mt-4 grid grid-cols-4 gap-1.5 bg-surface p-1">
               {TABS.map((tab) => {
                 const active = activeTab === tab.key;
                 return (
@@ -373,8 +340,8 @@ export default function GatheringPage() {
                     key={tab.key}
                     type="button"
                     onClick={() => setActiveTab(tab.key)}
-                    className={`rounded-xl px-2 py-3 text-center transition-all ${
-                      active ? 'bg-white text-t1 shadow-[0_8px_18px_rgba(0,0,0,0.06)]' : 'text-t3 hover:text-t2'
+                    className={`rounded-[7px] px-2 py-2 text-center transition-colors ${
+                      active ? 'bg-brand-soft text-brand' : 'text-t3 hover:text-t2'
                     }`}
                   >
                     <p className="text-sm font-semibold">{tab.label}</p>
@@ -391,19 +358,19 @@ export default function GatheringPage() {
                   type="button"
                   onClick={() => addRow(item)}
                   title={item.label}
-                  className="group flex w-full flex-col overflow-hidden rounded-lg border border-line bg-white/90 text-left shadow-[var(--shadow-sm)] transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-500/35 hover:bg-white"
+                  className="group flex w-full flex-col overflow-hidden rounded-lg border border-line bg-white text-left transition-colors duration-150 hover:border-brand/30 hover:bg-brand-soft/40"
                 >
-                  <div className="relative flex aspect-square items-center justify-center bg-[linear-gradient(135deg,rgba(250,244,232,0.96),rgba(255,255,255,0.94))] p-0.5">
+                  <div className="relative flex aspect-square items-center justify-center bg-surface p-0.5">
                     {item.imageUrl ? (
                       <Image
                         src={item.imageUrl}
                         alt={item.label}
                         fill
                         sizes="(max-width: 640px) 20vw, (max-width: 1024px) 16vw, 96px"
-                        className="h-full w-full object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.1)]"
+                        className="h-full w-full object-contain"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center rounded-2xl border border-dashed border-amber-500/15 bg-white/70">
+                      <div className="flex h-full w-full items-center justify-center rounded-[8px] border border-dashed border-brand/15 bg-white">
                         <span className="text-lg font-bold tracking-tight text-t3">{item.label.slice(0, 1)}</span>
                       </div>
                     )}
@@ -429,9 +396,9 @@ export default function GatheringPage() {
                   const unitPrice = parseNumber(row.unitPrice);
                   const rowTotal = quantity * unitPrice;
                   return (
-                    <div key={row.id} className="rounded-2xl border border-line bg-surface/35 p-2">
-                      <div className="grid gap-2 grid-cols-1 xl:grid-cols-[minmax(0,1.7fr)_80px_92px_84px_auto] xl:items-center">
-                        <div className="flex min-w-0 items-center gap-2 rounded-xl border border-line-str bg-field px-2.5 py-1.5 shadow-[var(--shadow-sm)]">
+                    <div key={row.id} className="gathering-input-row">
+                      <div className="grid gap-2 grid-cols-1 xl:grid-cols-[minmax(0,1.7fr)_140px_92px_84px_auto] xl:items-center">
+                        <div className="flex min-w-0 items-center gap-2 rounded-[9px] border border-line-str bg-field px-2.5 py-1.5">
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-white">
                             <span className="text-[9px] font-bold text-t3">
                               {row.tab === 'seed' ? '씨앗' : row.tab === 'flower' ? '꽃' : '원석'}
@@ -444,17 +411,12 @@ export default function GatheringPage() {
                             className="min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-t1 outline-none placeholder:text-t3/70"
                           />
                         </div>
-                        <label className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-line-str bg-white px-2.5 py-2 shadow-[var(--shadow-sm)]">
-                          <span className="text-[9px] font-semibold text-t3">수량</span>
-                          <input
-                            value={row.quantity}
-                            onChange={(e) => patchRow(row.id, { quantity: e.target.value.replace(/[^0-9]/g, '') })}
-                            placeholder="0"
-                            inputMode="numeric"
-                            className="w-9 min-w-0 bg-transparent text-right text-[13px] font-semibold text-t1 outline-none placeholder:text-t3/60"
-                          />
-                        </label>
-                        <label className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-line-str bg-white px-2.5 py-2 shadow-[var(--shadow-sm)]">
+                        <div className="flex min-w-0 items-center justify-between gap-1 rounded-[9px] border border-line-str bg-field px-2 py-1">
+                          <button type="button" aria-label={`${row.label || '아이템'} 수량 줄이기`} disabled={quantity <= 0} onClick={() => patchRow(row.id, { quantity: String(Math.max(0, quantity - 1)) })} className="h-9 w-9 rounded-lg text-lg hover:bg-surface disabled:opacity-30">−</button>
+                          <input aria-label={`${row.label || '아이템'} 수량`} value={row.quantity} onChange={e => patchRow(row.id, { quantity: e.target.value.replace(/[^0-9]/g, '') })} placeholder="0" inputMode="numeric" className="w-10 min-w-0 bg-transparent text-center text-[13px] font-semibold text-t1 outline-none" />
+                          <button type="button" aria-label={`${row.label || '아이템'} 수량 늘리기`} onClick={() => patchRow(row.id, { quantity: String(quantity + 1) })} className="h-9 w-9 rounded-lg text-lg hover:bg-surface">+</button>
+                        </div>
+                        <label className="flex min-w-0 items-center justify-between gap-2 rounded-[9px] border border-line-str bg-white px-2.5 py-2">
                           <span className="text-[9px] font-semibold text-t3">단가</span>
                           <input
                             value={row.unitPrice}
@@ -464,14 +426,14 @@ export default function GatheringPage() {
                             className="w-11 min-w-0 bg-transparent text-right text-[13px] font-semibold text-t1 outline-none placeholder:text-t3/60"
                           />
                         </label>
-                        <div className="rounded-xl bg-white px-2.5 py-2 text-right shadow-[var(--shadow-sm)]">
+                        <div className="px-2.5 py-2 text-right">
                           <p className="text-[9px] text-t3">합계</p>
                           <p className="mt-1 text-[12px] font-bold text-t1">{formatMeso(rowTotal)}</p>
                         </div>
                         <button
                           type="button"
                           onClick={() => setRows((current) => current.filter((currentRow) => currentRow.id !== row.id))}
-                          className="h-9 w-full rounded-xl border border-red-500/20 bg-red-500/8 px-2 text-[10px] font-semibold text-red-600 transition-colors hover:bg-red-500/15 xl:w-auto"
+                          className="h-9 w-full rounded-[8px] px-2 text-[10px] font-semibold text-negative transition-colors hover:bg-surface xl:w-auto"
                         >
                           삭제
                         </button>
@@ -481,31 +443,28 @@ export default function GatheringPage() {
                 })}
               </div>
 
-              <div className="mt-4 rounded-2xl bg-[#f7efe1] px-4 py-3 text-right">
-                <p className="text-[11px] text-t3">총 수익</p>
-                <p className="mt-1 text-lg font-bold text-amber-600">{formatMeso(total)}</p>
+              <div className="gathering-result mt-4">
+                <p className="text-[11px] text-t3">예상 수익</p>
+                <p className="mt-1 text-2xl font-bold text-brand">{formatMeso(total)}</p>
+                <div>{rows.filter(row => parseNumber(row.quantity) * parseNumber(row.unitPrice) > 0).map(row => <span key={row.id}>{row.label || '이름 없는 항목'} <strong>{formatMeso(parseNumber(row.quantity) * parseNumber(row.unitPrice))}</strong></span>)}</div>
               </div>
             </div>
           </Card>
-        ) : (
-          <div className="mt-4 rounded-2xl border border-dashed border-line bg-white/65 px-4 py-8 text-sm text-t3">
-            채집 기록 입력 폼이 접혀 있어요. 버튼을 누르면 기록 추가 화면이 펼쳐집니다.
-          </div>
-        )}
+        ) : null}
 
-        <Card className="mt-4 border-amber-500/20 bg-[linear-gradient(135deg,rgba(255,250,241,0.98),rgba(255,255,255,0.95)_60%,rgba(250,244,232,0.98))]">
+        <section className="gathering-records mt-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-t1">채집 기록 · {selectedMonthLabel}</p>
               <p className="mt-1 text-[11px] leading-5 text-t3">이번 달 기록만 카드로 보여주고, 총 수익도 월별로 집계해요.</p>
             </div>
-            <div className="rounded-2xl bg-[#f7efe1] px-3 py-2 text-right">
+            <div className="text-right">
               <p className="text-[10px] text-t3">이번달 수익</p>
-              <p className="mt-1 text-base font-bold text-amber-600">{formatMeso(recordSummary.total)}</p>
+              <p className="mt-1 text-base font-bold text-gathering">{formatMeso(recordSummary.total)}</p>
             </div>
           </div>
 
-          <Card className="p-4 mt-4">
+          <div className="gathering-month-control mt-4">
             <div className="flex items-center justify-between gap-3">
               <button
                 type="button"
@@ -536,7 +495,7 @@ export default function GatheringPage() {
                 ›
               </button>
             </div>
-          </Card>
+          </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
             <div className="rounded-full bg-white/75 px-3 py-1.5 text-xs font-semibold text-t3">
@@ -552,29 +511,29 @@ export default function GatheringPage() {
 
           <div className="mt-4">
             {!isLoggedIn ? (
-              <div className="rounded-2xl border border-dashed border-line bg-white/70 px-4 py-8 text-center text-sm text-t3">
+              <div className="gathering-empty">
                 로그인하면 채집 기록을 불러올 수 있어요.
               </div>
             ) : recordsLoading ? (
-              <div className="rounded-2xl border border-line bg-white/70 px-4 py-8 text-center text-sm text-t3">
+              <div className="gathering-empty">
                 채집 기록을 불러오는 중이에요...
               </div>
             ) : recordsError ? (
-              <div className="rounded-2xl border border-red-500/20 bg-red-500/8 px-4 py-4 text-sm text-red-600">
+              <div className="gathering-empty text-negative">
                 {recordsError}
               </div>
             ) : records.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-line bg-white/70 px-4 py-8 text-center text-sm text-t3">
-                이번 달에 저장된 채집 기록이 없어요.
+              <div className="gathering-empty">
+                <strong>아직 채집 기록이 없어요.</strong><span>첫 기록을 추가하면 월별 수익을 확인할 수 있어요.</span><Button size="sm" className="mt-3" onClick={() => setIsEditorOpen(true)}>채집 기록 추가</Button>
               </div>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="gathering-record-list">
                 {records.map((record) => {
-                  const tone = getTabTone(record.item_tab);
+                  const tone = getTabTone();
                   return (
                     <div
                       key={record.id}
-                      className="relative overflow-hidden rounded-2xl border border-line bg-white/90 shadow-[var(--shadow-sm)]"
+                      className="gathering-record-row"
                     >
                       <div className={`h-1 w-full ${tone.softClass}`} />
                       <div className="flex items-start justify-between gap-3 p-3">
@@ -592,7 +551,7 @@ export default function GatheringPage() {
                         </div>
                         <div className="relative shrink-0 self-start pt-2 pb-5 text-right">
                           <p className="text-[10px] text-t3">합계</p>
-                          <p className="mt-1 text-base font-bold text-amber-600">{formatMeso(record.total_amount)}</p>
+                          <p className="mt-1 text-base font-bold text-gathering">{formatMeso(record.total_amount)}</p>
                           <button
                             type="button"
                             onClick={() => void handleDeleteRecord(record)}
@@ -611,7 +570,7 @@ export default function GatheringPage() {
               </div>
             )}
           </div>
-        </Card>
+        </section>
       </div>
     </main>
   );

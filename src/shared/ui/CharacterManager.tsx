@@ -5,10 +5,13 @@ import { useSession } from 'next-auth/react';
 import { useQueryClient } from '@tanstack/react-query';
 import Image from 'next/image';
 import { Button } from '@/shared/ui/Button';
-import { Card } from '@/shared/ui/Card';
 import { Input } from '@/shared/ui/Input';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
 import { recordQueryKeys } from '@/shared/lib/queries/useRecordsQuery';
+import {
+  accountMesoQueryKeys,
+  applyLocalAccountMesoDelta,
+} from '@/shared/lib/queries/useAccountMesoQuery';
 import {
   useCharacterMutations,
   useCharactersQuery,
@@ -16,9 +19,11 @@ import {
 import {
   backfillRecordsCharacterId,
   deleteRecordsByCharacterId,
+  getRecordsByOwner,
   migrateRecordsCharacterId,
 } from '@/shared/lib/db/local';
 import { formatDate } from '@/shared/lib/utils/formatters';
+import { enrichRecordWithCalculations } from '@/shared/lib/utils/calculations';
 import {
   CHARACTER_STORAGE_KEYS,
   clearCharacterSelection,
@@ -37,6 +42,7 @@ type ManagedCharacter = LocalCharacterProfile & {
 
 type CharacterManagerProps = {
   variant?: 'full' | 'compact';
+  headingId?: string;
 };
 
 function getCharacterKey(character: Partial<ManagedCharacter>) {
@@ -193,7 +199,7 @@ async function fetchMapleCharacter(nickname: string, forceRefresh = false) {
   return data;
 }
 
-export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
+export function CharacterManager({ variant = 'full', headingId }: CharacterManagerProps) {
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user?.id;
   const { localOwnerId } = useAuthStore();
@@ -488,12 +494,34 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
       }
 
       if (!isLoggedIn && localOwnerId) {
+        const localRecords = await getRecordsByOwner(localOwnerId);
+        let shardPrice = 7_000_000;
+        try {
+          const settings = JSON.parse(localStorage.getItem('maple_diary:settings') || '{}') as { shard_price?: number };
+          shardPrice = settings.shard_price ?? shardPrice;
+        } catch {
+          // Keep the default valuation used by hunting records.
+        }
         for (const targetKey of matchingCharacterKeys) {
+          const deletedRecords = localRecords.filter((record) => record.character_id === targetKey);
           await deleteRecordsByCharacterId(localOwnerId, targetKey);
+          for (const record of deletedRecords) {
+            const netRevenue = enrichRecordWithCalculations(record, shardPrice).net_revenue;
+            applyLocalAccountMesoDelta(
+              localOwnerId,
+              -netRevenue,
+              'hunting',
+              record.id,
+              '캐릭터 삭제로 사냥 기록 삭제',
+            );
+          }
         }
       }
 
-      await queryClient.invalidateQueries({ queryKey: recordQueryKeys.all });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: recordQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: accountMesoQueryKeys.all }),
+      ]);
 
       syncAfterDelete(nextRemaining, nextActive);
     } catch (err) {
@@ -503,93 +531,41 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
     }
   };
 
-  const wrapperClass =
-    variant === 'compact'
-      ? 'maple-panel rounded-[32px] border border-[#ead9bf] bg-card/96 p-4 shadow-[0_12px_30px_rgba(92,63,31,0.12)]'
-      : 'maple-panel rounded-[28px] border border-line bg-card/90 p-5 shadow-[var(--shadow-md)]';
   const expHistory = useMemo(() => {
-    if (activeCharacter?.character_exp_history?.length) {
-      return activeCharacter.character_exp_history;
-    }
-    return [];
+    const history = activeCharacter?.character_exp_history ?? [];
+    const ordered = [...history].sort((a, b) => a.date.localeCompare(b.date));
+    if (!ordered.length) return [];
+    const end = new Date(ordered[ordered.length - 1].date);
+    end.setDate(end.getDate() - 6);
+    return ordered.filter((entry) => new Date(entry.date) >= end);
   }, [activeCharacter?.character_exp_history]);
-  const expHistoryMax = useMemo(
-    () => Math.max(...expHistory.map((entry) => entry.exp_gain_percent), 1),
-    [expHistory],
-  );
-  const renderExperienceHistoryCard = (compact = false) => {
+  const expHistoryMax = Math.max(...expHistory.map((entry) => entry.exp_gain_percent), 1);
+  const expRate = activeCharacter?.character_exp_rate;
+  const hasExpRate = expRate !== null && expRate !== undefined && expRate !== '' && Number.isFinite(Number(expRate));
+  const renderExperienceHistoryCard = () => {
     if (!activeCharacter) return null;
-
-    const cardShellClass = compact
-      ? 'rounded-[18px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.98),rgba(247,241,231,0.98))] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]'
-      : 'rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]';
-
-    const chartShellClass = compact
-      ? 'mt-3 rounded-[14px] border border-[#eee1ca] bg-white/78 px-2 py-2'
-      : 'mt-4 rounded-[18px] border border-[#eee1ca] bg-white/75 px-3 py-4';
-
-    const emptyStateClass = compact
-      ? 'mt-3 rounded-[14px] border border-dashed border-[#e8ddc6] bg-white/60 px-3 py-4 text-center text-[10px] text-[#8b6f59]'
-      : 'mt-4 rounded-[18px] border border-dashed border-[#e8ddc6] bg-white/55 px-4 py-6 text-center text-[12px] text-[#8b6f59]';
-
     return (
-      <Card className={compact ? 'mt-3' : 'mt-4'}>
-        <div className={cardShellClass}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className={compact ? 'text-[10px] font-medium text-[#b8a28e]' : 'text-[11px] font-medium text-[#b8a28e]'}>
-                경험치 히스토리
-              </p>
-              <p className={compact ? 'mt-0.5 text-[12px] font-semibold tracking-[-0.04em] text-[#3a2517]' : 'mt-1 text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]'}>
-                Lv. {activeCharacter.character_level} → {activeCharacter.character_level + 1}
-              </p>
-            </div>
-            <p className={compact ? 'text-[10px] font-semibold text-[#8b6f59]' : 'text-[11px] font-semibold text-[#8b6f59]'}>
-              {formatPercent(activeCharacter.character_exp_rate)}
-            </p>
-          </div>
-
-          {expHistory.length > 0 ? (
-            <>
-              <div className={chartShellClass}>
-                <div className={compact ? 'flex h-24 items-end gap-1.5' : 'flex h-48 items-end gap-3'}>
-                  {expHistory.map((item) => {
-                    const height = Math.max((item.exp_gain_percent / expHistoryMax) * 100, item.exp_gain_percent > 0 ? (compact ? 18 : 20) : 6);
-                    return (
-                      <div key={item.date} className="flex min-w-0 flex-1 flex-col items-center">
-                        <p className={compact ? 'mb-1 text-[9px] font-semibold text-[#8b6f59]' : 'mb-2 text-[10px] font-semibold text-[#8b6f59]'}>
-                          {formatPercent(item.exp_gain_percent)}
-                        </p>
-                        <div className={compact ? 'flex h-16 w-full items-end justify-center' : 'flex h-36 w-full items-end justify-center'}>
-                          <div
-                            className={
-                              compact
-                                ? 'w-full max-w-[18px] rounded-t-[10px] bg-[linear-gradient(180deg,#fbbf24_0%,#fb923c_42%,#ef4444_100%)]'
-                                : 'w-full max-w-[34px] rounded-t-[14px] bg-[linear-gradient(180deg,#fbbf24_0%,#fb923c_42%,#ef4444_100%)] shadow-[0_8px_16px_rgba(239,68,68,0.12)]'
-                            }
-                            style={{ height: `${height}%` }}
-                          />
-                        </div>
-                        <p className={compact ? 'mt-1 text-[8px] font-medium text-[#a58b75]' : 'mt-2 text-[10px] font-medium text-[#a58b75]'}>
-                          {formatChartDate(item.date)}
-                        </p>
-                      </div>
-                    );
-                  })}
+      <section className="diary-character-experience" aria-label="경험치 성장">
+        <div className="diary-character-section-title"><h3>경험치 성장</h3><span>최근 7일</span></div>
+        <div className="diary-character-exp-value"><span>Lv. {activeCharacter.character_level} <span aria-hidden="true">→</span> Lv. {activeCharacter.character_level + 1}</span><strong>{hasExpRate ? formatPercent(expRate) : '—'}</strong></div>
+        {hasExpRate ? <progress className="diary-character-progress" value={Math.max(0, Math.min(100, Number(expRate)))} max={100} aria-label="다음 레벨까지 경험치 진행률" /> : <p className="diary-character-muted">현재 경험치 정보가 없어요.</p>}
+        <div className="diary-character-levels"><span>현재 {hasExpRate ? formatPercent(expRate) : '—'}</span><span>다음 레벨까지 {hasExpRate ? formatPercent(Math.max(0, 100 - Number(expRate))) : '—'}</span></div>
+        <div className="diary-character-chart-heading"><h4>일별 경험치 증가</h4></div>
+        {expHistory.length ? <>
+          <div className="diary-character-exp-chart" role="group" aria-label="최근 7일 일별 경험치 증가율">
+            {expHistory.map((item) => (
+              <div className="diary-character-exp-day" key={item.date}>
+                <div className="diary-character-bar-track">
+                  <button type="button" className="diary-character-exp-bar" style={{ height: `${Math.max(0, item.exp_gain_percent) / expHistoryMax * 100}%` }} aria-label={`${item.date} 경험치 증가 ${formatPercent(item.exp_gain_percent)}`}>
+                    <span className="diary-character-chart-tooltip">{formatChartDate(item.date)} · {formatPercent(item.exp_gain_percent)}</span>
+                  </button>
                 </div>
+                <time dateTime={item.date}>{formatChartDate(item.date)}</time>
               </div>
-              <div className={compact ? 'mt-2 flex items-center justify-between text-[9px] font-semibold text-[#b8a28e]' : 'mt-2 flex items-center justify-between text-[10px] font-semibold text-[#b8a28e]'}>
-                <span>Lv. {activeCharacter.character_level}</span>
-                <span>Lv. {activeCharacter.character_level + 1}</span>
-              </div>
-            </>
-          ) : (
-            <div className={emptyStateClass}>
-              {compact ? '기록이 없어요' : '최근 경험치 기록이 없어요'}
-            </div>
-          )}
-        </div>
-      </Card>
+            ))}
+          </div>
+        </> : <p className="diary-character-empty">최근 경험치 기록이 없어요.</p>}
+      </section>
     );
   };
   const openDrawer = () => {
@@ -619,7 +595,7 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
     }, 280);
   };
   const drawerMarkup = (
-    <div className="fixed inset-0 z-[120] isolate">
+    <div className="diary-character-selector fixed inset-0 z-[120] isolate">
       <button
         aria-label="캐릭터 선택 닫기"
         className={`absolute inset-0 z-0 bg-black/65 ${
@@ -779,186 +755,26 @@ export function CharacterManager({ variant = 'full' }: CharacterManagerProps) {
     </div>
   );
 
-  if (variant === 'compact') {
-    return (
-      <>
-        <Card className={wrapperClass}>
-          <div className="rounded-[30px] border border-[#ead9bf] bg-[linear-gradient(180deg,rgba(255,252,248,0.98),rgba(248,241,228,0.96))] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-            <div className="flex items-center justify-between gap-3">
-              <p className="maple-badge inline-flex rounded-full border border-[#f5c58e] bg-[linear-gradient(180deg,rgba(255,238,223,0.96),rgba(255,248,240,0.92))] px-2.5 py-1 text-[11px] font-semibold tracking-[-0.01em] text-[#d97706] shadow-[0_1px_0_rgba(255,255,255,0.8)_inset]">
-                🍁 My Character
-              </p>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={openDrawer}
-                className="h-8 rounded-full px-3 text-[11px]"
-              >
-                캐릭터 선택
-              </Button>
-            </div>
-
-            <div className="mt-5 grid grid-cols-[112px_1fr] items-center gap-4">
-              {activeCharacter?.image_url ? (
-                <div className="relative h-[116px] w-[116px] shrink-0 overflow-hidden rounded-[24px] border border-[#e8ddc6] bg-[#f1eadc] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-                  <Image
-                    src={activeCharacter.image_url}
-                    alt={activeCharacter.character_name}
-                    fill
-                    unoptimized
-                    className="object-cover scale-[2.18] [image-rendering:pixelated]"
-                  />
-                </div>
-              ) : (
-                <div className="flex h-[116px] w-[116px] shrink-0 items-center justify-center rounded-[24px] border border-[#e8ddc6] bg-[#f1eadc] text-3xl shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-                  🍁
-                </div>
-              )}
-
-              <div className="min-w-0 pt-1">
-                <h2 className="truncate text-[23px] font-extrabold leading-[1.05] tracking-[-0.05em] text-[#3a2517]">
-                  {activeCharacter?.character_name || '등록된 캐릭터 없음'}
-                </h2>
-                <p className="mt-2 truncate text-[14px] font-medium tracking-[-0.03em] text-[#8b6f59]">
-                  {activeCharacter?.character_class || (isLoggedIn ? '로그인 후 캐릭터를 추가해주세요' : '캐릭터를 추가해주세요')}
-                </p>
-              </div>
-            </div>
-
-            {activeCharacter ? (
-              <>
-                <div className="mt-3 grid grid-cols-2 gap-2.5">
-                  <div className="rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                    <p className="text-[11px] font-medium text-[#b8a28e]">월드</p>
-                    <p className="mt-1.5 text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]">
-                      {activeCharacter.character_world || '미지정'}
-                    </p>
-                  </div>
-                  <div className="rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                    <p className="text-[11px] font-medium text-[#b8a28e]">레벨</p>
-                    <p className="mt-1.5 text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]">
-                      Lv. {activeCharacter.character_level}
-                    </p>
-                  </div>
-                  <div className="rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                    <p className="text-[11px] font-medium text-[#b8a28e]">직업</p>
-                    <p className="mt-1.5 truncate text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]">
-                      {activeCharacter.character_class}
-                    </p>
-                  </div>
-                  <div className="rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                    <p className="text-[11px] font-medium text-[#b8a28e]">전투력</p>
-                    <p className="mt-1.5 whitespace-nowrap text-[15px] font-semibold tracking-[-0.04em] text-[#3a2517]">
-                      {formatCompactNumber(activeCharacter.character_combat_power)}
-                    </p>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="mt-5 rounded-[20px] border border-[#e8ddc6] bg-[linear-gradient(180deg,rgba(255,252,248,0.96),rgba(247,241,231,0.96))] p-4 text-center text-sm text-[#8b6f59] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                아직 선택된 캐릭터가 없어요
-              </div>
-            )}
-          </div>
-        </Card>
-
-        {activeCharacter && renderExperienceHistoryCard(true)}
-
-        {drawerPhase !== 'closed' && drawerMarkup}
-      </>
-    );
-  }
-
   return (
     <>
-      <Card className={wrapperClass}>
-        <div className="rounded-[24px] border border-amber-500/15 bg-[linear-gradient(160deg,rgba(245,158,11,0.18),rgba(245,158,11,0.06)_44%,rgba(255,255,255,0.18))] p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="maple-badge inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold text-amber-600">
-                🍁 현재 캐릭터
-              </p>
-              {activeCharacter ? (
-                <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-[10px] font-semibold text-amber-600">
-                  선택됨
-                </span>
-              ) : (
-                <span className="rounded-full bg-surface/80 px-2.5 py-1 text-[10px] font-semibold text-t3">
-                  아직 선택 없음
-                </span>
-              )}
-            </div>
-
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={openDrawer}
-              className="shrink-0 whitespace-nowrap"
-            >
-              캐릭터 선택
-            </Button>
+      <section className={`diary-character-panel ${variant === 'compact' ? 'diary-character-panel-compact' : ''}`} aria-label="캐릭터 프로필">
+        <div className="diary-character-section-title diary-character-profile-heading">
+          <h2 id={headingId}>내 캐릭터</h2>
+          <Button variant="secondary" size="sm" onClick={openDrawer}>캐릭터 변경</Button>
+        </div>
+        <div className="diary-character-identity">
+          <div className="diary-character-portrait">
+            {activeCharacter?.image_url ? <Image src={activeCharacter.image_url} alt={activeCharacter.character_name} fill unoptimized sizes="220px" className="object-contain [image-rendering:pixelated]" /> : <span aria-hidden="true">🍁</span>}
           </div>
-
-          <div className="mt-4 flex items-start gap-3 sm:gap-4">
-            {activeCharacter?.image_url ? (
-              <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-[26px] border border-line bg-surface shadow-[0_12px_24px_rgba(245,158,11,0.14)]">
-                <Image
-                  src={activeCharacter.image_url}
-                  alt={activeCharacter.character_name}
-                  fill
-                  unoptimized
-                  className="object-cover scale-[2.25] [image-rendering:pixelated]"
-                />
-              </div>
-            ) : (
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[26px] border border-line bg-surface text-2xl shadow-[0_12px_24px_rgba(245,158,11,0.1)]">
-                🍁
-              </div>
-            )}
-
-            <div className="min-w-0 flex-1">
-              <h2 className="truncate text-[22px] font-bold tracking-[-0.04em] text-t1">
-                {activeCharacter?.character_name || '등록된 캐릭터 없음'}
-              </h2>
-              <p className="mt-1 truncate text-xs text-t3">
-                {activeCharacter
-                  ? `${activeCharacter.character_world || '월드 미지정'} · ${activeCharacter.character_class}`
-                  : (isLoggedIn ? '로그인 계정과 동기화됩니다' : '이 브라우저에 저장됩니다')}
-              </p>
-              {activeCharacter && (
-                <>
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <div className="rounded-[20px] border border-line bg-card/82 px-3 py-2.5 text-center shadow-[0_1px_0_rgba(255,255,255,0.45)_inset]">
-                      <p className="text-[10px] text-t3">레벨</p>
-                      <p className="mt-1 text-[15px] font-bold tracking-[-0.03em] text-t1">Lv. {activeCharacter.character_level}</p>
-                    </div>
-                    <div className="rounded-[20px] border border-line bg-card/82 px-3 py-2.5 text-center shadow-[0_1px_0_rgba(255,255,255,0.45)_inset]">
-                      <p className="text-[10px] text-t3">전투력</p>
-                      <p className="mt-1 truncate text-[15px] font-bold tracking-[-0.03em] text-t1">{formatCompactNumber(activeCharacter.character_combat_power)}</p>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+          <div>
+            <h2>{activeCharacter?.character_name || (loading ? '캐릭터 불러오는 중…' : '등록된 캐릭터 없음')}</h2>
+            <p>{activeCharacter ? `Lv. ${activeCharacter.character_level} · ${activeCharacter.character_class} · ${activeCharacter.character_world || '월드 미지정'}` : '캐릭터를 추가해 주세요.'}</p>
+            {activeCharacter && <div className="diary-character-combat"><span>전투력</span><strong>{activeCharacter.character_combat_power == null ? '—' : formatCompactNumber(activeCharacter.character_combat_power)}</strong></div>}
           </div>
         </div>
-
-        {variant === 'full' && (
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <div className="rounded-2xl border border-line bg-surface/50 p-3">
-              <p className="text-[11px] text-t3">등록된 캐릭터</p>
-              <p className="mt-1 text-sm font-bold text-t1">{characters.length}개</p>
-            </div>
-            <div className="rounded-2xl border border-line bg-surface/50 p-3">
-              <p className="text-[11px] text-t3">저장 위치</p>
-              <p className="mt-1 text-sm font-bold text-t1">{isLoggedIn ? 'DB 동기화' : '로컬 저장'}</p>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {activeCharacter && renderExperienceHistoryCard(false)}
-
+        {variant === 'full' && <div className="diary-character-storage"><span>등록된 캐릭터 <strong>{characters.length}개</strong></span><span>{isLoggedIn ? '계정에 동기화됨' : '이 브라우저에 저장됨'}</span></div>}
+        {renderExperienceHistoryCard()}
+      </section>
       {drawerPhase !== 'closed' && drawerMarkup}
     </>
   );

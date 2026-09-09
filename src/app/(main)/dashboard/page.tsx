@@ -1,366 +1,69 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { useSession } from 'next-auth/react';
-import { useMigrateOnLogin } from '@/shared/lib/hooks/useMigrateOnLogin';
-import { useRecordsQuery } from '@/shared/lib/queries/useRecordsQuery';
-import { useExpensesQuery } from '@/shared/lib/queries/useExpensesQuery';
-import { useGoalsQuery } from '@/shared/lib/queries/useGoalsQuery';
-import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
-import { useDashboardStore } from '@/shared/lib/stores/useDashboardStore';
-import { useActiveCharacterId } from '@/shared/lib/hooks/useActiveCharacterId';
+import Image from 'next/image';
+import { HomeRecordAction } from '@/shared/ui/HomeRecordAction';
+import { HomeAssetFlow } from '@/shared/ui/HomeAssetFlow';
+import { AccountMesoCard } from '@/shared/ui/AccountMesoCard';
+import { useAccountMesoQuery } from '@/shared/lib/queries/useAccountMesoQuery';
+import { MapleActivityIcon } from '@/shared/ui/MapleActivityIcon';
 import { useStoredCharacterProfile } from '@/shared/lib/hooks/useStoredCharacterProfile';
-import { useBossRevenuePeriodSummaries } from '@/shared/lib/hooks/useBossRevenuePeriodSummaries';
-import { Card } from '@/shared/ui/Card';
-import { formatMeso, formatDate, formatDateKorean, formatTime } from '@/shared/lib/utils/formatters';
-import { filterRecordsByCharacter } from '@/shared/lib/utils/characterFilter';
-import type { Expense, RecordWithCalculations } from '@/shared/types';
-import { useDashboardInitialData } from './dashboard-initial-data-provider';
-
-function RevenueCard({ label, value }: { label: string; value: number }) {
-  return (
-    <Card className="min-w-0 p-3.5">
-      <p className="text-[11px] text-t3 mb-1">{label}</p>
-      <p className="text-base font-bold text-t1 truncate">{formatMeso(value)}</p>
-    </Card>
-  );
-}
-
-function InfoCard({ label, value }: { label: string; value: string }) {
-  return (
-    <Card className="min-w-0 p-3.5">
-      <p className="mb-1 text-[11px] text-t3">{label}</p>
-      <p className="truncate text-base font-bold text-t1">{value}</p>
-    </Card>
-  );
-}
-
-function getMonthBounds(date: Date) {
-  const start = new Date(date.getFullYear(), date.getMonth(), 1);
-  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-  return { start, end };
-}
-
-interface DayGroup {
-  date: string;
-  records: RecordWithCalculations[];
-  totalNetRevenue: number;
-  totalTimeMinutes: number;
-  netPerHour: number;
-}
-
-interface ExpenseGroup {
-  date: string;
-  expenses: Expense[];
-  totalAmount: number;
-}
-
-function groupByDate(records: RecordWithCalculations[]): DayGroup[] {
-  const map = new Map<string, RecordWithCalculations[]>();
-  for (const r of records) {
-    if (!map.has(r.date)) map.set(r.date, []);
-    map.get(r.date)!.push(r);
-  }
-  return Array.from(map.entries()).map(([date, recs]) => {
-    const totalNetRevenue = recs.reduce((s, r) => s + r.net_revenue, 0);
-    const totalTimeMinutes = recs.reduce((s, r) => s + r.time_minutes, 0);
-    const netPerHour = totalTimeMinutes > 0 ? Math.floor((totalNetRevenue / totalTimeMinutes) * 60) : 0;
-    return { date, records: recs, totalNetRevenue, totalTimeMinutes, netPerHour };
-  });
-}
-
-function groupExpensesByDate(expenses: Expense[]): ExpenseGroup[] {
-  const map = new Map<string, Expense[]>();
-  for (const expense of expenses) {
-    if (!map.has(expense.date)) map.set(expense.date, []);
-    map.get(expense.date)!.push(expense);
-  }
-  return Array.from(map.entries()).map(([date, items]) => ({
-    date,
-    expenses: items.sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)),
-    totalAmount: items.reduce((sum, item) => sum + item.amount, 0),
-  }));
-}
-
-function DayRow({ group }: { group: DayGroup }) {
-  const multi = group.records.length > 1;
-  return (
-    <Link
-      href="/records"
-      className="flex items-center justify-between rounded-xl border border-transparent px-2 py-3 transition-colors hover:border-line hover:bg-surface/50"
-    >
-      <div>
-        <p className="text-sm font-medium text-t1">{formatDateKorean(group.date)}</p>
-        <p className="mt-0.5 text-xs text-t3">
-          {formatTime(group.totalTimeMinutes)}
-          {multi && (
-            <span className="ml-2 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">
-              {group.records.length}회
-            </span>
-          )}
-        </p>
-      </div>
-      <div className="text-right">
-        <p className="text-sm font-bold text-t1">{formatMeso(group.totalNetRevenue)}</p>
-        <p className="text-[11px] text-t3">{formatMeso(group.netPerHour)}/h</p>
-      </div>
-    </Link>
-  );
-}
+import { useRouter } from 'next/navigation';
+import { useMigrateOnLogin } from '@/shared/lib/hooks/useMigrateOnLogin';
+import { useEconomy } from '@/shared/lib/hooks/useEconomy';
+import { useRecordModalStore } from '@/shared/lib/stores/useRecordModalStore';
+import { NextGoal, SignedMeso, SOURCE_META } from '@/shared/ui/EconomyOverview';
+import { formatDate, formatMeso } from '@/shared/lib/utils/formatters';
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const initialized = useRef(false);
-  useMigrateOnLogin();
-
-  const { data: session } = useSession();
-  const initialData = useDashboardInitialData();
-  const isLoggedIn = !!session?.user?.id || initialData !== null;
-  const { initializeLocal, localOwnerId } = useAuthStore();
-  const { todayRevenue, recentRecords, sevenDayStats } =
-    useDashboardStore();
-  const currentDate = useMemo(() => new Date(), []);
-  const { start: currentMonthStart, end: currentMonthEnd } = useMemo(() => getMonthBounds(currentDate), [currentDate]);
-  const storedActiveCharacterId = useActiveCharacterId();
-  const activeCharacterId = storedActiveCharacterId ?? initialData?.activeCharacterId ?? null;
-  const { data: records = [], isLoading: recordsLoading } = useRecordsQuery({
-    localOwnerId,
-    userId: session?.user?.id,
-    isLoggedIn,
-    activeCharacterId,
-    initialData: initialData?.records,
-  });
-  const { data: expenses = [] } = useExpensesQuery({
-    userId: session?.user?.id,
-    isLoggedIn,
-    initialData: initialData?.expenses,
-  });
-  const { data: goals = [] } = useGoalsQuery({
-    localOwnerId,
-    userId: session?.user?.id,
-    isLoggedIn,
-    initialData: initialData?.goals,
-  });
-  const bossCharacterId = activeCharacterId ?? null;
-  const {
-    weeklySummary: currentBossWeeklySummary,
-    monthlySummary: currentBossMonthlySummary,
-  } = useBossRevenuePeriodSummaries(
-    currentMonthStart,
-    currentMonthEnd,
-    isLoggedIn,
-    bossCharacterId,
-    initialData
-      ? {
-          weeklySummary: initialData.weeklyBossSummary,
-          monthlySummary: initialData.monthlyBossSummary,
-        }
-      : null,
-    session?.user?.id,
-  );
-
-  useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-
-    const done = localStorage.getItem('maple_diary:onboarding_done');
-    if (!done) {
-      router.replace('/onboarding');
-      return;
-    }
-    initializeLocal();
-  }, [initializeLocal, router]);
-
-  const visibleRecords = useMemo(
-    () => filterRecordsByCharacter(records, activeCharacterId),
-    [records, activeCharacterId],
-  );
-  const todayRevenueValue = useMemo(() => todayRevenue(visibleRecords), [todayRevenue, visibleRecords]);
-  const recent = useMemo(() => recentRecords(visibleRecords, 9), [recentRecords, visibleRecords]);
-  const recentGroups = useMemo(() => groupByDate(recent).slice(0, 3), [recent]);
-  const chartData = useMemo(() => sevenDayStats(visibleRecords), [sevenDayStats, visibleRecords]);
-  const currentMonthStartStr = useMemo(() => formatDate(currentMonthStart), [currentMonthStart]);
-  const currentMonthEndStr = useMemo(() => formatDate(currentMonthEnd), [currentMonthEnd]);
-  const currentMonthRecords = useMemo(
-    () => visibleRecords.filter((r) => r.date >= currentMonthStartStr && r.date <= currentMonthEndStr),
-    [visibleRecords, currentMonthStartStr, currentMonthEndStr],
-  );
-  const currentMonthExpenses = useMemo(
-    () => expenses.filter((expense) => expense.date >= currentMonthStartStr && expense.date <= currentMonthEndStr),
-    [expenses, currentMonthStartStr, currentMonthEndStr],
-  );
-  const currentHuntingIncome = useMemo(
-    () => currentMonthRecords.reduce((sum, r) => sum + r.total_revenue, 0),
-    [currentMonthRecords],
-  );
-  const currentHuntingExpense = useMemo(
-    () => currentMonthRecords.reduce((sum, r) => sum + r.material_cost, 0),
-    [currentMonthRecords],
-  );
-  const currentExpenseTotal = useMemo(
-    () => currentMonthExpenses.reduce((sum, expense) => sum + expense.amount, 0),
-    [currentMonthExpenses],
-  );
-  const recentExpenses = useMemo(() => groupExpensesByDate(currentMonthExpenses).slice(0, 3), [currentMonthExpenses]);
-  const currentBossIncome = currentBossWeeklySummary.totalRevenue + currentBossMonthlySummary.totalRevenue;
-  const currentTotalIncome = currentHuntingIncome + currentBossIncome;
-  const currentNetIncome = currentTotalIncome - currentHuntingExpense;
-  const monthActiveDays = useMemo(() => new Set(currentMonthRecords.map((r) => r.date)).size, [currentMonthRecords]);
-
-  const currentGoalTargetAmount = useMemo(() => {
-    return goals.reduce((sum, goal) => {
-      const targetAmount = goal.targets?.[0]?.target_amount ?? goal.meso_goal ?? 0;
-      return sum + targetAmount;
-    }, 0);
-  }, [goals]);
-
-  const goalProgressText = useMemo(() => {
-    if (currentGoalTargetAmount <= 0) return '목표 미설정';
-    const pct = Math.min((currentNetIncome / currentGoalTargetAmount) * 100, 999);
-    return `${pct.toFixed(1)}%`;
-  }, [currentGoalTargetAmount, currentNetIncome]);
-
+  const economy = useEconomy();
   const profile = useStoredCharacterProfile();
-
-  return (
-    <main className="maple-fade-up flex flex-col gap-5 px-4 pt-6 pb-4">
-      <Card className="overflow-hidden border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.2),rgba(245,158,11,0.06)_48%,transparent)] p-5">
-        <div className="mb-4 flex items-start justify-between">
-          <div>
-            <p className="maple-badge inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-600">🍁 Maple Diary</p>
-            <h1 className="maple-title mt-0.5 text-2xl font-bold text-t1">
-              {profile?.character_name || '캐릭터'} 님
-            </h1>
-            <p className="mt-1 text-xs text-t2">오늘도 재획 화이팅</p>
-          </div>
-          <Link
-            href="/settings"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-card/85 text-t2 shadow-[var(--shadow-sm)] transition-colors hover:text-t1"
-          >
-            ⚙️
-          </Link>
+  const router = useRouter();
+  useMigrateOnLogin();
+  const openRecord = useRecordModalStore(state => state.open);
+  useEffect(() => { if (!localStorage.getItem('maple_diary:onboarding_done')) router.replace('/onboarding'); }, [router]);
+  const { weekly } = economy;
+  const balance = useAccountMesoQuery(economy.options);
+  const balanceAdjustments = (balance.data?.history ?? []).filter(entry => entry.entryType === 'initial_balance' || entry.entryType === 'manual_adjustment').map(entry => ({
+    id: `balance-${entry.id}`,
+    date: entry.createdAt.slice(0, 10),
+    createdAt: entry.createdAt,
+    title: entry.entryType === 'initial_balance' ? '초기 잔액 설정' : '잔액 조정',
+    kind: 'balance' as const,
+    income: entry.delta > 0 ? entry.delta : 0,
+    expense: entry.delta < 0 ? Math.abs(entry.delta) : 0,
+  }));
+  const recent = [...economy.entries.filter(entry => entry.date <= formatDate(economy.today)).map(entry => ({ ...entry, createdAt: `${entry.date}T00:00:00` })), ...balanceAdjustments]
+    .sort((a,b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)).slice(0,5);
+  return <main className="diary-home maple-fade-up">
+    <div className="diary-page-heading"><div><div className="diary-eyebrow">나의 메이플 기록</div><h1>쌓이는 기록만큼, 가까워지는 목표</h1></div><HomeRecordAction /></div>
+    <section className="diary-weekly-primary" aria-labelledby="weekly-profit-title">
+      <div className="diary-section-heading"><div><h2 id="weekly-profit-title">이번 주 순수익</h2><p>{formatDate(economy.weekStart).slice(5).replace('-', '. ')} — {formatDate(economy.weekEnd).slice(5).replace('-', '. ')} · 계정 전체</p></div><Link href="/analysis">수익 분석 ↗</Link></div>
+      {economy.loading ? <p className="diary-empty" role="status">이번 주 기록을 불러오는 중…</p> : economy.error ? <p className="diary-error" role="alert">{economy.error.message} 페이지를 새로고침해 다시 시도해 주세요.</p> : <>
+        <div className="diary-profit-headline"><div className="diary-net"><strong><SignedMeso value={weekly.net} /></strong><span>메소</span></div><div className="diary-profit-formula" aria-label="총 수익 빼기 총 지출은 순수익"><span>총 수익 <strong>{formatMeso(weekly.income)}</strong></span><b aria-hidden="true">−</b><span>총 지출 <strong>{formatMeso(weekly.expense)}</strong></span><b aria-hidden="true">=</b><span className="diary-formula-result">순수익 <strong><SignedMeso value={weekly.net} /></strong></span></div></div>
+        <div className="diary-contributions" aria-label="주간 순수익 구성">
+          {(Object.keys(SOURCE_META) as Array<keyof typeof SOURCE_META>).map(key => <Link href={SOURCE_META[key].href} key={key} className={`diary-contribution ${key}`}><span className="diary-contribution-label"><span className="diary-activity-icon">{SOURCE_META[key].icon}</span>{SOURCE_META[key].label}<span aria-hidden="true">↗</span></span><strong><SignedMeso value={weekly.sources[key]} /></strong><small>{key === 'hunting' ? '메소 · 조각 평가액' : key === 'boss' ? '저장된 보스 정산액' : '아이템 평가액'}</small></Link>)}
+          <Link href="/expenses" className="diary-contribution expense"><span className="diary-contribution-label"><span className="diary-activity-icon"><MapleActivityIcon kind="expense" /></span>지출<span aria-hidden="true">↗</span></span><strong><SignedMeso value={-weekly.expense} /></strong><small>사냥 재료비 포함</small></Link>
         </div>
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="rounded-xl bg-card/80 p-3">
-            <p className="text-[11px] text-t3">총 사냥</p>
-            <p className="mt-1 text-lg font-bold text-t1">{visibleRecords.length}회</p>
-          </div>
-          <div className="rounded-xl bg-card/80 p-3">
-            <p className="text-[11px] text-t3">최근 7일 평균</p>
-            <p className="mt-1 text-lg font-bold text-t1">{formatMeso(Math.floor(chartData.average))}</p>
-          </div>
-        </div>
-      </Card>
-
-      <div className="grid grid-cols-3 gap-2.5">
-        <RevenueCard label="오늘" value={todayRevenueValue} />
-        <InfoCard label="목표 진행" value={goalProgressText} />
-        <InfoCard label="이번 달 활동일" value={`${monthActiveDays}일`} />
+        <details className="diary-calculation-note"><summary>집계 기준</summary><p>조각·채집은 기록된 단가 기준 평가액을 포함합니다. 보스는 저장된 주·월 정산액 기준이며 실제 처치일과 다를 수 있어요. 메이플포인트는 별도로 집계합니다.</p></details>
+        {!economy.isLoggedIn && <Link className="diary-login-note" href="/login">로그인하면 보스·채집·지출 기록도 함께 볼 수 있어요 ↗</Link>}
+      </>}
+    </section>
+    <section className="diary-current-balance" aria-label="현재 메소 잔액">
+      <AccountMesoCard showHistory weekStart={economy.weekStart} />
+    </section>
+    <HomeAssetFlow economy={economy} />
+    <NextGoal economy={economy} />
+    <section className="diary-activity"><div className="diary-section-heading"><div><h2>최근 활동</h2><p>차곡차곡 쌓인 나의 메이플 기록</p></div><Link href="/records">기록 보기 ↗</Link></div>
+      <div className="diary-activity-table"><div className="diary-activity-head"><span>활동</span><span>기록일</span><span>수익 / 지출</span></div>
+        {economy.loading ? <p className="diary-empty">기록을 불러오는 중…</p> : economy.error ? <p className="diary-empty">기록을 불러오지 못했어요.</p> : recent.length === 0 ? <div className="diary-empty"><p>아직 기록이 없어요. 오늘의 첫 수익을 남겨보세요.</p><button onClick={openRecord} className="diary-text-button">＋ 첫 사냥 기록하기</button></div> : recent.map(entry => {
+          const href = entry.kind === 'balance' ? '/dashboard' : entry.kind === 'expense' ? '/expenses' : SOURCE_META[entry.kind].href;
+          const characterId = 'characterId' in entry ? entry.characterId : undefined;
+          return <Link href={href} className="diary-activity-row" key={entry.id}><span><i className={`diary-activity-icon ${entry.kind}`}>{characterId === profile?.id && profile?.image_url ? <Image src={profile.image_url} alt={`${profile.character_name} 캐릭터`} width={36} height={36} unoptimized /> : entry.kind === 'balance' ? <MapleActivityIcon kind="meso" /> : entry.kind === 'expense' ? <MapleActivityIcon kind="expense" /> : SOURCE_META[entry.kind].icon}</i><span><strong>{entry.title}</strong><small>{entry.kind === 'balance' ? '기록 기준 잔액' : entry.kind === 'expense' ? entry.category || '지출' : SOURCE_META[entry.kind].label}</small></span></span><time dateTime={entry.date}>{entry.date.slice(5).replace('-', '. ')}</time><strong><SignedMeso value={entry.income - entry.expense} /></strong></Link>;
+        })}
       </div>
-
-      <Card>
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-t1">최근 7일</p>
-            <p className="text-[11px] text-t3">일자별 순수익 추이</p>
-          </div>
-          <p className="text-xs text-t3">평균 {formatMeso(Math.floor(chartData.average))}</p>
-        </div>
-        <MiniBarChart data={chartData.data} />
-      </Card>
-
-      <Card>
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-t1">이번 달 지출</p>
-            <p className="text-[11px] text-t3">구매/강화/소모 비용 요약</p>
-          </div>
-          <p className="text-xs font-semibold text-amber-600">{formatMeso(currentExpenseTotal)}</p>
-        </div>
-        {recentExpenses.length === 0 ? (
-          <div className="rounded-xl bg-surface/60 px-4 py-6 text-center">
-            <p className="text-sm text-t3">아직 지출이 없어요.</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {recentExpenses.map((group) => (
-              <div key={group.date} className="rounded-xl border border-line bg-card/80 p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs font-semibold text-t1">{formatDateKorean(group.date)}</p>
-                  <p className="text-xs font-semibold text-amber-600">-{formatMeso(group.totalAmount)}</p>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  {group.expenses.slice(0, 2).map((expense) => (
-                    <div key={expense.id} className="flex items-center justify-between gap-3 text-xs">
-                      <span className="truncate text-t2">{expense.title}</span>
-                      <span className="shrink-0 font-semibold text-t1">-{formatMeso(expense.amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      <Card>
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-semibold text-t1">최근 사냥</p>
-          <Link href="/records" className="text-xs font-semibold text-amber-500">
-            전체보기
-          </Link>
-        </div>
-
-        {recordsLoading && (
-          <p className="text-sm text-t3 py-4 text-center">불러오는 중...</p>
-        )}
-
-        {!recordsLoading && recentGroups.length === 0 && (
-          <div className="rounded-xl bg-surface/60 px-4 py-8 text-center">
-            <p className="text-sm text-t3">아직 사냥이 없어요. 첫 사냥을 추가해보세요!</p>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-1">
-          {recentGroups.map((g) => (
-            <DayRow key={g.date} group={g} />
-          ))}
-        </div>
-      </Card>
-    </main>
-  );
-}
-
-function MiniBarChart({ data }: { data: { date: string; revenue: number }[] }) {
-  if (data.length === 0) {
-    return (
-      <div className="flex h-28 items-center justify-center rounded-xl bg-surface/45 text-xs text-t3">
-        최근 7일 사냥이 없습니다
-      </div>
-    );
-  }
-
-  const maxValue = Math.max(...data.map((item) => Math.abs(item.revenue)), 1);
-
-  return (
-    <div className="flex h-28 items-end gap-2" role="img" aria-label="최근 7일 일자별 순수익 막대그래프">
-      {data.map((item) => {
-        const height = Math.max(4, Math.round((Math.abs(item.revenue) / maxValue) * 84));
-        return (
-          <div key={item.date} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
-            <div className="flex min-h-0 w-full flex-1 items-end justify-center">
-              <div
-                className={`w-full max-w-7 rounded-t-md ${item.revenue < 0 ? 'bg-red-400' : 'bg-amber-500'}`}
-                style={{ height }}
-                title={`${item.date}: ${formatMeso(item.revenue)}`}
-              />
-            </div>
-            <span className="text-[9px] text-t3">{item.date.slice(5)}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
+    </section>
+    <footer className="diary-footer"><span>🍁 메이플 다이어리</span><span>나만의 메이플 경제 다이어리</span></footer>
+  </main>;
 }

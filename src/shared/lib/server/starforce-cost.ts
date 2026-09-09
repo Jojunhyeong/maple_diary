@@ -63,7 +63,7 @@ function parseDiscountRate(events: unknown) {
   }, 0);
 }
 
-function roundToHundred(value: number) {
+export function roundToHundred(value: number) {
   return Math.max(0, Math.round(value / 100) * 100);
 }
 
@@ -99,6 +99,29 @@ export function calculateBaseStarforceCost(itemLevel: number, beforeStarforce: n
           starforceDivisor(beforeStarforce);
 
   return roundToHundred(raw);
+}
+
+export function calculateStarforceAmount({
+  baseCost,
+  beforeStarforce,
+  eventDiscountRate,
+  personalDiscountRate,
+  pcRoomDiscountApplied,
+  destroyDefence,
+}: {
+  baseCost: number;
+  beforeStarforce: number;
+  eventDiscountRate: number;
+  personalDiscountRate: number;
+  pcRoomDiscountApplied: boolean;
+  destroyDefence: boolean;
+}) {
+  const personalDiscount = beforeStarforce <= 16 ? personalDiscountRate : 0;
+  const pcRoomDiscount = beforeStarforce <= 16 && pcRoomDiscountApplied ? 5 : 0;
+  const totalBaseDiscount = Math.min(100, eventDiscountRate + personalDiscount + pcRoomDiscount);
+  const discountedBaseCost = roundToHundred(baseCost * (1 - totalBaseDiscount / 100));
+  const protectionSurcharge = destroyDefence ? baseCost * 2 : 0;
+  return discountedBaseCost + protectionSurcharge;
 }
 
 export function calculateStarforceHistory(
@@ -141,11 +164,15 @@ export function calculateStarforceHistory(
   const eventDiscountRate = Math.min(100, Math.max(0, parseDiscountRate(history.starforce_event_list)));
   const applicablePersonalDiscount =
     beforeStarforce <= 16 ? Math.min(15, Math.max(0, personalDiscountRate)) : 0;
-  const totalBaseDiscount = Math.min(100, eventDiscountRate + applicablePersonalDiscount);
-  const discountedBaseCost = roundToHundred(baseCost * (1 - totalBaseDiscount / 100));
   const destroyDefence = isEnabledFlag(history.destroy_defence);
-  const protectionSurcharge = destroyDefence ? baseCost * 2 : 0;
-  const amount = discountedBaseCost + protectionSurcharge;
+  const amount = calculateStarforceAmount({
+    baseCost,
+    beforeStarforce,
+    eventDiscountRate,
+    personalDiscountRate: applicablePersonalDiscount,
+    pcRoomDiscountApplied: false,
+    destroyDefence,
+  });
 
   return {
     status: 'calculated',

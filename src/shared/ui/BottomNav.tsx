@@ -6,43 +6,20 @@ import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
 
 const NAV_ITEMS = [
-  { href: '/dashboard', label: '대시보드', icon: <HomeIcon /> },
-  { href: '/records', label: '사냥', icon: <ListIcon /> },
-  { href: '/expenses', label: '지출', icon: <WalletIcon /> },
-  { href: '/boss', label: '보스', icon: <BossIcon /> },
-  { href: '/gathering', label: '채집', icon: <LeafIcon /> },
+  { href: '/dashboard', label: '홈', icon: <HomeIcon /> },
+  { href: '/records', label: '기록', icon: <ListIcon /> },
   { href: '/analysis', label: '분석', icon: <ChartIcon /> },
   { href: '/goals', label: '목표', icon: <TargetIcon /> },
 ];
 
 export function BottomNav() {
   const pathname = usePathname();
-
-  return (
-    <nav className="maple-panel flex w-full rounded-2xl border border-nav-line bg-nav shadow-[var(--shadow-md)] backdrop-blur-xl">
-      {NAV_ITEMS.map(({ href, label, icon }) => {
-        const active = pathname === href || (pathname?.startsWith(href + '/') ?? false);
-        return (
-          <Link
-            key={href}
-            href={href}
-            className={clsx(
-              'relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-xl transition-all duration-200',
-              active ? 'text-amber-500' : 'text-t3 hover:text-t2',
-            )}
-          >
-            {active && (
-              <span className="absolute inset-x-3 top-1 h-7 rounded-lg bg-[linear-gradient(135deg,rgba(217,119,6,0.28),rgba(239,68,68,0.14))] shadow-[0_0_18px_rgba(217,119,6,0.32)]" />
-            )}
-            <span className="relative z-10">{icon}</span>
-            <span className={clsx('relative z-10 text-[10px] font-semibold', active ? 'text-amber-500' : 'text-t3')}>
-              {label}
-            </span>
-          </Link>
-        );
-      })}
-    </nav>
-  );
+  return <nav className="diary-nav" aria-label="주요 메뉴">{NAV_ITEMS.map(({ href, label, icon }) => {
+    const active = pathname === href || pathname?.startsWith(href + '/') || (href === '/records' && ['/record', '/expenses', '/gathering'].includes(pathname ?? ''));
+    return <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={clsx('diary-nav-link', active && 'is-active')}>
+      {icon}<span>{label}</span>
+    </Link>;
+  })}</nav>;
 }
 
 function NavIcon({ children }: { children: ReactNode }) {
@@ -79,18 +56,6 @@ function ListIcon() {
   );
 }
 
-function WalletIcon() {
-  return (
-    <NavIcon>
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4.5 8.5h14.2a1.8 1.8 0 0 1 1.8 1.8v5.2a1.8 1.8 0 0 1-1.8 1.8H6.4a1.9 1.9 0 0 1-1.9-1.9V8.5z" />
-        <path d="M4.5 8.5V7.2a2 2 0 0 1 2-2h10.2" />
-        <path d="M15.1 12.7h2.1" />
-      </svg>
-    </NavIcon>
-  );
-}
-
 function ChartIcon() {
   return (
     <NavIcon>
@@ -98,29 +63,6 @@ function ChartIcon() {
         <path d="M4 19.2h16" />
         <path d="M7 16.5v-4.1M12 16.5V8M17 16.5V10.2" />
         <path d="M6 7.5l3.7-2.3 3.3 2.1 5-3.2" />
-      </svg>
-    </NavIcon>
-  );
-}
-
-function LeafIcon() {
-  return (
-    <NavIcon>
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M19.3 4.7c-4.9.2-8.8 1.6-11.5 4.3C5 11.8 4.2 15.2 4.4 19.3c4.1.2 7.5-.6 10.3-2.4 2.7-1.7 4.1-4.8 4.6-9.1-.1-1-.1-2.1 0-3.1z" />
-        <path d="M7.2 16.8c2.1-2.5 4.6-4.4 7.5-5.6" />
-      </svg>
-    </NavIcon>
-  );
-}
-
-function BossIcon() {
-  return (
-    <NavIcon>
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4.5 8.5l2.8 3 3.2-4 2.2 4.1 2.8-3.1 3.5 5.7H5.2z" />
-        <path d="M6 16h12" />
-        <path d="M7.5 16l1.3 3.5h6.4L16.5 16" />
       </svg>
     </NavIcon>
   );

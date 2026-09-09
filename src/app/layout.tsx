@@ -9,7 +9,7 @@ import { QueryProvider } from "@/shared/ui/QueryProvider";
 
 export const metadata: Metadata = {
   title: "Maple Diary",
-  description: "메이플스토리 재획 수익 추적 대시보드",
+  description: "메이플스토리 수익과 지출, 자산과 목표를 한눈에 보는 개인 경제 다이어리",
   icons: {
     icon: '/favicon.svg',
   },
@@ -18,7 +18,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

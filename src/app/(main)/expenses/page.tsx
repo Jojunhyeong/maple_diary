@@ -68,18 +68,18 @@ export default function ExpensesPage() {
     userId: session?.user?.id,
     isLoggedIn,
   });
-  const { deleteExpense } = useExpenseMutations({ isLoggedIn });
+  const { deleteExpense, togglePcRoomDiscount, isTogglingPcRoomDiscount } = useExpenseMutations({ isLoggedIn });
   const { data: nexonConnection, isLoading: isNexonStatusLoading } = useNexonConnectionQuery({
     userId: session?.user?.id,
     isLoggedIn,
   });
-  const { syncStarforce, isStarforceSyncing } = useNexonConnectionMutations({ isLoggedIn });
+  const { syncEnhancements, isEnhancementSyncing } = useNexonConnectionMutations({ isLoggedIn });
   const isNexonConnected = !!nexonConnection?.connected;
   const { open, openForEdit } = useExpenseModalStore();
   const [isMaplePointOpen, setIsMaplePointOpen] = useState(false);
   const [isMaplePointManualOpen, setIsMaplePointManualOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'meso' | 'maple-point'>('meso');
-  const [starforceSyncMessage, setStarforceSyncMessage] = useState('');
+  const [enhancementSyncMessage, setEnhancementSyncMessage] = useState('');
 
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth(new Date()));
 
@@ -109,7 +109,7 @@ export default function ExpensesPage() {
     try {
       await deleteExpense(expenseId);
     } catch (error) {
-      setStarforceSyncMessage(error instanceof Error ? error.message : '지출을 삭제하지 못했어요.');
+      setEnhancementSyncMessage(error instanceof Error ? error.message : '지출을 삭제하지 못했어요.');
     }
   };
 
@@ -117,43 +117,65 @@ export default function ExpensesPage() {
     setActiveTab(tab);
   };
 
-  const handleStarforceSync = async () => {
-    setStarforceSyncMessage('');
+  const handlePcRoomDiscount = async (expense: Expense) => {
+    setEnhancementSyncMessage('');
     try {
-      const payload = await syncStarforce();
+      await togglePcRoomDiscount({
+        expenseId: expense.id,
+        applied: !expense.pc_room_discount_applied,
+      });
+      setEnhancementSyncMessage(
+        expense.pc_room_discount_applied
+          ? 'PC방 할인을 해제하고 지출 및 현재 잔액을 다시 계산했어요.'
+          : 'PC방 할인 5%를 적용하고 지출 및 현재 잔액을 다시 계산했어요.',
+      );
+    } catch (error) {
+      setEnhancementSyncMessage(error instanceof Error ? error.message : 'PC방 할인을 변경하지 못했어요.');
+    }
+  };
+
+  const handleEnhancementSync = async () => {
+    setEnhancementSyncMessage('');
+    try {
+      const payload = await syncEnhancements();
 
       const importedAttempts = payload.importedAttempts ?? 0;
+      const starforceAttempts = payload.starforceAttempts ?? 0;
+      const potentialAttempts = payload.potentialAttempts ?? 0;
       const totalAmount = payload.totalAmount ?? 0;
       const skippedCount = payload.skippedCount ?? 0;
       if (importedAttempts === 0 && skippedCount === 0) {
-        setStarforceSyncMessage('새로운 스타포스 강화 내역이 없어요.');
+        setEnhancementSyncMessage('새로운 스타포스·잠재능력 재설정 내역이 없어요.');
       } else {
         const importedMessage =
           importedAttempts > 0
-            ? `${importedAttempts}회, ${formatMeso(totalAmount)}의 계산 강화비를 반영했어요.`
+            ? `스타포스 ${starforceAttempts}회, 잠재능력 재설정 ${potentialAttempts}회 · ${formatMeso(totalAmount)}을 반영했어요.`
             : '계산 가능한 신규 강화비가 없어요.';
         const skippedMessage =
           skippedCount > 0 ? ` 정확히 계산할 수 없는 ${skippedCount}회는 제외했어요.` : '';
-        setStarforceSyncMessage(`${importedMessage}${skippedMessage}`);
+        setEnhancementSyncMessage(`${importedMessage}${skippedMessage}`);
       }
     } catch (error) {
-      setStarforceSyncMessage(error instanceof Error ? error.message : '강화비를 동기화하지 못했어요.');
+      setEnhancementSyncMessage(error instanceof Error ? error.message : '강화비를 동기화하지 못했어요.');
     }
   };
 
   return (
-    <main className="maple-fade-up flex flex-col gap-4 px-4 pt-6 pb-4">
-      <div>
-        <h1 className="maple-title text-2xl font-bold text-t1">지출 장부</h1>
-        <p className="mt-1 text-xs text-t3">메소와 메포 지출을 정리해보세요</p>
+    <main className="diary-expenses-page maple-fade-up flex flex-col gap-4">
+      <div className="diary-record-toolbar">
+        <div><h2>지출 장부</h2><p>메소와 메이플포인트 지출을 정리해 보세요.</p></div>
+        <div className="diary-record-actions">
+          {isMaplePointTab && <button type="button" className="diary-text-button" onClick={() => setIsMaplePointOpen(true)}>콘텐츠 관리</button>}
+          <Button type="button" size="sm" onClick={isMaplePointTab ? () => setIsMaplePointManualOpen(true) : open}>＋ 지출 추가</Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 rounded-2xl bg-surface p-1">
+      <div className="expenses-tabs grid grid-cols-2 gap-1 bg-surface p-1">
         <button
           type="button"
           onClick={() => handleTabChange('meso')}
-          className={`rounded-xl px-3 py-3 text-sm font-semibold transition-colors ${
-            activeTab === 'meso' ? 'bg-white text-t1 shadow-[0_8px_18px_rgba(0,0,0,0.06)]' : 'text-t3'
+          className={`rounded-[7px] px-3 py-2.5 text-sm font-semibold transition-colors ${
+            activeTab === 'meso' ? 'bg-brand-soft text-brand' : 'text-t3'
           }`}
         >
           메소
@@ -161,86 +183,66 @@ export default function ExpensesPage() {
         <button
           type="button"
           onClick={() => handleTabChange('maple-point')}
-          className={`rounded-xl px-3 py-3 text-sm font-semibold transition-colors ${
-            activeTab === 'maple-point' ? 'bg-white text-t1 shadow-[0_8px_18px_rgba(0,0,0,0.06)]' : 'text-t3'
+          className={`rounded-[7px] px-3 py-2.5 text-sm font-semibold transition-colors ${
+            activeTab === 'maple-point' ? 'bg-brand-soft text-brand' : 'text-t3'
           }`}
         >
           메포
         </button>
       </div>
 
-      {isMaplePointTab ? (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setIsMaplePointOpen(true)}
-            className="group flex min-h-[60px] flex-col items-center justify-center rounded-2xl border border-amber-500/20 bg-[linear-gradient(135deg,#f59e0b,#ea7a14)] px-3 py-2 text-center text-white shadow-[0_12px_24px_rgba(217,119,6,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0"
-          >
-            <span className="text-[14px] font-bold leading-tight">컨텐츠 관리</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsMaplePointManualOpen(true)}
-            className="group flex min-h-[60px] flex-col items-center justify-center rounded-2xl border border-line bg-card/95 px-3 py-2 text-center text-t1 shadow-[var(--shadow-sm)] transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-500/35 hover:bg-card active:translate-y-0"
-          >
-            <span className="text-[14px] font-bold leading-tight">수동 입력</span>
-          </button>
-        </div>
-      ) : (
+      {!isMaplePointTab && (
         <>
-          <Button type="button" size="lg" fullWidth onClick={open}>
-            + 지출 추가
-          </Button>
-
-          <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.12),rgba(245,158,11,0.03)_65%,transparent)] p-4">
+          <section className="starforce-integration">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-t1">스타포스 강화비</p>
+                  <p className="text-sm font-semibold text-t1">강화비 자동 기록</p>
                   {isNexonConnected && (
-                    <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] font-semibold text-green-600">
+                    <span className="rounded-[6px] bg-positive/10 px-2 py-0.5 text-[10px] font-semibold text-positive">
                       연결됨
                     </span>
                   )}
                 </div>
                 <p className="mt-1 text-[11px] leading-5 text-t3">
-                  넥슨 강화 이력에서 계산 가능한 신규 지출을 가져와요.
+                  스타포스와 잠재능력 재설정 이력에서 계산 가능한 신규 지출을 가져와요.
                 </p>
               </div>
 
               {isNexonStatusLoading ? (
                 <span className="shrink-0 text-xs text-t3">확인 중...</span>
               ) : isNexonConnected ? (
-                <button
+                <Button
                   type="button"
-                  onClick={() => void handleStarforceSync()}
-                  disabled={isStarforceSyncing}
-                  className="shrink-0 rounded-full bg-amber-500 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-amber-500/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  size="sm"
+                  onClick={() => void handleEnhancementSync()}
+                  disabled={isEnhancementSyncing}
+                  className="shrink-0"
                 >
-                  {isStarforceSyncing ? '동기화 중...' : '지금 동기화'}
-                </button>
+                  {isEnhancementSyncing ? '동기화 중...' : '지금 동기화'}
+                </Button>
               ) : (
                 <Link
                   href="/settings"
-                  className="shrink-0 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-600"
+                  className="shrink-0 rounded-[8px] border border-brand/25 bg-brand-soft px-3 py-2 text-xs font-semibold text-brand"
                 >
-                  API 연결
+                  넥슨 연결
                 </Link>
               )}
             </div>
-            {starforceSyncMessage && (
+            {enhancementSyncMessage && (
               <p className="mt-2 border-t border-line/70 pt-2 text-xs leading-5 text-t2">
-                {starforceSyncMessage}
+                {enhancementSyncMessage}
               </p>
             )}
-          </Card>
+          </section>
         </>
       )}
 
     
         
 
-        <Card className="p-4">
+        <section className="expenses-month-control">
           <div className="flex items-center justify-between gap-3">
             <button
               type="button"
@@ -263,10 +265,10 @@ export default function ExpensesPage() {
               ›
             </button>
           </div>
-        </Card>
+        </section>
      
 
-      <Card variant="highlight">
+      <section className="expenses-summary">
         <div className="grid grid-cols-3 gap-2 text-center">
           <div>
             <p className="text-[11px] text-t3">{isMaplePointTab ? '총 메포' : '총 지출'}</p>
@@ -281,7 +283,7 @@ export default function ExpensesPage() {
             <p className="mt-1 text-base font-bold text-t1">{averageAmountLabel}</p>
           </div>
         </div>
-      </Card>
+      </section>
 
       <MaplePointCalculatorModal isOpen={isMaplePointOpen} onClose={() => setIsMaplePointOpen(false)} />
       <MaplePointManualExpenseModal
@@ -292,9 +294,7 @@ export default function ExpensesPage() {
       {loading && <p className="py-8 text-center text-sm text-t3">지출을 불러오는 중이에요.</p>}
 
       {!loading && groupedExpenses.length === 0 && (
-        <Card className="py-10 text-center">
-          <p className="text-sm text-t3">이 달에는 아직 지출이 없어요</p>
-        </Card>
+        <div className="expenses-empty"><strong>이 달에는 아직 지출이 없어요.</strong><p>첫 지출을 추가하면 월별 합계와 평균을 확인할 수 있어요.</p></div>
       )}
 
       <div className="flex flex-col gap-3">
@@ -304,6 +304,8 @@ export default function ExpensesPage() {
             group={group}
             onEdit={openForEdit}
             onDelete={handleDelete}
+            onTogglePcRoomDiscount={(expense) => void handlePcRoomDiscount(expense)}
+            isTogglingPcRoomDiscount={isTogglingPcRoomDiscount}
           />
         ))}
       </div>
@@ -315,13 +317,17 @@ function ExpenseDayGroupCard({
   group,
   onEdit,
   onDelete,
+  onTogglePcRoomDiscount,
+  isTogglingPcRoomDiscount,
 }: {
   group: ExpenseGroup;
   onEdit: (expense: Expense) => void;
   onDelete: (expenseId: string) => void;
+  onTogglePcRoomDiscount: (expense: Expense) => void;
+  isTogglingPcRoomDiscount: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const hasMultiple = group.expenses.length > 1;
+  const [expanded, setExpanded] = useState(!hasMultiple);
 
   return (
     <Card className="p-3.5">
@@ -350,11 +356,30 @@ function ExpenseDayGroupCard({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-t1">{expense.title}</p>
-                  <p className="mt-0.5 text-xs text-t3">{expense.category || '기타'}</p>
+                  <p className="mt-0.5 text-xs text-t3">{expense.category || '기타'}{expense.memo?.startsWith('넥슨 API 계산 ·') && <span className="ml-2 rounded bg-sky-50 px-2 py-1 text-[10px] text-sky-700">⚡ 넥슨 연동 · 계산 지출</span>}</p>
                 </div>
                 <p className="shrink-0 text-sm font-bold text-t1">-{formatMeso(expense.amount)}</p>
               </div>
               {expense.memo && <p className="mt-2 text-xs leading-5 text-t2">{expense.memo}</p>}
+              {expense.nexon_history_type === 'starforce' && (
+                <button
+                  type="button"
+                  onClick={() => onTogglePcRoomDiscount(expense)}
+                  disabled={isTogglingPcRoomDiscount || !expense.pc_room_discount_eligible}
+                  aria-pressed={!!expense.pc_room_discount_applied}
+                  className={`mt-2 rounded-[8px] border px-2.5 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                    expense.pc_room_discount_applied
+                      ? 'border-brand/30 bg-brand-soft text-brand'
+                      : 'border-line bg-card text-t2 hover:border-brand/30 hover:text-brand'
+                  }`}
+                >
+                  {!expense.pc_room_discount_eligible
+                    ? 'PC방 할인 대상 없음 · 18성 이상'
+                    : expense.pc_room_discount_applied
+                      ? 'PC방 할인 5% 적용됨 ✓'
+                      : 'PC방 할인 적용'}
+                </button>
+              )}
               <div className="mt-3 flex items-center justify-between gap-2">
                 <p className="text-[11px] text-t3">등록일 {formatDateKorean(expense.date)}</p>
                 <div className="flex gap-2">

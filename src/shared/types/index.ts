@@ -89,6 +89,9 @@ export interface Expense {
   updated_at: string;
   sync_status: SyncStatus;
   local_id?: string;
+  nexon_history_type?: 'starforce' | 'potential';
+  pc_room_discount_applied?: boolean;
+  pc_room_discount_eligible?: boolean;
 }
 
 export type GatheringItemTab = "seed" | "flower" | "ore";

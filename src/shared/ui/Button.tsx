@@ -21,13 +21,13 @@ export function Button({
   return (
     <button
       className={clsx(
-        'inline-flex items-center justify-center rounded-xl font-semibold tracking-[-0.01em] transition-all duration-200 cursor-pointer',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-app',
+        'inline-flex items-center justify-center rounded-[9px] font-semibold tracking-[-0.01em] transition-colors duration-150 cursor-pointer',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:ring-offset-2 focus-visible:ring-offset-app',
         {
-          'maple-btn-primary bg-[linear-gradient(135deg,#f59e0b,#dc6a0b)] text-white shadow-[0_12px_24px_rgba(217,119,6,0.32)] hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0': variant === 'primary',
-          'bg-surface/90 text-t1 border border-line hover:bg-surface hover:-translate-y-0.5 active:translate-y-0': variant === 'secondary',
-          'bg-transparent text-t2 hover:bg-surface/70 hover:text-t1': variant === 'ghost',
-          'bg-red-500 text-white shadow-[0_10px_20px_rgba(239,68,68,0.25)] hover:-translate-y-0.5 hover:bg-red-600 active:translate-y-0': variant === 'danger',
+          'maple-btn-primary bg-brand text-white hover:bg-brand-hover': variant === 'primary',
+          'border border-line bg-card text-t1 hover:border-brand/25 hover:bg-brand-soft': variant === 'secondary',
+          'bg-transparent text-t2 hover:bg-surface hover:text-t1': variant === 'ghost',
+          'bg-negative text-white hover:brightness-95': variant === 'danger',
         },
         {
           'h-9 px-4 text-sm': size === 'sm',
@@ -35,7 +35,7 @@ export function Button({
           'h-14 px-8 text-[17px]': size === 'lg',
         },
         { 'w-full': fullWidth },
-        { 'opacity-45 cursor-not-allowed hover:translate-y-0': disabled },
+        { 'opacity-45 cursor-not-allowed': disabled },
         className,
       )}
       disabled={disabled}
