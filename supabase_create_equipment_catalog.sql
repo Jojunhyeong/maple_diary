@@ -43,7 +43,7 @@ insert into public.equipment_catalog (slug, name, slot, part, job_group, level, 
   ('continuous-ring-lv4', '컨티뉴어스 링 Lv.4', '반지', '반지', null, 110, 'https://media.maplestorywiki.net/yetidb/Eqp_Continuous_Ring.png', 'https://maplestorywiki.net/w/Continuous_Ring'),
   ('endless-terror', '거대한 공포', '반지', '반지', null, 200, null, null),
   ('whisper-of-the-source', '근원의 속삭임', '반지', '반지', null, 250, 'https://media.maplestorywiki.net/yetidb/Eqp_Whisper_of_the_Source.png', null),
-  ('Entrancing-Nightmare', '황홀한 악몽', '반지', '반지', null, 250, null, null),
+  ('Entrancing-Nightmare', '황홀한 악몽', '반지', '반지', null, 250, 'https://media.maplestorywiki.net/yetidb/Eqp_Blissful_Nightmare.png', 'https://maplestorywiki.net/w/Blissful_Nightmare'),
   
 
   ('mechanator-pendant', '메커네이터 펜던트', '펜던트', '펜던트', null, 120, null, null),
@@ -205,6 +205,7 @@ on conflict (slug) do update set
 update public.equipment_catalog set wiki_title = 'Great Dread' where slug = 'endless-terror';
 update public.equipment_catalog set wiki_title = 'Ring of Restraint' where slug = 'ring-of-restraint-lv4';
 update public.equipment_catalog set wiki_title = 'Continuous Ring' where slug = 'continuous-ring-lv4';
+update public.equipment_catalog set wiki_title = 'Blissful Nightmare' where slug = 'Entrancing-Nightmare';
 update public.equipment_catalog set wiki_title = 'Whisper of the Source' where slug = 'whisper-of-the-source';
 update public.equipment_catalog set wiki_title = 'Mechanator Pendant' where slug = 'mechanator-pendant';
 update public.equipment_catalog set wiki_title = 'Dominator Pendant' where slug = 'dominator-pendant';
