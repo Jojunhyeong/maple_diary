@@ -39,6 +39,8 @@ insert into public.equipment_catalog (slug, name, slot, part, job_group, level, 
   ('silver-blossom-ring', '실버 블로썸 링', '반지', '반지', null, 120, null, null),
   ('meister-ring', '마이스터 링', '반지', '반지', null, 140, null, null),
   ('guardian-angel-ring', '가디언 엔젤 링', '반지', '반지', null, 160, null, null),
+  ('ring-of-restraint-lv4', '리스트레인트 링 Lv.4', '반지', '반지', null, 110, 'https://media.maplestorywiki.net/yetidb/Eqp_Ring_of_Restraint.png', 'https://maplestorywiki.net/w/Ring_of_Restraint'),
+  ('continuous-ring-lv4', '컨티뉴어스 링 Lv.4', '반지', '반지', null, 110, 'https://media.maplestorywiki.net/yetidb/Eqp_Continuous_Ring.png', 'https://maplestorywiki.net/w/Continuous_Ring'),
   ('endless-terror', '거대한 공포', '반지', '반지', null, 200, null, null),
   ('whisper-of-the-source', '근원의 속삭임', '반지', '반지', null, 250, 'https://media.maplestorywiki.net/yetidb/Eqp_Whisper_of_the_Source.png', null),
   ('Entrancing-Nightmare', '황홀한 악몽', '반지', '반지', null, 250, null, null),
@@ -201,6 +203,8 @@ on conflict (slug) do update set
   updated_at = now();
 
 update public.equipment_catalog set wiki_title = 'Great Dread' where slug = 'endless-terror';
+update public.equipment_catalog set wiki_title = 'Ring of Restraint' where slug = 'ring-of-restraint-lv4';
+update public.equipment_catalog set wiki_title = 'Continuous Ring' where slug = 'continuous-ring-lv4';
 update public.equipment_catalog set wiki_title = 'Whisper of the Source' where slug = 'whisper-of-the-source';
 update public.equipment_catalog set wiki_title = 'Mechanator Pendant' where slug = 'mechanator-pendant';
 update public.equipment_catalog set wiki_title = 'Dominator Pendant' where slug = 'dominator-pendant';
