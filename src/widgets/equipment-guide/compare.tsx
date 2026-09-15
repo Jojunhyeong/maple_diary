@@ -28,12 +28,12 @@ export function Compare({ characterName, characterJob, selectedSlot, stat }: { c
       : !stat ? <><p>{characterName} · {slot?.label} · {own.name}</p><p>스타포스: {star != null && star !== '' ? star + '성' : '정보 없음'}<br />잠재능력: {optionLabel(own.raw ?? {})}<br />에디셔널: {optionLabel(own.raw ?? {}, true)}</p><p className={styles.sample}>{characterJob}의 선택 구간 표본이 확보되면 내 장비와 비교할 수 있어요.</p></>
       : <><p>{characterName} · {own.name} <span className={styles.sample}>/ 비교 기준은 수집한 실제 장비 표본입니다.</span></p>
         {characterJob !== stat.job && <p className={styles.notice}>내 캐릭터와 선택한 통계의 직업이 달라요.</p>}
-        <div className={styles.tableWrap}><table><thead><tr><th>항목</th><th>내 장비</th><th>선택 구간 · 대표 아이템</th></tr></thead><tbody>
+        <div className={styles.tableWrap}><table><thead><tr><th>항목</th><th>내 장비</th><th>가까운 전투력 표본</th></tr></thead><tbody>
           <tr><th>스타포스</th><td>{star ? star + '성' : '정보 없음'}</td><td>중앙값 {stat.starforce.median ?? '—'}성</td></tr>
           <tr><th>잠재능력</th><td>{own.raw?.potential_option_grade || '정보 없음'}<br />{optionLabel(own.raw ?? {})}</td><td>{stat.potentialOptions?.[0]?.label ?? '정보 없음'}<br />{stat.potentialOptions?.[0]?.ratio ?? 0}% 사용</td></tr>
           <tr><th>에디셔널</th><td>{own.raw?.additional_potential_option_grade || '정보 없음'}<br />{optionLabel(own.raw ?? {}, true)}</td><td>{stat.additionalPotentialOptions?.[0]?.label ?? '정보 없음'}<br />{stat.additionalPotentialOptions?.[0]?.ratio ?? 0}% 사용</td></tr>
         </tbody></table></div>
-        {difference !== null && <p>스타포스는 선택 구간 대표 아이템 중앙값{difference === 0 ? '과 같아요.' : '보다 ' + Math.abs(difference) + '성 ' + (difference > 0 ? '높아요.' : '낮아요.')}</p>}
+        {difference !== null && <p>스타포스는 비교 표본의 대표 아이템 중앙값{difference === 0 ? '과 같아요.' : '보다 ' + Math.abs(difference) + '성 ' + (difference > 0 ? '높아요.' : '낮아요.')}</p>}
       </>}
   </section>;
 }

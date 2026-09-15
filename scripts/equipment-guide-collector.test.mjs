@@ -37,7 +37,7 @@ test('interrupted rows resume, completed pages make no requests, and locks are r
     await run(100);
     const snapshot = JSON.parse(await readFile(join(cwd, 'src/shared/data/equipment-guide-snapshot.json'), 'utf8'));
     assert.equal(snapshot.sampleCount, 10);
-    assert.equal(snapshot.stats.length, 5);
+    assert.equal(snapshot.stats.length, 140);
     assert.ok(snapshot.stats.some(stat => stat.job === '아델'));
     assert.ok(snapshot.stats.some(stat => stat.job === '렌'));
     const result = await run(100);

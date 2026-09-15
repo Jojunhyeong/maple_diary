@@ -4,10 +4,8 @@ export const COMBAT_BUCKETS = Array.from({ length: 27 }, (_, index) => {
   return { id: `${min / 1_000_000}m-${max / 1_000_000}m`, label: `${min === 50_000_000 ? '5천만' : min / 100_000_000 + '억'} ~ ${max / 100_000_000}억`, min, max };
 });
 export const MIN_SAMPLE_COUNT = 30;
-export function findCombatBucket(power: number | null | undefined) {
-  if (typeof power !== 'number' || !Number.isFinite(power)) return undefined;
-  return COMBAT_BUCKETS.find((bucket, index) => power >= bucket.min && (power < bucket.max || (index === COMBAT_BUCKETS.length - 1 && power === bucket.max)));
-}
+export const COHORT_TARGET_SIZE = 50;
+export const COMBAT_POWER_COHORTS = Array.from({ length: 28 }, (_, index) => (index + 1) * 50_000_000);
 // Grid coordinates and Nexon equipment slot names are kept together.
 export const EQUIPMENT_SLOTS = [
   { id: 'ring1', label: '반지 1', apiSlot: '반지1', part: '반지', col: 1, row: 1 },
@@ -40,7 +38,9 @@ export type OptionDistribution = { label: string; count: number; ratio: number }
 export type EquipmentGuideItem = { itemName: string; itemIcon?: string; catalogSlug?: string; count: number; ratio: number };
 export type EquipmentGuideStat = {
   job: string;
-  combatPowerBucket: string;
+  cohortPower: number;
+  powerMin: number;
+  powerMax: number;
   slot: EquipmentSlotId;
   sampleCount: number;
   items: EquipmentGuideItem[];
@@ -53,5 +53,9 @@ export type EquipmentGuideStat = {
   starforceSupported?: boolean;
   updatedAt?: string;
 };
-export type EquipmentGuideDataset = { source: 'api'; stats: EquipmentGuideStat[] };
+export type EquipmentGuideDataset = {
+  source: 'api';
+  stats: EquipmentGuideStat[];
+  cohort?: { targetPower: number; powerMin: number; powerMax: number; characterCount: number };
+};
 export type OwnEquipment = { slot: string; name: string; raw?: Record<string, string | null | undefined> };

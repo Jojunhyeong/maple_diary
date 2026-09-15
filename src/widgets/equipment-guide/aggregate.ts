@@ -3,7 +3,7 @@ import type { EquipmentGuideStat, EquipmentSlotId, GradeDistribution } from './m
 export type ObservedEquipment = Record<string, string | null | undefined>;
 export type EquipmentObservation = { ocid: string; job: string; power: number; date: string; items: ObservedEquipment[] };
 type Slot = { id: EquipmentSlotId; apiSlot: string };
-type Bucket = { id: string; min: number; max: number };
+type CohortOptions = { targets: readonly number[]; size: number; minPower: number; maxPower: number };
 const percent = (count: number, total: number) => total ? Math.round(count / total * 1000) / 10 : 0;
 
 const FARMING_POTENTIALS = ['아이템 드롭률', '메소 획득량'];
@@ -51,24 +51,30 @@ function grades(rows: ObservedEquipment[], field: string): GradeDistribution {
   return Object.fromEntries(Object.entries(counts).map(([key, count]) => [key, percent(count, rows.length)])) as GradeDistribution;
 }
 
-export function aggregateEquipment(observations: EquipmentObservation[], slots: readonly Slot[], buckets: readonly Bucket[]) {
-  const grouped = new Map<string, { job: string; bucket: string; slot: EquipmentSlotId; date: string; rows: ObservedEquipment[] }>();
+export function aggregateEquipment(observations: EquipmentObservation[], slots: readonly Slot[], cohort: CohortOptions) {
+  const grouped = new Map<string, { job: string; cohortPower: number; powerMin: number; powerMax: number; slot: EquipmentSlotId; date: string; rows: ObservedEquipment[] }>();
   // One latest observation per character; reruns never inflate sample counts.
   const unique = new Map<string, EquipmentObservation>();
   for (const observation of observations) if (!unique.has(observation.ocid) || unique.get(observation.ocid)!.date < observation.date) unique.set(observation.ocid, observation);
+  const byJob = new Map<string, EquipmentObservation[]>();
   for (const observation of unique.values()) {
-    // A farming preset lowers combat power and contaminates every equipped-slot comparison.
-    if (hasFarmingPotential(observation)) continue;
-    const bucket = buckets.find((b, i) => observation.power >= b.min && (observation.power < b.max || (i === buckets.length - 1 && observation.power === b.max)));
-    if (!bucket) continue;
+    if (hasFarmingPotential(observation) || observation.power < cohort.minPower || observation.power > cohort.maxPower) continue;
+    const rows = byJob.get(observation.job) ?? [];
+    rows.push(observation);
+    byJob.set(observation.job, rows);
+  }
+  for (const [job, jobRows] of byJob) for (const target of cohort.targets) {
+    const nearest = [...jobRows].sort((a, b) => Math.abs(a.power - target) - Math.abs(b.power - target) || a.power - b.power || a.ocid.localeCompare(b.ocid)).slice(0, cohort.size);
+    if (!nearest.length) continue;
+    const powerMin = Math.min(...nearest.map(row => row.power));
+    const powerMax = Math.max(...nearest.map(row => row.power));
     for (const slot of slots) {
-      const row = observation.items.find(item => item.item_equipment_slot === slot.apiSlot);
-      if (!row?.item_name) continue;
-      const key = `${observation.job}:${bucket.id}:${slot.id}`;
-      const group = grouped.get(key) ?? { job: observation.job, bucket: bucket.id, slot: slot.id, date: observation.date, rows: [] };
-      group.rows.push(row);
-      if (observation.date > group.date) group.date = observation.date;
-      grouped.set(key, group);
+      const rows = nearest.flatMap(observation => {
+        const row = observation.items.find(item => item.item_equipment_slot === slot.apiSlot);
+        return row?.item_name ? [row] : [];
+      });
+      if (!rows.length) continue;
+      grouped.set(`${job}:${target}:${slot.id}`, { job, cohortPower: target, powerMin, powerMax, slot: slot.id, date: nearest.reduce((latest, row) => row.date > latest ? row.date : latest, nearest[0].date), rows });
     }
   }
   const stats: EquipmentGuideStat[] = [];
@@ -82,7 +88,7 @@ export function aggregateEquipment(observations: EquipmentObservation[], slots: 
     const representative = group.rows.filter(row => row.item_name === items[0].itemName);
     const stars = representative.flatMap(row => row.starforce != null && row.starforce !== '' && Number.isFinite(Number(row.starforce)) ? [Number(row.starforce)] : []).sort((a, b) => a - b);
     const middle = Math.floor(stars.length / 2);
-    stats.push({ job: group.job, combatPowerBucket: group.bucket, slot: group.slot, sampleCount: group.rows.length, items,
+    stats.push({ job: group.job, cohortPower: group.cohortPower, powerMin: group.powerMin, powerMax: group.powerMax, slot: group.slot, sampleCount: group.rows.length, items,
       starforce: stars.length ? { average: Math.round(stars.reduce((a, b) => a + b, 0) / stars.length * 10) / 10, median: stars.length % 2 ? stars[middle] : (stars[middle - 1] + stars[middle]) / 2 } : {},
       potential: grades(representative, 'potential_option_grade'), additionalPotential: grades(representative, 'additional_potential_option_grade'),
       potentialOptions: options(representative), additionalPotentialOptions: options(representative, true), updatedAt: group.date,

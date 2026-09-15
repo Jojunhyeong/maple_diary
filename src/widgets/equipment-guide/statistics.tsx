@@ -26,12 +26,12 @@ function Distribution({ title, values, options }: { title: string; values: Grade
     <div className={styles.barRow} key={key}><span>{label}</span><span className={styles.track}><span style={{ width: (values[key] ?? 0) + '%' }} /></span><strong>{values[key]}%</strong></div>
   )}</section>;
 }
-export function Statistics({ stat, label, bucket }: { stat?: EquipmentGuideStat; label: string; bucket: string }) {
+export function Statistics({ stat, label, comparison }: { stat?: EquipmentGuideStat; label: string; comparison: string }) {
   if (!stat || !stat.items.length) return <div className={styles.empty}><span aria-hidden="true">◇</span><h2>{label}</h2><p>아직 충분한 장비 데이터가 없어요.</p><small>다른 부위나 전투력 구간을 선택하거나 내 장비를 확인해 보세요.</small></div>;
   const top = stat.items[0];
   const part = EQUIPMENT_SLOTS.find(slot => slot.id === stat.slot)?.part ?? label;
   return <div>
-    <div className={styles.detailHeading}><ItemIcon key={top.itemIcon} src={top.itemIcon} /><div><h2>{top.itemName}</h2><p>{label} · {stat.job} · {bucket}</p></div></div>
+    <div className={styles.detailHeading}><ItemIcon key={top.itemIcon} src={top.itemIcon} /><div><h2>{top.itemName}</h2><p>{label} · {stat.job} · {comparison}</p></div></div>
     <p className={styles.sample}>수집 표본 {stat.sampleCount.toLocaleString()}명 · {stat.updatedAt} 기준</p>
     {stat.sampleCount < MIN_SAMPLE_COUNT && <p role="status" className={styles.notice}>표본이 적어 참고용으로만 확인해주세요.</p>}
     <div className={styles.ratio}><span>사용 비율</span><strong>{top.ratio}<small>%</small></strong><p>수집한 부위 착용자 중 이 아이템을 사용하는 비율이에요.</p></div>

@@ -1,7 +1,7 @@
 import nextEnv from '@next/env';
 import { rankingPages, selectRankingRows, canPublish, isUnavailableCharacter } from './equipment-guide-plan.mjs';
 import { mkdir, readFile, writeFile, rename, open, unlink } from 'node:fs/promises';
-import { COMBAT_BUCKETS, EQUIPMENT_SLOTS } from '../src/widgets/equipment-guide/model.ts';
+import { COHORT_TARGET_SIZE, COMBAT_BUCKETS, COMBAT_POWER_COHORTS, EQUIPMENT_SLOTS } from '../src/widgets/equipment-guide/model.ts';
 import { aggregateEquipment, hasFarmingPotential } from '../src/widgets/equipment-guide/aggregate.ts';
 
 nextEnv.loadEnvConfig(process.cwd());
@@ -82,7 +82,7 @@ async function save() {
   await rename(progressPath + '.tmp', progressPath);
   const observations = Object.values(cache).filter(row => row.items?.length);
   const eligible = observations.filter(observation => !hasFarmingPotential(observation));
-  const stats = aggregateEquipment(observations, EQUIPMENT_SLOTS, COMBAT_BUCKETS);
+  const stats = aggregateEquipment(observations, EQUIPMENT_SLOTS, { targets: COMBAT_POWER_COHORTS, size: COHORT_TARGET_SIZE, minPower: COMBAT_BUCKETS[0].min, maxPower: COMBAT_BUCKETS.at(-1).max });
   const observedJobs = [...new Set(observations.map(row => row.job))].sort();
   const coverage = observedJobs.flatMap(job => COMBAT_BUCKETS.map((bucket, index) => ({
     job,
@@ -93,7 +93,7 @@ async function save() {
   const coveragePath = `.cache/equipment-guide/${date}-coverage.json`;
   await writeFile(coveragePath + '.tmp', JSON.stringify({ date, updatedAt: new Date().toISOString(), below30: coverage.filter(row => row.sampleCount < 30).length, groups: coverage }, null, 2));
   await rename(coveragePath + '.tmp', coveragePath);
-  const snapshot = { source: 'api', collectedAt: new Date().toISOString(), date, sampleCount: eligible.length, excludedFarmingPresetCount: observations.length - eligible.length, scannedCount: Object.keys(cache).length, method: '전체 직업 종합 랭킹에서 수집했으며 아이템 드롭률·메소 획득량 잠재 장착 캐릭터를 제외한 표본입니다. 전체 유저 통계가 아닙니다.', stats };
+  const snapshot = { source: 'api', schemaVersion: 2, collectedAt: new Date().toISOString(), date, sampleCount: eligible.length, excludedFarmingPresetCount: observations.length - eligible.length, scannedCount: Object.keys(cache).length, method: '전체 직업 종합 랭킹에서 수집한 후, 같은 직업의 전투력이 가까운 캐릭터 최대 50명을 묶었습니다. 아이템 드롭률·메소 획득량 잠재 장착 캐릭터는 제외합니다.', stats };
   // Never replace the published snapshot with a failed/empty collection.
   const output = process.env.GUIDE_OUTPUT || 'src/shared/data/equipment-guide-snapshot.json';
   const published = canPublish(await readJson(output, null), snapshot);
@@ -101,7 +101,7 @@ async function save() {
     await writeFile(output + '.tmp', JSON.stringify(snapshot));
     await rename(output + '.tmp', output);
   }
-  console.log(JSON.stringify({ date, scanned: snapshot.scannedCount, collected: observations.length, eligible: eligible.length, excludedFarmingPresets: snapshot.excludedFarmingPresetCount, groups: new Set(stats.map(s => `${s.job}:${s.combatPowerBucket}`)).size, requests, published }));
+  console.log(JSON.stringify({ date, scanned: snapshot.scannedCount, collected: observations.length, eligible: eligible.length, excludedFarmingPresets: snapshot.excludedFarmingPresetCount, cohorts: new Set(stats.map(s => `${s.job}:${s.cohortPower}`)).size, requests, published }));
 }
 try {
   if (!process.argv.includes('--aggregate-only')) for (const page of pages) {
