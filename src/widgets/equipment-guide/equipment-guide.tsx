@@ -22,16 +22,20 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
   const job = profile.character_class;
   const power = profile.character_combat_power;
   const [selected, setSelected] = useState<EquipmentSlotId>('hat');
+  const [searchStarted, setSearchStarted] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const query = useQuery({
     queryKey: ['equipment-guide', job, power],
-    enabled: !!job && typeof power === 'number' && power > 0,
+    enabled: searchStarted && !!job && typeof power === 'number' && power > 0,
     queryFn: async ({ signal }) => {
-      const response = await fetch('/api/equipment-guide?' + new URLSearchParams({ job, power: String(power) }), { signal });
+      const response = await fetch('/api/equipment-guide?' + new URLSearchParams({ characterId: profile.id ?? '' }), { signal });
       if (!response.ok) throw new Error('장비 통계를 불러오지 못했어요.');
       return response.json() as Promise<EquipmentGuideDataset & { stale: boolean }>;
     },
     staleTime: 300_000,
+    refetchInterval: query => query.state.data?.cacheStatus === 'collecting'
+      ? query.state.data.retryAfterMs ?? 2_000
+      : false,
   });
   const data = query.data ?? { source: 'api', stats: [] };
   const slot = EQUIPMENT_SLOTS.find(item => item.id === selected)!;
@@ -46,12 +50,16 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
     <div className={styles.filters}>
       <div><strong>{profile.character_name}</strong><p className={styles.sample}>{job} · 현재 선택한 내 캐릭터</p><Link href="/settings">캐릭터 변경 →</Link></div>
       <div><strong>내 전투력 {typeof power === 'number' ? formatPower(power) : '정보 없음'}</strong><p className={styles.sample}>가까운 표본을 자동으로 찾아요</p></div>
+      <button type="button" disabled={query.isFetching || !(typeof power === 'number' && power > 0)} onClick={() => searchStarted ? query.refetch() : setSearchStarted(true)}>
+        {query.data?.cacheStatus === 'collecting' ? '장비 수집 중…' : query.data?.stats.length ? '다시 검색' : '비슷한 장비 검색'}
+      </button>
     </div>
     <p className={styles.notice}>종합 랭킹에서 수집한 실제 착용 장비입니다. 아이템 드롭률·메소 획득량 잠재를 장착한 재획 세팅은 제외하며, 표본이 적은 구간은 사용 비율이 크게 달라질 수 있어요.</p>
     {!(typeof power === 'number' && power > 0) && <p className={styles.notice}>내 전투력 정보가 있어야 가까운 표본을 찾을 수 있어요. 설정에서 캐릭터를 다시 불러와 주세요.</p>}
-    {query.isPending && query.isFetching && <p role="status">실제 장비 통계를 불러오는 중이에요.</p>}
+    {query.isPending && query.isFetching && <p role="status">캐시를 확인하는 중이에요.</p>}
+    {query.data?.cacheStatus === 'collecting' && <p role="status" className={styles.notice}>같은 직업·비슷한 전투력 캐릭터의 장비를 처음 수집하고 있어요. 완료되면 자동으로 표시됩니다.</p>}
     {query.isError && <p role="alert">장비 통계를 불러오지 못했어요. <button onClick={() => query.refetch()}>다시 시도</button></p>}
-    {query.isFetched && !query.isError && !data.stats.length && !query.data?.stale && <p role="status" className={styles.notice}>{job}의 비교 표본을 아직 확보하지 못했어요. 아래에서 내 장비는 확인할 수 있어요.</p>}
+    {query.isFetched && !query.isError && !data.stats.length && query.data?.cacheStatus !== 'collecting' && !query.data?.stale && <p role="status" className={styles.notice}>{job}의 ±25% 범위에서 비교 표본을 확보하지 못했어요. 아래에서 내 장비는 확인할 수 있어요.</p>}
     {query.data?.stale && <p role="status">통계 갱신이 필요합니다. 오래된 데이터는 표시하지 않아요.</p>}
     <div className={styles.workspace}>
       <section className={styles.inventory} aria-label="부위별 장비 통계">
@@ -79,7 +87,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
       </section>
       <aside className={styles.statistics} aria-label="선택한 장비 상세 통계">{!query.isPending && !query.isError && <Statistics stat={stat} label={slot.label} comparison={comparison} />}</aside>
     </div>
-    <section className={styles.info}><h2>통계 안내</h2><p>동일 날짜의 Nexon Open API 장비 중 내 캐릭터와 같은 직업이고 전투력이 가까운 캐릭터를 최대 50명까지 묶어 비교합니다. 순위·레벨 기반 표본이므로 전체 유저의 장비 분포와 다를 수 있어요.</p><p>아이템 사용 비율은 해당 부위 착용자 기준이며, 강화·잠재 통계는 가장 많이 사용한 아이템의 착용자 기준입니다.</p><p>Data based on NEXON Open API</p></section>
+    <section className={styles.info}><h2>통계 안내</h2><p>검색한 전투력의 ±25% 안에서 같은 직업 캐릭터를 최대 50명까지 수집합니다. 같은 직업·전투력 구간의 결과는 7일 동안 함께 사용해 API 호출을 줄입니다.</p><p>아이템 드롭률·메소 획득량 잠재를 장착한 재획 세팅은 제외합니다. 아이템 사용 비율은 해당 부위 착용자 기준이며, 강화·잠재 통계는 가장 많이 사용한 아이템의 착용자 기준입니다.</p><p>Data based on NEXON Open API</p></section>
     <Compare selectedSlot={selected} characterName={profile?.character_name} characterJob={profile?.character_class} stat={stat} />
     <dialog ref={dialog} className={styles.dialog} aria-label={slot.label + ' 장비 통계'} onClick={event => { if (event.target === event.currentTarget) dialog.current?.close(); }}>
       <div className={styles.dialogBody}><button autoFocus className={styles.close} aria-label="장비 통계 닫기" onClick={() => dialog.current?.close()}>닫기 ✕</button><Statistics stat={stat} label={slot.label} comparison={comparison} /></div>

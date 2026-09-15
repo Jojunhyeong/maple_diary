@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: equipment-guide-weekly
@@ -17,8 +17,6 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     timeout-minutes: 180
-    env:
-      TARGET_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,31 +28,19 @@ jobs:
       - name: Check automation credentials
         env:
           NEXON_API_KEY: ${{ secrets.NEXON_API_KEY }}
-          DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           test -n "$NEXON_API_KEY" || { echo '::error::NEXON_API_KEY is required'; exit 1; }
-          test -n "$DEPLOY_HOOK" || { echo '::error::VERCEL_DEPLOY_HOOK_URL is required'; exit 1; }
+          test -n "$SUPABASE_URL" || { echo '::error::NEXT_PUBLIC_SUPABASE_URL is required'; exit 1; }
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo '::error::SUPABASE_SERVICE_ROLE_KEY is required'; exit 1; }
       - run: npm ci
       - name: Test collection and publication rules
         run: node --experimental-strip-types --test scripts/equipment-guide*.test.mjs
-      - name: Collect and validate fresh equipment statistics
+      - name: Collect and validate character search index
         env:
           NEXON_API_KEY: ${{ secrets.NEXON_API_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GUIDE_MAX_REQUESTS: ${{ vars.EQUIPMENT_GUIDE_MAX_REQUESTS || '25000' }}
-        run: node scripts/refresh-equipment-guide.mjs
-      - name: Commit only the validated public snapshot
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/shared/data/equipment-guide-snapshot.json
-          if ! git diff --cached --quiet; then
-            git commit -m 'chore: refresh weekly equipment statistics'
-            git push origin "HEAD:$TARGET_BRANCH"
-          fi
-      - name: Request production redeployment
-        env:
-          DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
-        run: |
-          curl --fail --silent --show-error --retry 3 --connect-timeout 15 --max-time 60 \
-            --request POST "$DEPLOY_HOOK" --output /tmp/equipment-guide-deploy.json
-          echo 'Validated statistics committed; Vercel deployment requested.' >> "$GITHUB_STEP_SUMMARY"
+        run: node scripts/refresh-equipment-guide-index.mjs

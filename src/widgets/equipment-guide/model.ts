@@ -57,5 +57,15 @@ export type EquipmentGuideDataset = {
   source: 'api';
   stats: EquipmentGuideStat[];
   cohort?: { targetPower: number; powerMin: number; powerMax: number; characterCount: number };
+  cacheStatus?: 'ready' | 'collecting' | 'fallback' | 'unavailable';
+  retryAfterMs?: number;
+};
+export type EquipmentCharacterIndexEntry = { ocid: string; job: string; power: number };
+export type EquipmentCharacterIndex = {
+  schemaVersion: 1;
+  date: string;
+  collectedAt: string;
+  sampleCount: number;
+  entries: EquipmentCharacterIndexEntry[];
 };
 export type OwnEquipment = { slot: string; name: string; raw?: Record<string, string | null | undefined> };

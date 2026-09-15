@@ -11,6 +11,19 @@ export function* rankingPages(explicitPages) {
   for (let page = 2; ; page++) if (!anchors.has(page)) yield page;
 }
 
+// Sample both the top ranks and deeper rank bands. Deeper pages contain the
+// lower-combat-power characters that a sequential top-rank crawl rarely sees.
+export function rankingIndexPages(explicitPages) {
+  if (explicitPages) return [...rankingPages(explicitPages)];
+  const pages = Array.from({ length: 10 }, (_, index) => index + 1);
+  const start = Math.log(15);
+  const end = Math.log(5_000);
+  for (let index = 0; index < 46; index++) {
+    pages.push(Math.round(Math.exp(start + (end - start) * index / 45)));
+  }
+  return [...new Set([...pages, 200, 500, 1_000, 2_000, 5_000])].sort((a, b) => a - b);
+}
+
 export function selectRankingRows(rows, take) {
   if (!Number.isSafeInteger(take) || take < 1 || take > 200) throw new Error('잘못된 페이지당 수집 인원');
   if (rows.length <= take) return rows;
