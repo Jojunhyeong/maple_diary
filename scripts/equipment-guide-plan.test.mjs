@@ -30,7 +30,9 @@ test('partial and older collections never replace a larger or newer snapshot', (
 test('invalid keys and prepared-data errors stop collection instead of silently skipping users', () => {
   assert.equal(isUnavailableCharacter({ status: 400, code: 'OPENAPI00003' }), true);
   assert.equal(isUnavailableCharacter({ status: 404 }), true);
-  for (const code of ['OPENAPI00004', 'OPENAPI00005', 'OPENAPI00009', 'OPENAPI00010']) {
+  assert.equal(isUnavailableCharacter({ status: 400, code: 'OPENAPI00004', endpoint: 'id' }), true);
+  assert.equal(isUnavailableCharacter({ status: 400, code: 'OPENAPI00004', endpoint: 'character/stat' }), false);
+  for (const code of ['OPENAPI00005', 'OPENAPI00009', 'OPENAPI00010']) {
     assert.equal(isUnavailableCharacter({ status: 400, code }), false);
   }
 });

@@ -66,6 +66,7 @@ async function api(path, params) {
     if (!response.ok) {
       const error = new Error(`Nexon ${path}: HTTP ${response.status}`);
       error.status = response.status;
+      error.endpoint = path;
       const body = await response.json().catch(() => null);
       error.code = body?.error?.name; // Only the code is retained; never log identifiers or the API key.
       throw error;

@@ -26,5 +26,9 @@ export function canPublish(previous, next) {
 }
 
 export function isUnavailableCharacter(error) {
-  return error.status === 404 || error.code === 'OPENAPI00003';
+  return error.status === 404
+    || error.code === 'OPENAPI00003'
+    // A name returned by the official ranking can disappear or become
+    // unavailable before its OCID lookup. Only tolerate this code at /id.
+    || (error.endpoint === 'id' && error.code === 'OPENAPI00004');
 }
