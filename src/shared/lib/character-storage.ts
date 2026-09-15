@@ -21,6 +21,13 @@ export interface LocalCharacterProfile {
   is_active?: boolean;
 }
 
+export function selectActiveCharacterProfile(characters: LocalCharacterProfile[], activeId: string | null): LocalCharacterProfile | null {
+  return characters.find(character => !!activeId && character.id === activeId)
+    ?? characters.find(character => character.is_active)
+    ?? characters[0]
+    ?? null;
+}
+
 export function isUuidLike(value: string | null | undefined): value is string {
   if (!value) return false;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);

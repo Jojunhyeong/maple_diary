@@ -3,36 +3,22 @@
 import { useEffect, useState } from 'react';
 import {
   CHARACTER_CHANGE_EVENT,
-  CHARACTER_STORAGE_KEYS,
-  isUuidLike,
   readActiveCharacterId,
   readLocalCharacters,
+  selectActiveCharacterProfile,
   type LocalCharacterProfile,
 } from '@/shared/lib/character-storage';
 
 function readStoredProfile(): LocalCharacterProfile | null {
   if (typeof window === 'undefined') return null;
 
-  try {
-    const raw = localStorage.getItem(CHARACTER_STORAGE_KEYS.LEGACY_PROFILE);
-    if (raw) {
-      const parsed = JSON.parse(raw) as LocalCharacterProfile;
-      if (parsed && typeof parsed.character_name === 'string') return parsed;
-    }
-  } catch {
-    // fall through to the character list below
-  }
-
   const activeId = readActiveCharacterId();
   const characters = readLocalCharacters();
   if (characters.length === 0) return null;
 
-  if (activeId && isUuidLike(activeId)) {
-    const activeCharacter = characters.find((character) => character.id === activeId);
-    if (activeCharacter) return activeCharacter;
-  }
-
-  return characters[0] || null;
+  // Selection events are emitted before the legacy profile is synchronized.
+  // Prefer the selected entry in the current character list.
+  return selectActiveCharacterProfile(characters, activeId);
 }
 
 export function useStoredCharacterProfile() {

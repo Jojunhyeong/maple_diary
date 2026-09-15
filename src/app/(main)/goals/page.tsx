@@ -694,6 +694,24 @@ export default function GoalsPage() {
 
   useEffect(() => {
     setIsMounted(true);
+    const params = new URLSearchParams(window.location.search);
+    const name = params.get('guideItem')?.trim();
+    const part = params.get('guidePart')?.trim();
+    const slug = params.get('guideSlug')?.trim();
+    if (name && name.length <= 100 && part && part.length <= 30) {
+      setCreatingGoalDraft({
+        ...createDraft('equipment'),
+        equipmentPart: part,
+        equipmentKey: slug || part + '::' + name,
+        equipmentName: name,
+        equipmentSlot: part,
+        equipmentIconUrl: slug ? '/api/equipment-catalog/icon?slug=' + encodeURIComponent(slug) : null,
+      });
+      params.delete('guideItem');
+      params.delete('guidePart');
+      params.delete('guideSlug');
+      window.history.replaceState(window.history.state, '', window.location.pathname + (params.size ? '?' + params.toString() : ''));
+    }
   }, []);
 
   const ownedMeso = accountMeso?.amount ?? 0;

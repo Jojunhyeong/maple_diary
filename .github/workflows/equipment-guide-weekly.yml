@@ -1,0 +1,60 @@
+name: Weekly equipment guide refresh
+
+on:
+  schedule:
+    # Saturday 05:17 Asia/Seoul (Friday 20:17 UTC).
+    - cron: '17 20 * * 5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: equipment-guide-weekly
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      TARGET_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.20.0'
+          cache: npm
+      - name: Check automation credentials
+        env:
+          NEXON_API_KEY: ${{ secrets.NEXON_API_KEY }}
+          DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          test -n "$NEXON_API_KEY" || { echo '::error::NEXON_API_KEY is required'; exit 1; }
+          test -n "$DEPLOY_HOOK" || { echo '::error::VERCEL_DEPLOY_HOOK_URL is required'; exit 1; }
+      - run: npm ci
+      - name: Test collection and publication rules
+        run: node --experimental-strip-types --test scripts/equipment-guide*.test.mjs
+      - name: Collect and validate fresh equipment statistics
+        env:
+          NEXON_API_KEY: ${{ secrets.NEXON_API_KEY }}
+          GUIDE_MAX_REQUESTS: ${{ vars.EQUIPMENT_GUIDE_MAX_REQUESTS || '25000' }}
+        run: node scripts/refresh-equipment-guide.mjs
+      - name: Commit only the validated public snapshot
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/shared/data/equipment-guide-snapshot.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'chore: refresh weekly equipment statistics'
+            git push origin "HEAD:$TARGET_BRANCH"
+          fi
+      - name: Request production redeployment
+        env:
+          DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          curl --fail --silent --show-error --retry 3 --connect-timeout 15 --max-time 60 \
+            --request POST "$DEPLOY_HOOK" --output /tmp/equipment-guide-deploy.json
+          echo 'Validated statistics committed; Vercel deployment requested.' >> "$GITHUB_STEP_SUMMARY"
