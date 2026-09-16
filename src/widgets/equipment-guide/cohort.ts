@@ -3,7 +3,7 @@ import type { EquipmentCharacterIndexEntry } from './model';
 export const EQUIPMENT_GUIDE_BUCKET_SIZE = 10_000_000;
 export const EQUIPMENT_GUIDE_CACHE_DAYS = 7;
 export const EQUIPMENT_GUIDE_MAX_POWER_DISTANCE_RATIO = 0.1;
-const EQUIPMENT_GUIDE_CACHE_VERSION = 'v4';
+const EQUIPMENT_GUIDE_CACHE_VERSION = 'v5';
 
 export function equipmentGuideBucket(power: number) {
   return Math.max(EQUIPMENT_GUIDE_BUCKET_SIZE, Math.round(power / EQUIPMENT_GUIDE_BUCKET_SIZE) * EQUIPMENT_GUIDE_BUCKET_SIZE);

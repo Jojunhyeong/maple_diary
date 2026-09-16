@@ -7,6 +7,7 @@ import { useStoredCharacterProfile } from '@/shared/lib/hooks/useStoredCharacter
 import { EQUIPMENT_SLOTS, type EquipmentSlotId, type EquipmentGuideDataset } from './model';
 import { ItemIcon, Statistics } from './statistics';
 import { Compare } from './compare';
+import { LoadoutCarousel } from './loadout-carousel';
 import styles from './styles.module.css';
 
 export function EquipmentGuide() {
@@ -42,7 +43,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
       ? query.state.data.retryAfterMs ?? 2_000
       : false,
   });
-  const data = query.data ?? { source: 'api', stats: [] };
+  const data: EquipmentGuideDataset = query.data ?? { source: 'api', stats: [] };
   const slot = EQUIPMENT_SLOTS.find(item => item.id === selected)!;
   const stat = data.stats.find(item => item.slot === selected);
   const comparison = query.data?.cohort ? `${formatPower(query.data.cohort.powerMin)} ~ ${formatPower(query.data.cohort.powerMax)}` : '가까운 전투력 표본';
@@ -129,6 +130,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
       </section>
       <aside className={styles.statistics} aria-label="선택한 장비 상세 통계">{!query.isPending && !query.isError && <Statistics stat={stat} label={slot.label} comparison={comparison} />}</aside>
     </div>
+    <LoadoutCarousel loadouts={data.loadouts} />
     <section className={styles.info}><h2>통계 안내</h2><p>검색 전투력의 ±10% 안에서 같은 직업 캐릭터를 최대 50명까지 수집합니다. 표본 캐릭터의 전투력과 장비는 반드시 같은 날짜의 실제 적용 세팅을 사용합니다.</p><p>해당 적용 세팅에 아이템 드롭률·메소 획득량 잠재가 있으면 제외합니다. 같은 직업·전투력 구간의 결과는 7일 동안 공유합니다.</p><p>Data based on NEXON Open API</p></section>
     <Compare selectedSlot={selected} characterName={profile?.character_name} characterJob={profile?.character_class} stat={stat} />
     <dialog ref={dialog} className={styles.dialog} aria-label={slot.label + ' 장비 통계'} onClick={event => { if (event.target === event.currentTarget) dialog.current?.close(); }}>

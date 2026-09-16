@@ -2,8 +2,11 @@ import { supabaseAdmin } from '@/shared/lib/supabase';
 import { aggregateEquipment, itemsHaveFarmingPotential, type EquipmentObservation, type ObservedEquipment } from '@/widgets/equipment-guide/aggregate';
 import { COHORT_TARGET_SIZE, COMBAT_BUCKETS, EQUIPMENT_SLOTS, type EquipmentCharacterIndexEntry, type EquipmentGuideDataset } from '@/widgets/equipment-guide/model';
 import { EQUIPMENT_GUIDE_BUCKET_SIZE, EQUIPMENT_GUIDE_CACHE_DAYS, EQUIPMENT_GUIDE_MAX_POWER_DISTANCE_RATIO, equipmentGuideCacheKey } from '@/widgets/equipment-guide/cohort';
+import { normalizeEquipmentSetEffects, selectRepresentativeCandidates } from '@/widgets/equipment-guide/loadouts';
 
 const CANDIDATE_FETCH_LIMIT = 150;
+const SET_EFFECT_CANDIDATE_LIMIT = 20;
+const LOADOUT_LIMIT = 5;
 
 const ITEM_FIELDS = [
   'item_equipment_slot', 'item_name', 'item_icon', 'starforce',
@@ -74,6 +77,50 @@ async function nexonEquipment(ocid: string, date: string) {
   return null;
 }
 
+async function nexonSetEffect(ocid: string, date: string) {
+  const key = process.env.NEXON_API_KEY || process.env.NEXT_PUBLIC_MAPLE_API_KEY;
+  if (!key) throw new Error('NEXON_API_KEY가 필요합니다.');
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const response = await fetch(`https://open.api.nexon.com/maplestory/v1/character/set-effect?${new URLSearchParams({ ocid, date })}`, {
+      headers: { 'x-nxopen-api-key': key }, signal: AbortSignal.timeout(15_000), cache: 'no-store',
+    });
+    if (response.ok) return response.json() as Promise<Record<string, unknown>>;
+    if (response.status !== 429 && response.status < 500) return null;
+    await new Promise(resolve => setTimeout(resolve, 1_000 * (attempt + 1)));
+  }
+  return null;
+}
+
+async function representativeLoadouts(sample: EquipmentObservation[], targetPower: number) {
+  const enriched = [];
+  const candidates = sample.slice(0, SET_EFFECT_CANDIDATE_LIMIT);
+  for (let offset = 0; offset < candidates.length; offset += 5) {
+    const rows = await Promise.all(candidates.slice(offset, offset + 5).map(async observation => {
+      const payload = await nexonSetEffect(observation.ocid, observation.date).catch(() => null);
+      const setEffects = payload ? normalizeEquipmentSetEffects(payload) : [];
+      const itemSignature = observation.items.map(item => `${item.item_equipment_slot}:${item.item_name}`).sort().join('|');
+      return { ...observation, setEffects, itemSignature };
+    }));
+    enriched.push(...rows);
+  }
+  return selectRepresentativeCandidates(enriched, targetPower, LOADOUT_LIMIT).map((observation, index) => ({
+    id: `representative-${index + 1}`,
+    power: observation.power,
+    date: observation.date,
+    setEffects: observation.setEffects,
+    items: EQUIPMENT_SLOTS.flatMap(slot => {
+      const item = observation.items.find(row => row.item_equipment_slot === slot.apiSlot);
+      if (!item?.item_name) return [];
+      const starforce = item.starforce !== null && item.starforce !== undefined && item.starforce !== '' && Number.isFinite(Number(item.starforce)) ? Number(item.starforce) : undefined;
+      return [{
+        slot: slot.id, itemName: item.item_name, itemIcon: item.item_icon || undefined, starforce,
+        potentialGrade: item.potential_option_grade || undefined,
+        additionalPotentialGrade: item.additional_potential_option_grade || undefined,
+      }];
+    }),
+  }));
+}
+
 export async function collectAndStoreEquipmentGuide(cacheKey: string, job: string, power: number, sourceDate: string) {
   const observations: EquipmentObservation[] = [];
   try {
@@ -91,8 +138,9 @@ export async function collectAndStoreEquipmentGuide(cacheKey: string, job: strin
     }
     const sample = observations.slice(0, COHORT_TARGET_SIZE);
     const stats = aggregateEquipment(sample, EQUIPMENT_SLOTS, { targets: [power], size: COHORT_TARGET_SIZE, minPower: COMBAT_BUCKETS[0].min, maxPower: COMBAT_BUCKETS.at(-1)!.max });
+    const loadouts = sample.length ? await representativeLoadouts(sample, power) : [];
     const dataset: EquipmentGuideDataset = {
-      source: 'api', stats, cacheStatus: stats.length ? 'ready' : 'unavailable',
+      source: 'api', stats, loadouts, cacheStatus: stats.length ? 'ready' : 'unavailable',
       cohort: sample.length ? { targetPower: power, powerMin: Math.min(...sample.map(row => row.power)), powerMax: Math.max(...sample.map(row => row.power)), characterCount: sample.length } : undefined,
     };
     const db = supabaseAdmin();

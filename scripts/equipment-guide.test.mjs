@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { aggregateEquipment, hasFarmingPotential, optionLabel, selectNonFarmingEquipmentPreset } from '../src/widgets/equipment-guide/aggregate.ts';
 import { COMBAT_BUCKETS, COMBAT_POWER_COHORTS, EQUIPMENT_SLOTS } from '../src/widgets/equipment-guide/model.ts';
 import { selectActiveCharacterProfile } from '../src/shared/lib/character-storage.ts';
+import { normalizeEquipmentSetEffects, selectRepresentativeCandidates } from '../src/widgets/equipment-guide/loadouts.ts';
 
 test('switching registered characters selects the new job and power instead of the first profile', () => {
   const bishop = { id: 'bishop', character_name: '첫캐릭터', character_class: '비숍', character_combat_power: 100_000_000 };
@@ -84,4 +85,21 @@ test('latest observation replaces earlier equipment and missing starforce is not
   const stats = aggregateEquipment([observation('a', 100_000_000, [item('old', 22)], '2026-09-09'), observation('a', 100_000_000, [item('new', '', { starforce: null })])], EQUIPMENT_SLOTS, cohortOptions);
   assert.equal(stats[0].items[0].itemName, 'new');
   assert.deepEqual(stats[0].starforce, {});
+});
+test('keeps only progression equipment sets from the official set-effect response', () => {
+  const effects = normalizeEquipmentSetEffects({ set_effect: [
+    { set_name: '에테르넬 세트(마법사)', total_set_count: 3 },
+    { set_name: '칠흑의 보스 세트', total_set_count: 5 },
+    { set_name: '하이틴 그래피티 세트', total_set_count: 4 },
+    { set_name: '마이스터 세트', total_set_count: 1 },
+  ] });
+  assert.deepEqual(effects, [{ name: '칠흑의 보스', count: 5 }, { name: '에테르넬', count: 3 }]);
+});
+test('chooses different real set combinations before filling similar representatives', () => {
+  const candidate = (ocid, power, name, count, itemSignature) => ({ ocid, power, setEffects: [{ name, count }], itemSignature });
+  const selected = selectRepresentativeCandidates([
+    candidate('a', 100, '에테르넬', 3, 'A'), candidate('b', 101, '에테르넬', 3, 'B'),
+    candidate('c', 105, '아케인셰이드', 5, 'C'), candidate('d', 110, '여명의 보스', 2, 'D'),
+  ], 100, 3);
+  assert.deepEqual(selected.map(row => row.ocid), ['a', 'c', 'd']);
 });

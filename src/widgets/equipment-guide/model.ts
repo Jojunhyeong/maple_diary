@@ -66,9 +66,26 @@ export type EquipmentGuideStat = {
   starforceSupported?: boolean;
   updatedAt?: string;
 };
+export type EquipmentGuideLoadoutItem = {
+  slot: EquipmentSlotId;
+  itemName: string;
+  itemIcon?: string;
+  starforce?: number;
+  potentialGrade?: string;
+  additionalPotentialGrade?: string;
+};
+export type EquipmentGuideSetEffect = { name: string; count: number };
+export type EquipmentGuideLoadout = {
+  id: string;
+  power: number;
+  date: string;
+  setEffects: EquipmentGuideSetEffect[];
+  items: EquipmentGuideLoadoutItem[];
+};
 export type EquipmentGuideDataset = {
   source: 'api';
   stats: EquipmentGuideStat[];
+  loadouts?: EquipmentGuideLoadout[];
   cohort?: { targetPower: number; powerMin: number; powerMax: number; characterCount: number };
   cacheStatus?: 'ready' | 'collecting' | 'fallback' | 'unavailable';
   retryAfterMs?: number;
