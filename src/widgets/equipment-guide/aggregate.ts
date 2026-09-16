@@ -8,8 +8,8 @@ const percent = (count: number, total: number) => total ? Math.round(count / tot
 
 const FARMING_POTENTIALS = ['아이템 드롭률', '메소 획득량'];
 
-export function hasFarmingPotential(observation: EquipmentObservation) {
-  return observation.items.some(item => [
+export function itemsHaveFarmingPotential(items: ObservedEquipment[]) {
+  return items.some(item => [
     item.potential_option_1,
     item.potential_option_2,
     item.potential_option_3,
@@ -17,6 +17,31 @@ export function hasFarmingPotential(observation: EquipmentObservation) {
     item.additional_potential_option_2,
     item.additional_potential_option_3,
   ].some(value => value && FARMING_POTENTIALS.some(keyword => value.replaceAll(' ', '').includes(keyword.replaceAll(' ', '')))));
+}
+
+export function hasFarmingPotential(observation: EquipmentObservation) {
+  return itemsHaveFarmingPotential(observation.items);
+}
+
+function equipmentScore(items: ObservedEquipment[]) {
+  const grades: Record<string, number> = { 레전드리: 4, 유니크: 3, 에픽: 2, 레어: 1 };
+  return items.reduce((score, item) => score
+    + (Number(item.starforce) || 0) * 10
+    + (grades[item.potential_option_grade ?? ''] ?? 0) * 3
+    + (grades[item.additional_potential_option_grade ?? ''] ?? 0), 0);
+}
+
+export function selectNonFarmingEquipmentPreset(payload: Record<string, unknown>) {
+  const presets = [1, 2, 3].flatMap(presetNo => {
+    const items = payload[`item_equipment_preset_${presetNo}`];
+    return Array.isArray(items) && items.length ? [{ presetNo, items: items as ObservedEquipment[] }] : [];
+  });
+  if (!presets.length && Array.isArray(payload.item_equipment) && payload.item_equipment.length) {
+    presets.push({ presetNo: Number(payload.preset_no) || 0, items: payload.item_equipment as ObservedEquipment[] });
+  }
+  return presets
+    .filter(preset => !itemsHaveFarmingPotential(preset.items))
+    .sort((a, b) => equipmentScore(b.items) - equipmentScore(a.items) || a.presetNo - b.presetNo)[0] ?? null;
 }
 
 // Only add identical percentage options. Flat stats and conditional effects stay separate.

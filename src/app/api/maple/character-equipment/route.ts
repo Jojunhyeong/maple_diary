@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { selectNonFarmingEquipmentPreset } from '@/widgets/equipment-guide/aggregate';
 
 const MAPLE_API_BASE = 'https://open.api.nexon.com/maplestory/v1';
 const EQUIPMENT_CACHE_TTL_MS = 1000 * 60 * 60 * 12;
@@ -11,9 +12,7 @@ type CachedEquipment = {
 };
 
 declare global {
-  // eslint-disable-next-line no-var
   var __mapleEquipmentCache: Map<string, CachedEquipment> | undefined;
-  // eslint-disable-next-line no-var
   var __mapleEquipmentPending: Map<string, Promise<{ status: number; payload: Record<string, unknown> }>> | undefined;
 }
 
@@ -41,19 +40,6 @@ function normalizeEquipmentRows(rows: EquipmentRow[]) {
     shape_icon_url: row.item_shape_icon ?? null,
     raw: row,
   }));
-}
-
-function extractPrimaryEquipment(payload: Record<string, unknown>): EquipmentRow[] {
-  const primary = payload.item_equipment;
-  if (Array.isArray(primary)) return primary as EquipmentRow[];
-
-  const fallbackKeys = Object.keys(payload).filter((key) => key.startsWith('item_equipment_preset_'));
-  const fallback: EquipmentRow[] = [];
-  for (const key of fallbackKeys) {
-    const value = payload[key];
-    if (Array.isArray(value)) fallback.push(...(value as EquipmentRow[]));
-  }
-  return fallback;
 }
 
 async function resolveOcid(name: string, apiKey: string): Promise<string> {
@@ -118,7 +104,8 @@ async function fetchFromNexon(
 
     const basic = await basicRes.json();
     const equipment = await equipmentRes.json();
-    const items = normalizeEquipmentRows(extractPrimaryEquipment(equipment));
+    const selectedPreset = selectNonFarmingEquipmentPreset(equipment);
+    const items = normalizeEquipmentRows((selectedPreset?.items ?? []) as EquipmentRow[]);
 
     const payload = {
       ocid,
@@ -127,6 +114,7 @@ async function fetchFromNexon(
       character_class: basic.character_class ?? null,
       character_level: basic.character_level ?? null,
       character_image: basic.character_image ?? null,
+      equipment_preset_no: selectedPreset?.presetNo || null,
       items,
     };
 
@@ -156,7 +144,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'ocid 또는 name이 필요합니다' }, { status: 400 });
   }
 
-  const cacheKey = (ocid || name || '').trim().toLowerCase();
+    const cacheKey = `${(ocid || name || '').trim().toLowerCase()}:non-farming-v1`;
   const cached = equipmentCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return NextResponse.json(cached.payload, { status: cached.status });

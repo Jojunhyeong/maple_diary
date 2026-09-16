@@ -13,7 +13,7 @@ test('ranking index visits top and deep ranking bands without duplicates', () =>
 
 test('nearby searches share a 25m cache bucket', () => {
   assert.equal(equipmentGuideBucket(104_000_000), 100_000_000);
-  assert.equal(equipmentGuideCacheKey('히어로', 111_000_000), '히어로:100000000');
+  assert.equal(equipmentGuideCacheKey('히어로', 111_000_000), 'v2:히어로:100000000');
 });
 
 test('candidate selection keeps the same job within 25 percent and sorts by distance', () => {

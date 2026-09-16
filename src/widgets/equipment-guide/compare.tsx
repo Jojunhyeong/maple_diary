@@ -13,7 +13,7 @@ export function Compare({ characterName, characterJob, selectedSlot, stat }: { c
     queryFn: async ({ signal }) => {
       const response = await fetch('/api/maple/character-equipment?name=' + encodeURIComponent(characterName!), { signal });
       if (!response.ok) throw new Error('장비 정보를 불러오지 못했어요.');
-      return await response.json() as { items: OwnEquipment[] };
+      return await response.json() as { items: OwnEquipment[]; equipment_preset_no?: number | null };
     },
   });
   const slot = EQUIPMENT_SLOTS.find(item => item.id === selectedSlot);
@@ -21,6 +21,7 @@ export function Compare({ characterName, characterJob, selectedSlot, stat }: { c
   const star = own?.raw?.starforce;
   const difference = star != null && star !== '' && Number.isFinite(Number(star)) && stat?.starforce.median !== undefined ? Number(star) - stat.starforce.median : null;
   return <section className={styles.compare}><h2>내 장비와 비교하기</h2>
+    {query.data?.equipment_preset_no && <p className={styles.sample}>드롭률·메소 획득량 잠재가 없는 장비 프리셋 {query.data.equipment_preset_no}번을 사용합니다.</p>}
     {!characterName ? <p>캐릭터를 선택하면 내 장비를 함께 확인할 수 있어요. <Link href="/settings">캐릭터 선택 →</Link></p>
       : query.isPending ? <p role="status">내 장비를 불러오는 중이에요.</p>
       : query.isError ? <p role="alert">{query.error.message} <button onClick={() => void query.refetch()}>다시 시도</button></p>

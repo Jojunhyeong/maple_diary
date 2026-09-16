@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { aggregateEquipment, hasFarmingPotential, optionLabel } from '../src/widgets/equipment-guide/aggregate.ts';
+import { aggregateEquipment, hasFarmingPotential, optionLabel, selectNonFarmingEquipmentPreset } from '../src/widgets/equipment-guide/aggregate.ts';
 import { COMBAT_BUCKETS, COMBAT_POWER_COHORTS, EQUIPMENT_SLOTS } from '../src/widgets/equipment-guide/model.ts';
 import { selectActiveCharacterProfile } from '../src/shared/lib/character-storage.ts';
 
@@ -31,6 +31,17 @@ test('excludes the entire character when any equipment uses drop or meso farming
   assert.equal(stats.length, COMBAT_POWER_COHORTS.length);
   assert.equal(stats[0].sampleCount, 1);
   assert.equal(stats[0].items[0].itemName, '전투 모자');
+});
+test('selects the strongest preset after removing drop and meso presets', () => {
+  const selected = selectNonFarmingEquipmentPreset({
+    preset_no: 1,
+    item_equipment_preset_1: [item('드메 모자', 22, { potential_option_1: '아이템 드롭률 : +20%' })],
+    item_equipment_preset_2: [item('보스 모자 A', 17, { potential_option_grade: '레전드리' })],
+    item_equipment_preset_3: [item('보스 모자 B', 22, { potential_option_grade: '레전드리' })],
+  });
+  assert.equal(selected.presetNo, 3);
+  assert.equal(selected.items[0].item_name, '보스 모자 B');
+  assert.equal(selectNonFarmingEquipmentPreset({ item_equipment_preset_1: [item('메획', 0, { potential_option_1: '메소 획득량 : +20%' })] }), null);
 });
 test('deduplicates characters, omits missing slots and keeps the full item denominator', () => {
   const a = observation('a', 100_000_000, [item('A', 17)]);

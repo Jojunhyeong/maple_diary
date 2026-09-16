@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/shared/lib/supabase';
-import { aggregateEquipment, hasFarmingPotential, type EquipmentObservation } from '@/widgets/equipment-guide/aggregate';
+import { aggregateEquipment, selectNonFarmingEquipmentPreset, type EquipmentObservation } from '@/widgets/equipment-guide/aggregate';
 import { COHORT_TARGET_SIZE, COMBAT_BUCKETS, EQUIPMENT_SLOTS, type EquipmentCharacterIndexEntry, type EquipmentGuideDataset } from '@/widgets/equipment-guide/model';
 import { EQUIPMENT_GUIDE_CACHE_DAYS, equipmentGuideCacheKey } from '@/widgets/equipment-guide/cohort';
 
@@ -65,7 +65,7 @@ async function nexonEquipment(ocid: string, date: string) {
     const response = await fetch(`https://open.api.nexon.com/maplestory/v1/character/item-equipment?${new URLSearchParams({ ocid, date })}`, {
       headers: { 'x-nxopen-api-key': key }, signal: AbortSignal.timeout(15_000), cache: 'no-store',
     });
-    if (response.ok) return response.json() as Promise<{ item_equipment?: Array<Record<string, string | null>> }>;
+    if (response.ok) return response.json() as Promise<Record<string, unknown>>;
     if (response.status !== 429 && response.status < 500) return null;
     await new Promise(resolve => setTimeout(resolve, 1_000 * (attempt + 1)));
   }
@@ -79,11 +79,13 @@ export async function collectAndStoreEquipmentGuide(cacheKey: string, job: strin
     for (let offset = 0; offset < candidates.length && observations.length < COHORT_TARGET_SIZE; offset += 8) {
       const results = await Promise.all(candidates.slice(offset, offset + 8).map(async candidate => {
         const equipment = await nexonEquipment(candidate.ocid, sourceDate);
-        if (!equipment?.item_equipment?.length) return null;
-        const items = equipment.item_equipment.map(item => Object.fromEntries(ITEM_FIELDS.map(field => [field, item[field] ?? null])));
+        if (!equipment) return null;
+        const preset = selectNonFarmingEquipmentPreset(equipment);
+        if (!preset) return null;
+        const items = preset.items.map(item => Object.fromEntries(ITEM_FIELDS.map(field => [field, item[field] ?? null])));
         return { ...candidate, date: sourceDate, items } satisfies EquipmentObservation;
       }));
-      for (const observation of results) if (observation && !hasFarmingPotential(observation)) observations.push(observation);
+      for (const observation of results) if (observation) observations.push(observation);
     }
     const sample = observations.slice(0, COHORT_TARGET_SIZE);
     const stats = aggregateEquipment(sample, EQUIPMENT_SLOTS, { targets: [power], size: COHORT_TARGET_SIZE, minPower: COMBAT_BUCKETS[0].min, maxPower: COMBAT_BUCKETS.at(-1)!.max });
