@@ -29,7 +29,6 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
   const [powerMode, setPowerMode] = useState<'nexon' | 'history' | 'manual'>('nexon');
   const [historyStatus, setHistoryStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [historyMessage, setHistoryMessage] = useState('');
-  const detailDialog = useRef<HTMLDialogElement>(null);
   const loadoutDialog = useRef<HTMLDialogElement>(null);
   const compareDialog = useRef<HTMLDialogElement>(null);
   const query = useQuery({
@@ -49,9 +48,12 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
   const slot = EQUIPMENT_SLOTS.find(item => item.id === selected)!;
   const stat = data.stats.find(item => item.slot === selected);
   const comparison = query.data?.cohort ? `${formatPower(query.data.cohort.powerMin)} ~ ${formatPower(query.data.cohort.powerMax)}` : '가까운 전투력 표본';
-  function selectSlot(id: EquipmentSlotId, open: boolean) {
+  function selectSlot(id: EquipmentSlotId) {
     setSelected(id);
-    if (open && window.matchMedia('(max-width: 767px)').matches) detailDialog.current?.showModal();
+  }
+  function compareSlot(id: EquipmentSlotId) {
+    setSelected(id);
+    compareDialog.current?.showModal();
   }
   function search() {
     const next = Math.round(draftPowerEok * 100_000_000);
@@ -84,7 +86,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
     }
   }
   return <main className={styles.page}>
-    <header className={styles.header}><div><p className={styles.eyebrow}>내 캐릭터의 다음 장비</p><h1>장비 가이드</h1><p>내 캐릭터와 같은 직업·비슷한 전투력의 장비를 비교해 보세요.</p></div><div className={styles.headerControls}><span className={styles.demoBadge}>Nexon 실제 장비 표본</span><div className={styles.quickActions}><button type="button" disabled={!data.loadouts?.length} onClick={() => loadoutDialog.current?.showModal()}>전체 세팅 보기{data.loadouts?.length ? ` ${data.loadouts.length}` : ''}</button><button type="button" disabled={!stat} onClick={() => compareDialog.current?.showModal()}>내 장비와 비교</button></div></div></header>
+    <header className={styles.header}><div><p className={styles.eyebrow}>내 캐릭터의 다음 장비</p><h1>장비 가이드</h1><p>내 캐릭터와 같은 직업·비슷한 전투력의 장비를 비교해 보세요.</p></div><div className={styles.headerControls}><span className={styles.demoBadge}>Nexon 실제 장비 표본</span><div className={styles.quickActions}><button type="button" disabled={!data.loadouts?.length} onClick={() => loadoutDialog.current?.showModal()}>전체 세팅 보기{data.loadouts?.length ? ` ${data.loadouts.length}` : ''}</button></div></div></header>
     <div className={styles.filters}>
       <div><strong>{profile.character_name}</strong><p className={styles.sample}>{job} · 현재 설정된 내 캐릭터</p></div>
       <div><strong>넥슨 조회 전투력 {typeof power === 'number' ? formatPower(power) : '정보 없음'}</strong><p className={styles.sample}>현재 장착 중인 세팅 기준</p></div>
@@ -120,14 +122,14 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
           {EQUIPMENT_SLOTS.map(item => {
             const itemStat = data.stats.find(value => value.slot === item.id);
             return <button key={item.id} style={{ gridColumn: item.col, gridRow: item.row }}
-              className={styles.slot} aria-label={item.label + (itemStat ? ' 인기 장비 보기' : ' · 데이터 없음')} aria-pressed={selected === item.id}
-              onMouseEnter={() => { if (window.matchMedia('(hover: hover) and (min-width: 768px)').matches) selectSlot(item.id, false); }}
-              onFocus={() => selectSlot(item.id, false)} onClick={() => selectSlot(item.id, true)}>
+              className={styles.slot} aria-label={item.label + (itemStat ? ' 내 장비와 비교' : ' · 데이터 없음')} aria-pressed={selected === item.id}
+              onMouseEnter={() => { if (window.matchMedia('(hover: hover) and (min-width: 768px)').matches) selectSlot(item.id); }}
+              onFocus={() => selectSlot(item.id)} onClick={() => compareSlot(item.id)}>
               <ItemIcon key={itemStat?.items[0]?.itemIcon ?? item.id} src={itemStat?.items[0]?.itemIcon} /><span>{item.label}</span>
             </button>;
           })}
         </div>
-        <p className={styles.hint}>장비 슬롯을 선택해 사용 비율과 강화 분포를 확인하세요.</p>
+        <p className={styles.hint}>마우스를 올리면 통계가 바뀌고, 클릭하면 내 장비와 바로 비교할 수 있어요.</p>
         <div className={styles.legend}><span>● 선택한 부위</span><span>◇ 데이터 준비 중</span></div>
       </section>
       <aside className={styles.statistics} aria-label="선택한 장비 상세 통계">{!query.isPending && !query.isError && <Statistics stat={stat} label={slot.label} comparison={comparison} />}</aside>
@@ -138,9 +140,6 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
     </dialog>
     <dialog ref={compareDialog} className={styles.compareDialog} aria-label="내 장비와 비교" onClick={event => { if (event.target === event.currentTarget) compareDialog.current?.close(); }}>
       <div className={styles.modalBody}><button autoFocus className={styles.close} aria-label="내 장비 비교 닫기" onClick={() => compareDialog.current?.close()}>닫기 ✕</button><Compare selectedSlot={selected} characterName={profile?.character_name} characterJob={profile?.character_class} stat={stat} /></div>
-    </dialog>
-    <dialog ref={detailDialog} className={styles.dialog} aria-label={slot.label + ' 장비 통계'} onClick={event => { if (event.target === event.currentTarget) detailDialog.current?.close(); }}>
-      <div className={styles.dialogBody}><button autoFocus className={styles.close} aria-label="장비 통계 닫기" onClick={() => detailDialog.current?.close()}>닫기 ✕</button><Statistics stat={stat} label={slot.label} comparison={comparison} /></div>
     </dialog>
   </main>;
 }
