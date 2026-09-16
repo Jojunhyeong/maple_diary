@@ -95,7 +95,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
         {query.data?.cacheStatus === 'collecting' ? '장비 수집 중…' : query.data?.stats.length ? '다시 검색' : '비슷한 장비 검색'}
       </button>
     </div>
-    <p className={styles.notice}>종합 랭킹에서 수집한 실제 장비입니다. 프리셋 1~3 중 아이템 드롭률·메소 획득량 잠재가 없는 장비를 사용하며, 표본이 적은 구간은 사용 비율이 크게 달라질 수 있어요.</p>
+    <p className={styles.notice}>종합 랭킹에서 수집한 실제 장비입니다. 전투력과 같은 날짜에 적용 중이던 장비만 사용하고, 아이템 드롭률·메소 획득량 잠재가 있으면 표본에서 제외합니다.</p>
     <p className={styles.notice}>새로고침하면 넥슨 조회 전투력으로 돌아갑니다. 직접 입력은 현재 화면에서만 유지되며, 최근 14일 중 드메 잠재가 없는 적용 세팅의 가장 높은 전투력도 찾을 수 있어요.</p>
     {historyMessage && <p role={historyStatus === 'error' ? 'alert' : 'status'} className={styles.notice}>{historyMessage}</p>}
     {query.isPending && query.isFetching && <p role="status">캐시를 확인하는 중이에요.</p>}
@@ -129,7 +129,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
       </section>
       <aside className={styles.statistics} aria-label="선택한 장비 상세 통계">{!query.isPending && !query.isError && <Statistics stat={stat} label={slot.label} comparison={comparison} />}</aside>
     </div>
-    <section className={styles.info}><h2>통계 안내</h2><p>넥슨 API는 장비 프리셋별 전투력을 제공하지 않아, 입력한 보스 세팅 전투력을 비교 기준으로 사용합니다. 검색 전투력의 ±25% 안에서 같은 직업 캐릭터를 최대 50명까지 수집합니다.</p><p>각 캐릭터의 프리셋 1~3에서 아이템 드롭률·메소 획득량 잠재가 있는 프리셋을 제외하고, 남은 프리셋 중 강화 수준이 가장 높은 장비를 사용합니다. 같은 직업·전투력 구간의 결과는 7일 동안 공유합니다.</p><p>Data based on NEXON Open API</p></section>
+    <section className={styles.info}><h2>통계 안내</h2><p>검색 전투력의 ±10% 안에서 같은 직업 캐릭터를 최대 50명까지 수집합니다. 표본 캐릭터의 전투력과 장비는 반드시 같은 날짜의 실제 적용 세팅을 사용합니다.</p><p>해당 적용 세팅에 아이템 드롭률·메소 획득량 잠재가 있으면 제외합니다. 같은 직업·전투력 구간의 결과는 7일 동안 공유합니다.</p><p>Data based on NEXON Open API</p></section>
     <Compare selectedSlot={selected} characterName={profile?.character_name} characterJob={profile?.character_class} stat={stat} />
     <dialog ref={dialog} className={styles.dialog} aria-label={slot.label + ' 장비 통계'} onClick={event => { if (event.target === event.currentTarget) dialog.current?.close(); }}>
       <div className={styles.dialogBody}><button autoFocus className={styles.close} aria-label="장비 통계 닫기" onClick={() => dialog.current?.close()}>닫기 ✕</button><Statistics stat={stat} label={slot.label} comparison={comparison} /></div>

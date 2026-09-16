@@ -1,7 +1,9 @@
 import { supabaseAdmin } from '@/shared/lib/supabase';
-import { aggregateEquipment, selectNonFarmingEquipmentPreset, type EquipmentObservation } from '@/widgets/equipment-guide/aggregate';
+import { aggregateEquipment, itemsHaveFarmingPotential, type EquipmentObservation, type ObservedEquipment } from '@/widgets/equipment-guide/aggregate';
 import { COHORT_TARGET_SIZE, COMBAT_BUCKETS, EQUIPMENT_SLOTS, type EquipmentCharacterIndexEntry, type EquipmentGuideDataset } from '@/widgets/equipment-guide/model';
-import { EQUIPMENT_GUIDE_CACHE_DAYS, equipmentGuideCacheKey } from '@/widgets/equipment-guide/cohort';
+import { EQUIPMENT_GUIDE_BUCKET_SIZE, EQUIPMENT_GUIDE_CACHE_DAYS, EQUIPMENT_GUIDE_MAX_POWER_DISTANCE_RATIO, equipmentGuideCacheKey } from '@/widgets/equipment-guide/cohort';
+
+const CANDIDATE_FETCH_LIMIT = 150;
 
 const ITEM_FIELDS = [
   'item_equipment_slot', 'item_name', 'item_icon', 'starforce',
@@ -46,16 +48,16 @@ export async function claimEquipmentGuideCache(cacheKey: string, job: string, po
 
 async function selectCandidates(job: string, power: number, sourceDate: string) {
   const db = supabaseAdmin();
-  const distance = Math.max(25_000_000, power * 0.25);
+  const distance = Math.max(EQUIPMENT_GUIDE_BUCKET_SIZE, power * EQUIPMENT_GUIDE_MAX_POWER_DISTANCE_RATIO);
   const fields = 'ocid, job, power';
   const [below, above] = await Promise.all([
-    db.from('equipment_guide_characters').select(fields).eq('source_date', sourceDate).eq('job', job).lte('power', power).gte('power', Math.floor(power - distance)).order('power', { ascending: false }).limit(75),
-    db.from('equipment_guide_characters').select(fields).eq('source_date', sourceDate).eq('job', job).gt('power', power).lte('power', Math.ceil(power + distance)).order('power', { ascending: true }).limit(75),
+    db.from('equipment_guide_characters').select(fields).eq('source_date', sourceDate).eq('job', job).lte('power', power).gte('power', Math.floor(power - distance)).order('power', { ascending: false }).limit(CANDIDATE_FETCH_LIMIT),
+    db.from('equipment_guide_characters').select(fields).eq('source_date', sourceDate).eq('job', job).gt('power', power).lte('power', Math.ceil(power + distance)).order('power', { ascending: true }).limit(CANDIDATE_FETCH_LIMIT),
   ]);
   if (below.error || above.error) throw new Error('장비 가이드 색인을 조회하지 못했습니다.');
   return ([...(below.data ?? []), ...(above.data ?? [])] as EquipmentCharacterIndexEntry[])
     .sort((a, b) => Math.abs(a.power - power) - Math.abs(b.power - power))
-    .slice(0, 75);
+    .slice(0, CANDIDATE_FETCH_LIMIT);
 }
 
 async function nexonEquipment(ocid: string, date: string) {
@@ -80,9 +82,9 @@ export async function collectAndStoreEquipmentGuide(cacheKey: string, job: strin
       const results = await Promise.all(candidates.slice(offset, offset + 8).map(async candidate => {
         const equipment = await nexonEquipment(candidate.ocid, sourceDate);
         if (!equipment) return null;
-        const preset = selectNonFarmingEquipmentPreset(equipment);
-        if (!preset) return null;
-        const items = preset.items.map(item => Object.fromEntries(ITEM_FIELDS.map(field => [field, item[field] ?? null])));
+        const appliedItems = equipment.item_equipment;
+        if (!Array.isArray(appliedItems) || !appliedItems.length || itemsHaveFarmingPotential(appliedItems as ObservedEquipment[])) return null;
+        const items = (appliedItems as ObservedEquipment[]).map(item => Object.fromEntries(ITEM_FIELDS.map(field => [field, item[field] ?? null])));
         return { ...candidate, date: sourceDate, items } satisfies EquipmentObservation;
       }));
       for (const observation of results) if (observation) observations.push(observation);

@@ -11,17 +11,17 @@ test('ranking index visits top and deep ranking bands without duplicates', () =>
   assert.equal(new Set(pages).size, pages.length);
 });
 
-test('nearby searches share a 25m cache bucket', () => {
+test('nearby searches share a 10m cache bucket', () => {
   assert.equal(equipmentGuideBucket(104_000_000), 100_000_000);
-  assert.equal(equipmentGuideCacheKey('히어로', 111_000_000), 'v2:히어로:100000000');
+  assert.equal(equipmentGuideCacheKey('히어로', 111_000_000), 'v3:히어로:110000000');
 });
 
-test('candidate selection keeps the same job within 25 percent and sorts by distance', () => {
+test('candidate selection keeps the same job within 10 percent and sorts by distance', () => {
   const entries = [
     { ocid: 'far', job: '히어로', power: 140_000_000 },
     { ocid: 'other', job: '비숍', power: 100_000_000 },
     { ocid: 'near', job: '히어로', power: 102_000_000 },
-    { ocid: 'edge', job: '히어로', power: 75_000_000 },
+    { ocid: 'edge', job: '히어로', power: 90_000_000 },
   ];
   assert.deepEqual(selectEquipmentCandidates(entries, '히어로', 100_000_000).map(row => row.ocid), ['near', 'edge']);
 });
