@@ -52,8 +52,10 @@ export async function GET(request: NextRequest) {
     .maybeSingle<{ class: string; character_combat_power: number | null }>();
   if (characterError) return Response.json({ error: '등록 캐릭터를 확인하지 못했어요.' }, { status: 500 });
   const job = character?.class?.trim() ?? '';
-  const requestedPower = Number(character?.character_combat_power);
-  if (!job || job.length > 40 || !Number.isFinite(requestedPower) || requestedPower <= 0) {
+  const apiPower = Number(character?.character_combat_power);
+  const overridePower = Number(request.nextUrl.searchParams.get('power'));
+  const requestedPower = Number.isFinite(overridePower) && overridePower > 0 ? overridePower : apiPower;
+  if (!job || job.length > 40 || !Number.isFinite(requestedPower) || requestedPower < COMBAT_BUCKETS[0].min || requestedPower > COMBAT_BUCKETS.at(-1)!.max) {
     return Response.json({ error: '등록 캐릭터의 직업과 전투력을 확인해 주세요.' }, { status: 400 });
   }
 

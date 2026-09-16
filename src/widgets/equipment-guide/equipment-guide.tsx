@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { LocalCharacterProfile } from '@/shared/lib/character-storage';
 import { useQuery } from '@tanstack/react-query';
@@ -21,14 +21,26 @@ export function EquipmentGuide() {
 function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }) {
   const job = profile.character_class;
   const power = profile.character_combat_power;
+  const storageKey = `maple_diary:equipment_guide_power:${profile.id ?? profile.character_name}`;
   const [selected, setSelected] = useState<EquipmentSlotId>('hat');
   const [searchStarted, setSearchStarted] = useState(false);
+  const [comparisonPower, setComparisonPower] = useState(typeof power === 'number' ? power : 0);
+  const [draftPowerEok, setDraftPowerEok] = useState(typeof power === 'number' ? power / 100_000_000 : 0);
   const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const saved = Number(localStorage.getItem(storageKey));
+      const next = Number.isFinite(saved) && saved >= 50_000_000 && saved <= 1_400_000_000 ? saved : typeof power === 'number' ? power : 0;
+      setComparisonPower(next);
+      setDraftPowerEok(next / 100_000_000);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [power, storageKey]);
   const query = useQuery({
-    queryKey: ['equipment-guide', job, power],
-    enabled: searchStarted && !!job && typeof power === 'number' && power > 0,
+    queryKey: ['equipment-guide', job, comparisonPower],
+    enabled: searchStarted && !!job && comparisonPower >= 50_000_000 && comparisonPower <= 1_400_000_000,
     queryFn: async ({ signal }) => {
-      const response = await fetch('/api/equipment-guide?' + new URLSearchParams({ characterId: profile.id ?? '' }), { signal });
+      const response = await fetch('/api/equipment-guide?' + new URLSearchParams({ characterId: profile.id ?? '', power: String(comparisonPower) }), { signal });
       if (!response.ok) throw new Error('장비 통계를 불러오지 못했어요.');
       return response.json() as Promise<EquipmentGuideDataset & { stale: boolean }>;
     },
@@ -45,17 +57,28 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
     setSelected(id);
     if (open && window.matchMedia('(max-width: 767px)').matches) dialog.current?.showModal();
   }
+  function search() {
+    const next = Math.round(draftPowerEok * 100_000_000);
+    if (next < 50_000_000 || next > 1_400_000_000) return;
+    localStorage.setItem(storageKey, String(next));
+    if (searchStarted && next === comparisonPower) query.refetch();
+    else setComparisonPower(next);
+    setSearchStarted(true);
+  }
   return <main className={styles.page}>
     <header className={styles.header}><div><p className={styles.eyebrow}>내 캐릭터의 다음 장비</p><h1>장비 가이드</h1><p>내 캐릭터와 같은 직업·비슷한 전투력의 장비를 비교해 보세요.</p></div><span className={styles.demoBadge}>Nexon 실제 장비 표본</span></header>
     <div className={styles.filters}>
       <div><strong>{profile.character_name}</strong><p className={styles.sample}>{job} · 현재 선택한 내 캐릭터</p><Link href="/settings">캐릭터 변경 →</Link></div>
-      <div><strong>내 전투력 {typeof power === 'number' ? formatPower(power) : '정보 없음'}</strong><p className={styles.sample}>가까운 표본을 자동으로 찾아요</p></div>
-      <button type="button" disabled={query.isFetching || !(typeof power === 'number' && power > 0)} onClick={() => searchStarted ? query.refetch() : setSearchStarted(true)}>
+      <div><strong>넥슨 조회 전투력 {typeof power === 'number' ? formatPower(power) : '정보 없음'}</strong><p className={styles.sample}>현재 장착 중인 세팅 기준</p></div>
+      <label>보스 세팅 비교 전투력
+        <span className={styles.powerInput}><input type="number" min="0.5" max="14" step="0.1" value={draftPowerEok || ''} onChange={event => setDraftPowerEok(Number(event.target.value))} /><b>억</b></span>
+      </label>
+      <button type="button" disabled={query.isFetching || draftPowerEok < 0.5 || draftPowerEok > 14} onClick={search}>
         {query.data?.cacheStatus === 'collecting' ? '장비 수집 중…' : query.data?.stats.length ? '다시 검색' : '비슷한 장비 검색'}
       </button>
     </div>
     <p className={styles.notice}>종합 랭킹에서 수집한 실제 착용 장비입니다. 아이템 드롭률·메소 획득량 잠재를 장착한 재획 세팅은 제외하며, 표본이 적은 구간은 사용 비율이 크게 달라질 수 있어요.</p>
-    {!(typeof power === 'number' && power > 0) && <p className={styles.notice}>내 전투력 정보가 있어야 가까운 표본을 찾을 수 있어요. 설정에서 캐릭터를 다시 불러와 주세요.</p>}
+    <p className={styles.notice}>드메 장비를 착용 중이라면 보스 세팅에서 확인한 전투력을 입력하세요. 이 값은 현재 브라우저에 캐릭터별로 저장됩니다.</p>
     {query.isPending && query.isFetching && <p role="status">캐시를 확인하는 중이에요.</p>}
     {query.data?.cacheStatus === 'collecting' && <p role="status" className={styles.notice}>같은 직업·비슷한 전투력 캐릭터의 장비를 처음 수집하고 있어요. 완료되면 자동으로 표시됩니다.</p>}
     {query.isError && <p role="alert">장비 통계를 불러오지 못했어요. <button onClick={() => query.refetch()}>다시 시도</button></p>}
@@ -87,7 +110,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
       </section>
       <aside className={styles.statistics} aria-label="선택한 장비 상세 통계">{!query.isPending && !query.isError && <Statistics stat={stat} label={slot.label} comparison={comparison} />}</aside>
     </div>
-    <section className={styles.info}><h2>통계 안내</h2><p>검색한 전투력의 ±25% 안에서 같은 직업 캐릭터를 최대 50명까지 수집합니다. 같은 직업·전투력 구간의 결과는 7일 동안 함께 사용해 API 호출을 줄입니다.</p><p>아이템 드롭률·메소 획득량 잠재를 장착한 재획 세팅은 제외합니다. 아이템 사용 비율은 해당 부위 착용자 기준이며, 강화·잠재 통계는 가장 많이 사용한 아이템의 착용자 기준입니다.</p><p>Data based on NEXON Open API</p></section>
+    <section className={styles.info}><h2>통계 안내</h2><p>넥슨 API는 장비 프리셋별 전투력을 제공하지 않아, 입력한 보스 세팅 전투력을 비교 기준으로 사용합니다. 검색 전투력의 ±25% 안에서 같은 직업 캐릭터를 최대 50명까지 수집합니다.</p><p>같은 직업·전투력 구간의 결과는 7일 동안 공유합니다. 아이템 드롭률·메소 획득량 잠재를 장착한 재획 세팅은 제외합니다.</p><p>Data based on NEXON Open API</p></section>
     <Compare selectedSlot={selected} characterName={profile?.character_name} characterJob={profile?.character_class} stat={stat} />
     <dialog ref={dialog} className={styles.dialog} aria-label={slot.label + ' 장비 통계'} onClick={event => { if (event.target === event.currentTarget) dialog.current?.close(); }}>
       <div className={styles.dialogBody}><button autoFocus className={styles.close} aria-label="장비 통계 닫기" onClick={() => dialog.current?.close()}>닫기 ✕</button><Statistics stat={stat} label={slot.label} comparison={comparison} /></div>
