@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useStoredCharacterProfile } from '@/shared/lib/hooks/useStoredCharacterProfile';
+import { EQUIPMENT_GUIDE_ENABLED } from '@/shared/lib/equipment-guide-feature';
 import { CharacterManager } from './CharacterManager';
 import { BottomNav } from './BottomNav';
 
@@ -21,7 +22,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Link href="/dashboard" className="diary-brand"><span className="diary-logo">🍁</span><span>메이플 다이어리<small>나의 메이플 기록</small></span></Link>
         <p className="diary-nav-caption">내 다이어리</p>
         <BottomNav />
-        <Link href="/equipment-guide" className="diary-settings" aria-current={pathname === '/equipment-guide' ? 'page' : undefined}>◇ <span>장비 가이드</span></Link>
+        {EQUIPMENT_GUIDE_ENABLED && <Link href="/equipment-guide" className="diary-settings" aria-current={pathname === '/equipment-guide' ? 'page' : undefined}>◇ <span>장비 가이드</span></Link>}
         <div className="diary-sidebar-note"><span>작은 기록, 더 가까운 목표.</span><p>메이플에서의 노력을<br />차곡차곡 모아보세요.</p><span className="diary-leaf">🍁</span></div>
         <Link href="/settings" className="diary-settings">⚙ <span>설정 및 계정</span></Link>
       </aside>
@@ -38,7 +39,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
         <div id="page-content" className={`diary-content ${isRecord ? 'diary-record-content' : ''}`}>
           {isRecord && <div className="diary-record-intro"><div className="diary-eyebrow">오늘도 차곡차곡</div><h1>오늘의 메이플 기록</h1><p>벌고, 쓰고, 모으는 모든 순간을 한곳에.</p><nav className="diary-tabs" aria-label="기록 종류">{[['/records', '사냥'], ['/expenses', '지출'], ['/gathering', '채집']].map(([href,label]) => <Link key={href} href={href} aria-current={pathname === href ? 'page' : undefined}>{label}</Link>)}</nav></div>}
-          <Link href="/equipment-guide" className="mb-4 inline-block text-xs font-medium text-brand md:hidden">장비 가이드 →</Link>
+          {EQUIPMENT_GUIDE_ENABLED && <Link href="/equipment-guide" className="mb-4 inline-block text-xs font-medium text-brand md:hidden">장비 가이드 →</Link>}
           {children}
         </div>
       </div>

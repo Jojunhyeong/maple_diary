@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { selectNonFarmingEquipmentPreset } from '@/widgets/equipment-guide/aggregate';
+import { EQUIPMENT_GUIDE_ENABLED } from '@/shared/lib/equipment-guide-feature';
 
 const MAPLE_API_BASE = 'https://open.api.nexon.com/maplestory/v1';
 const EQUIPMENT_CACHE_TTL_MS = 1000 * 60 * 60 * 12;
@@ -137,6 +138,7 @@ async function fetchFromNexon(
 }
 
 export async function GET(request: NextRequest) {
+  if (!EQUIPMENT_GUIDE_ENABLED) return NextResponse.json({ error: 'Not Found' }, { status: 404 });
   const ocid = request.nextUrl.searchParams.get('ocid');
   const name = request.nextUrl.searchParams.get('name');
 
@@ -144,7 +146,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'ocid 또는 name이 필요합니다' }, { status: 400 });
   }
 
-    const cacheKey = `${(ocid || name || '').trim().toLowerCase()}:non-farming-v1`;
+  const cacheKey = `${(ocid || name || '').trim().toLowerCase()}:non-farming-v1`;
   const cached = equipmentCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return NextResponse.json(cached.payload, { status: cached.status });

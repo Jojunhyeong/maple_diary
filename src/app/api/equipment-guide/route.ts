@@ -3,6 +3,7 @@ import { auth } from '@/../auth';
 import snapshot from '@/shared/data/equipment-guide-snapshot.json';
 import { supabaseAdmin } from '@/shared/lib/supabase';
 import { isUuidLike } from '@/shared/lib/character-storage';
+import { EQUIPMENT_GUIDE_ENABLED } from '@/shared/lib/equipment-guide-feature';
 import { COMBAT_BUCKETS, type EquipmentGuideStat } from '@/widgets/equipment-guide/model';
 import { equipmentGuideBucket } from '@/widgets/equipment-guide/cohort';
 import {
@@ -39,6 +40,7 @@ function fallbackDataset(job: string, targetPower: number) {
 }
 
 export async function GET(request: NextRequest) {
+  if (!EQUIPMENT_GUIDE_ENABLED) return Response.json({ error: 'Not Found' }, { status: 404 });
   const session = await auth();
   if (!session?.user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 });
   const characterId = request.nextUrl.searchParams.get('characterId');
