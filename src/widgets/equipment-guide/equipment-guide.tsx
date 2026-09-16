@@ -5,7 +5,7 @@ import type { LocalCharacterProfile } from '@/shared/lib/character-storage';
 import { useQuery } from '@tanstack/react-query';
 import { useStoredCharacterProfile } from '@/shared/lib/hooks/useStoredCharacterProfile';
 import { EQUIPMENT_SLOTS, type EquipmentSlotId, type EquipmentGuideDataset } from './model';
-import { ItemIcon, Statistics } from './statistics';
+import { ItemIcon, ItemRankingCarousel, Statistics } from './statistics';
 import { Compare } from './compare';
 import styles from './styles.module.css';
 
@@ -101,7 +101,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
     {query.isPending && query.isFetching && <p role="status">캐시를 확인하는 중이에요.</p>}
     {query.data?.cacheStatus === 'collecting' && <p role="status" className={styles.notice}>같은 직업·비슷한 전투력 캐릭터의 장비를 처음 수집하고 있어요. 완료되면 자동으로 표시됩니다.</p>}
     {query.isError && <p role="alert">장비 통계를 불러오지 못했어요. <button onClick={() => query.refetch()}>다시 시도</button></p>}
-    {query.isFetched && !query.isError && !data.stats.length && query.data?.cacheStatus !== 'collecting' && !query.data?.stale && <p role="status" className={styles.notice}>{job}의 ±25% 범위에서 비교 표본을 확보하지 못했어요. 아래에서 내 장비는 확인할 수 있어요.</p>}
+    {query.isFetched && !query.isError && !data.stats.length && query.data?.cacheStatus !== 'collecting' && !query.data?.stale && <p role="status" className={styles.notice}>{job}의 ±10% 범위에서 비교 표본을 확보하지 못했어요. 아래에서 내 장비는 확인할 수 있어요.</p>}
     {query.data?.stale && <p role="status">통계 갱신이 필요합니다. 오래된 데이터는 표시하지 않아요.</p>}
     <div className={styles.workspace}>
       <section className={styles.inventory} aria-label="부위별 장비 통계">
@@ -116,12 +116,18 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
           </div>
           {EQUIPMENT_SLOTS.map(item => {
             const itemStat = data.stats.find(value => value.slot === item.id);
-            return <button key={item.id} style={{ gridColumn: item.col, gridRow: item.row }}
-              className={styles.slot} aria-label={item.label + (itemStat ? ' 장비 통계 보기' : ' · 데이터 없음')} aria-pressed={selected === item.id}
-              onMouseEnter={() => { if (window.matchMedia('(hover: hover) and (min-width: 768px)').matches) selectSlot(item.id, false); }}
-              onFocus={() => selectSlot(item.id, false)} onClick={() => selectSlot(item.id, true)}>
-              <ItemIcon key={itemStat?.items[0]?.itemIcon ?? item.id} src={itemStat?.items[0]?.itemIcon} /><span>{item.label}</span>
-            </button>;
+            const popoverSide = item.col >= 5 ? styles.popoverLeft : styles.popoverRight;
+            const popoverVertical = item.row >= 4 ? styles.popoverBottom : '';
+            return <div key={item.id} className={styles.slotWrap} style={{ gridColumn: item.col, gridRow: item.row }}
+              onMouseEnter={() => { if (window.matchMedia('(hover: hover) and (min-width: 768px)').matches) selectSlot(item.id, false); }}>
+              <button className={styles.slot} aria-label={item.label + (itemStat ? ' 인기 장비 보기' : ' · 데이터 없음')} aria-pressed={selected === item.id}
+                onFocus={() => selectSlot(item.id, false)} onClick={() => selectSlot(item.id, true)}>
+                <ItemIcon key={itemStat?.items[0]?.itemIcon ?? item.id} src={itemStat?.items[0]?.itemIcon} /><span>{item.label}</span>
+              </button>
+              {itemStat?.items.length ? <div className={`${styles.slotPopover} ${popoverSide} ${popoverVertical}`} role="dialog" aria-label={`${item.label} 인기 장비 미리보기`}>
+                <ItemRankingCarousel stat={itemStat} label={item.label} compact />
+              </div> : null}
+            </div>;
           })}
         </div>
         <p className={styles.hint}>장비 슬롯을 선택해 사용 비율과 강화 분포를 확인하세요.</p>
