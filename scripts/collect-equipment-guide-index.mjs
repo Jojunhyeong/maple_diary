@@ -1,6 +1,6 @@
 import nextEnv from '@next/env';
 import { mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { rankingIndexPages, selectRankingRows, isUnavailableCharacter } from './equipment-guide-plan.mjs';
+import { rankingIndexPages, selectRankingRows, isUnavailableRankingObservation } from './equipment-guide-plan.mjs';
 import { COMBAT_BUCKETS } from '../src/widgets/equipment-guide/model.ts';
 
 nextEnv.loadEnvConfig(process.cwd());
@@ -108,7 +108,7 @@ try {
           cache[id.ocid] = { ocid: id.ocid, job, power };
         }
       } catch (error) {
-        if (!isUnavailableCharacter(error)) { completed = false; throw error; }
+        if (!isUnavailableRankingObservation(error)) { completed = false; throw error; }
       } finally {
         if (completed) {
           progress.pages[page] = { nextRow: nextRow + 1, done: false };

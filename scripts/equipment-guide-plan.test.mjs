@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rankingPages, selectRankingRows, canPublish, isUnavailableCharacter } from './equipment-guide-plan.mjs';
+import { rankingPages, selectRankingRows, canPublish, isUnavailableCharacter, isUnavailableRankingObservation } from './equipment-guide-plan.mjs';
 
 test('expanded scan covers every page through 250 once, including gaps below anchors', () => {
   const iterator = rankingPages();
@@ -35,4 +35,9 @@ test('invalid keys and prepared-data errors stop collection instead of silently 
   for (const code of ['OPENAPI00005', 'OPENAPI00009', 'OPENAPI00010']) {
     assert.equal(isUnavailableCharacter({ status: 400, code }), false);
   }
+});
+
+test('the lightweight ranking index skips a missing historical stat row', () => {
+  assert.equal(isUnavailableRankingObservation({ endpoint: 'character/stat', code: 'OPENAPI00004' }), true);
+  assert.equal(isUnavailableRankingObservation({ endpoint: 'character/stat', code: 'OPENAPI00002' }), false);
 });

@@ -45,3 +45,10 @@ export function isUnavailableCharacter(error) {
     // unavailable before its OCID lookup. Only tolerate this code at /id.
     || (error.endpoint === 'id' && error.code === 'OPENAPI00004');
 }
+
+export function isUnavailableRankingObservation(error) {
+  return isUnavailableCharacter(error)
+    // A character can remain in the daily ranking while its historical stat
+    // record is no longer prepared. Skipping that one row keeps the index run.
+    || (error.endpoint === 'character/stat' && error.code === 'OPENAPI00004');
+}
