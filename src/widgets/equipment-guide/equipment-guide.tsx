@@ -5,7 +5,7 @@ import type { LocalCharacterProfile } from '@/shared/lib/character-storage';
 import { useQuery } from '@tanstack/react-query';
 import { useStoredCharacterProfile } from '@/shared/lib/hooks/useStoredCharacterProfile';
 import { EQUIPMENT_SLOTS, type EquipmentSlotId, type EquipmentGuideDataset } from './model';
-import { ItemIcon, ItemRankingCarousel, Statistics } from './statistics';
+import { ItemIcon, Statistics } from './statistics';
 import { Compare } from './compare';
 import styles from './styles.module.css';
 
@@ -125,7 +125,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
                 <ItemIcon key={itemStat?.items[0]?.itemIcon ?? item.id} src={itemStat?.items[0]?.itemIcon} /><span>{item.label}</span>
               </button>
               {itemStat?.items.length ? <div className={`${styles.slotPopover} ${popoverSide} ${popoverVertical}`} role="dialog" aria-label={`${item.label} 인기 장비 미리보기`}>
-                <ItemRankingCarousel stat={itemStat} label={item.label} compact />
+                <Statistics stat={itemStat} label={item.label} comparison={comparison} />
               </div> : null}
             </div>;
           })}

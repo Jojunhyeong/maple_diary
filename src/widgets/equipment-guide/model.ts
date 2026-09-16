@@ -35,7 +35,20 @@ export const EQUIPMENT_SLOTS = [
 export type EquipmentSlotId = typeof EQUIPMENT_SLOTS[number]['id'];
 export type GradeDistribution = { legendary: number; unique: number; epic: number; rare?: number; other?: number };
 export type OptionDistribution = { label: string; count: number; ratio: number }[];
-export type EquipmentGuideItem = { itemName: string; itemIcon?: string; catalogSlug?: string; count: number; ratio: number };
+export type EquipmentGuideItem = {
+  itemName: string;
+  itemIcon?: string;
+  catalogSlug?: string;
+  count: number;
+  ratio: number;
+  starforce?: { average?: number; median?: number; distribution?: { value: number; count: number; ratio: number }[] };
+  potential?: GradeDistribution;
+  additionalPotential?: GradeDistribution;
+  potentialOptions?: OptionDistribution;
+  additionalPotentialOptions?: OptionDistribution;
+  potentialSupported?: boolean;
+  starforceSupported?: boolean;
+};
 export type EquipmentGuideStat = {
   job: string;
   cohortPower: number;

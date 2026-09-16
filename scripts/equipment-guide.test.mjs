@@ -52,6 +52,19 @@ test('deduplicates characters, omits missing slots and keeps the full item denom
   assert.equal(stat.starforce.median, 19.5);
   assert.equal(stat.potentialOptions[0].count, 2);
 });
+test('keeps starforce and potential statistics for each ranked item', () => {
+  const stats = aggregateEquipment([
+    observation('a', 100_000_000, [item('A', 22, { potential_option_1: 'INT : +30%' })]),
+    observation('b', 100_000_000, [item('A', 18, { potential_option_1: 'INT : +21%' })]),
+    observation('c', 100_000_000, [item('B', 12, { potential_option_1: 'INT : +18%' })]),
+  ], EQUIPMENT_SLOTS, cohortOptions);
+  const stat = stats.find(value => value.cohortPower === 100_000_000);
+  assert.equal(stat.items[0].itemName, 'A');
+  assert.equal(stat.items[0].starforce.median, 20);
+  assert.equal(stat.items[1].itemName, 'B');
+  assert.equal(stat.items[1].starforce.median, 12);
+  assert.equal(stat.items[1].potentialOptions[0].label, 'INT +18%');
+});
 test('builds each comparison from the nearest same-job characters and caps it at 50', () => {
   const rows = Array.from({ length: 60 }, (_, index) => observation(String(index), 50_000_000 + index * 1_000_000, [item(index < 10 ? 'A' : 'B', 17)]));
   const stats = aggregateEquipment(rows, EQUIPMENT_SLOTS, cohortOptions);

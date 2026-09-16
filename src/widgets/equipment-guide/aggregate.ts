@@ -76,6 +76,18 @@ function grades(rows: ObservedEquipment[], field: string): GradeDistribution {
   return Object.fromEntries(Object.entries(counts).map(([key, count]) => [key, percent(count, rows.length)])) as GradeDistribution;
 }
 
+function itemDetails(rows: ObservedEquipment[]) {
+  const stars = rows.flatMap(row => row.starforce != null && row.starforce !== '' && Number.isFinite(Number(row.starforce)) ? [Number(row.starforce)] : []).sort((a, b) => a - b);
+  const middle = Math.floor(stars.length / 2);
+  return {
+    starforce: stars.length ? { average: Math.round(stars.reduce((a, b) => a + b, 0) / stars.length * 10) / 10, median: stars.length % 2 ? stars[middle] : (stars[middle - 1] + stars[middle]) / 2 } : {},
+    potential: grades(rows, 'potential_option_grade'),
+    additionalPotential: grades(rows, 'additional_potential_option_grade'),
+    potentialOptions: options(rows),
+    additionalPotentialOptions: options(rows, true),
+  };
+}
+
 export function aggregateEquipment(observations: EquipmentObservation[], slots: readonly Slot[], cohort: CohortOptions) {
   const grouped = new Map<string, { job: string; cohortPower: number; powerMin: number; powerMax: number; slot: EquipmentSlotId; date: string; rows: ObservedEquipment[] }>();
   // One latest observation per character; reruns never inflate sample counts.
@@ -109,14 +121,18 @@ export function aggregateEquipment(observations: EquipmentObservation[], slots: 
       const previous = counts.get(row.item_name!);
       counts.set(row.item_name!, { count: (previous?.count ?? 0) + 1, icon: row.item_icon || previous?.icon });
     }
-    const items = [...counts].map(([itemName, value]) => ({ itemName, itemIcon: value.icon, count: value.count, ratio: percent(value.count, group.rows.length) })).sort((a, b) => b.count - a.count || a.itemName.localeCompare(b.itemName));
-    const representative = group.rows.filter(row => row.item_name === items[0].itemName);
-    const stars = representative.flatMap(row => row.starforce != null && row.starforce !== '' && Number.isFinite(Number(row.starforce)) ? [Number(row.starforce)] : []).sort((a, b) => a - b);
-    const middle = Math.floor(stars.length / 2);
+    const rankedItems = [...counts].map(([itemName, value]) => ({ itemName, itemIcon: value.icon, count: value.count, ratio: percent(value.count, group.rows.length) }))
+      .sort((a, b) => b.count - a.count || a.itemName.localeCompare(b.itemName))
+      .slice(0, 3);
+    const items = rankedItems.map(item => {
+      const { itemName } = item;
+      const representative = group.rows.filter(row => row.item_name === itemName);
+      return { ...item, ...itemDetails(representative) };
+    });
+    const top = items[0];
     stats.push({ job: group.job, cohortPower: group.cohortPower, powerMin: group.powerMin, powerMax: group.powerMax, slot: group.slot, sampleCount: group.rows.length, items,
-      starforce: stars.length ? { average: Math.round(stars.reduce((a, b) => a + b, 0) / stars.length * 10) / 10, median: stars.length % 2 ? stars[middle] : (stars[middle - 1] + stars[middle]) / 2 } : {},
-      potential: grades(representative, 'potential_option_grade'), additionalPotential: grades(representative, 'additional_potential_option_grade'),
-      potentialOptions: options(representative), additionalPotentialOptions: options(representative, true), updatedAt: group.date,
+      starforce: top.starforce, potential: top.potential, additionalPotential: top.additionalPotential,
+      potentialOptions: top.potentialOptions, additionalPotentialOptions: top.additionalPotentialOptions, updatedAt: group.date,
     });
   }
   return stats;
