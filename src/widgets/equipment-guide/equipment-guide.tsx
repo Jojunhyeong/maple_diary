@@ -116,18 +116,12 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
           </div>
           {EQUIPMENT_SLOTS.map(item => {
             const itemStat = data.stats.find(value => value.slot === item.id);
-            const popoverSide = item.col >= 5 ? styles.popoverLeft : styles.popoverRight;
-            const popoverVertical = item.row >= 4 ? styles.popoverBottom : '';
-            return <div key={item.id} className={styles.slotWrap} style={{ gridColumn: item.col, gridRow: item.row }}
-              onMouseEnter={() => { if (window.matchMedia('(hover: hover) and (min-width: 768px)').matches) selectSlot(item.id, false); }}>
-              <button className={styles.slot} aria-label={item.label + (itemStat ? ' 인기 장비 보기' : ' · 데이터 없음')} aria-pressed={selected === item.id}
-                onFocus={() => selectSlot(item.id, false)} onClick={() => selectSlot(item.id, true)}>
-                <ItemIcon key={itemStat?.items[0]?.itemIcon ?? item.id} src={itemStat?.items[0]?.itemIcon} /><span>{item.label}</span>
-              </button>
-              {itemStat?.items.length ? <div className={`${styles.slotPopover} ${popoverSide} ${popoverVertical}`} role="dialog" aria-label={`${item.label} 인기 장비 미리보기`}>
-                <Statistics stat={itemStat} label={item.label} comparison={comparison} />
-              </div> : null}
-            </div>;
+            return <button key={item.id} style={{ gridColumn: item.col, gridRow: item.row }}
+              className={styles.slot} aria-label={item.label + (itemStat ? ' 인기 장비 보기' : ' · 데이터 없음')} aria-pressed={selected === item.id}
+              onMouseEnter={() => { if (window.matchMedia('(hover: hover) and (min-width: 768px)').matches) selectSlot(item.id, false); }}
+              onFocus={() => selectSlot(item.id, false)} onClick={() => selectSlot(item.id, true)}>
+              <ItemIcon key={itemStat?.items[0]?.itemIcon ?? item.id} src={itemStat?.items[0]?.itemIcon} /><span>{item.label}</span>
+            </button>;
           })}
         </div>
         <p className={styles.hint}>장비 슬롯을 선택해 사용 비율과 강화 분포를 확인하세요.</p>
