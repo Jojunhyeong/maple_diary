@@ -27,7 +27,7 @@ function Distribution({ title, values, options }: { title: string; values: Grade
   )}</section>;
 }
 export function Statistics({ stat, label, comparison }: { stat?: EquipmentGuideStat; label: string; comparison: string }) {
-  if (!stat || !stat.items.length) return <div className={styles.empty}><span aria-hidden="true">◇</span><h2>{label}</h2><p>아직 충분한 장비 데이터가 없어요.</p><small>다른 부위나 전투력 구간을 선택하거나 내 장비를 확인해 보세요.</small></div>;
+  if (!stat || !stat.items.length) return <div className={styles.empty}><span aria-hidden="true">◇</span><h2>{label}</h2><p>아직 충분한 장비 데이터가 없어요.</p><small>다른 부위를 확인하거나 잠시 후 다시 검색해 보세요.</small></div>;
   const top = stat.items[0];
   const part = EQUIPMENT_SLOTS.find(slot => slot.id === stat.slot)?.part ?? label;
   return <div>
