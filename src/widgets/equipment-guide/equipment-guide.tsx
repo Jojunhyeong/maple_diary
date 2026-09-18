@@ -138,7 +138,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
       </section>
       <aside className={styles.statistics} aria-label="선택한 장비 상세 통계">{!query.isPending && !query.isError && <Statistics stat={stat} label={slot.label} comparison={comparison} />}</aside>
     </div>
-    <section className={styles.info}><h2>통계 안내</h2><p>같은 직업에서 검색 전투력의 ±15% 안에 있는 가장 가까운 유효 캐릭터 30명을 사용합니다. 부위별 착용자도 30명 이상일 때만 통계를 표시합니다.</p><p>후보는 랭킹 깊이 10곳에 분산해 수집하고, 검색 시 최신 전투력과 현재 적용 장비를 함께 확인합니다. 드메 잠재 캐릭터는 제외하며 같은 직업·2,500만 전투력 구간의 결과를 7일 동안 공유합니다.</p><p>Data based on NEXON Open API</p></section>
+    <section className={styles.info}><h2>통계 안내</h2><p>같은 직업에서 검색 전투력의 ±15% 안에 있는 가장 가까운 유효 캐릭터 30명을 사용합니다. 저전투력 구간은 최소 ±2,500만 범위를 적용하며, 부위별 착용자도 30명 이상일 때만 통계를 표시합니다.</p><p>후보는 랭킹 깊이 10곳에 분산해 수집하고, 검색 시 최신 전투력과 현재 적용 장비를 함께 확인합니다. 드메 잠재 캐릭터는 제외하며 같은 직업·2,500만 전투력 구간의 결과를 7일 동안 공유합니다.</p><p>Data based on NEXON Open API</p></section>
     <dialog ref={loadoutDialog} className={styles.modalDialog} aria-label="전체 장비 세팅" onClick={event => { if (event.target === event.currentTarget) loadoutDialog.current?.close(); }}>
       <div className={styles.modalBody}><button autoFocus className={styles.close} aria-label="전체 장비 세팅 닫기" onClick={() => loadoutDialog.current?.close()}>닫기 ✕</button><LoadoutCarousel loadouts={data.loadouts} /></div>
     </dialog>
