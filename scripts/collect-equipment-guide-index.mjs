@@ -14,7 +14,7 @@ if (process.env.GUIDE_RANKING_CLASSES) {
   rankingClasses = [...new Set(parsedClasses.map(value => value.trim()))].sort((a, b) => a.localeCompare(b, 'ko'));
 }
 const pages = rankingClasses.length ? rankingJobIndexPages(process.env.GUIDE_PAGES) : rankingIndexPages(process.env.GUIDE_PAGES);
-const take = Number(process.env.GUIDE_PER_PAGE || (rankingClasses.length ? 50 : 200));
+const take = Number(process.env.GUIDE_PER_PAGE || (rankingClasses.length ? 20 : 200));
 const maxRequests = Number(process.env.GUIDE_MAX_REQUESTS || 25_000);
 if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date))) throw new Error('잘못된 기준일');
 if (!Number.isInteger(take) || take < 1 || take > 200) throw new Error('잘못된 페이지당 수집 인원');

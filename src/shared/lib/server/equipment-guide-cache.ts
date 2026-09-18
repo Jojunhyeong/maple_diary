@@ -1,10 +1,10 @@
 import { supabaseAdmin } from '@/shared/lib/supabase';
 import { aggregateEquipment, itemsHaveFarmingPotential, type EquipmentObservation, type ObservedEquipment } from '@/widgets/equipment-guide/aggregate';
 import { COHORT_TARGET_SIZE, COMBAT_BUCKETS, EQUIPMENT_SLOTS, MIN_SAMPLE_COUNT, type EquipmentCharacterIndexEntry, type EquipmentGuideDataset } from '@/widgets/equipment-guide/model';
-import { EQUIPMENT_GUIDE_CACHE_DAYS, equipmentGuideCacheKey } from '@/widgets/equipment-guide/cohort';
+import { EQUIPMENT_GUIDE_CACHE_DAYS, equipmentGuideCacheKey, isWithinEquipmentGuidePowerRange } from '@/widgets/equipment-guide/cohort';
 import { normalizeEquipmentSetEffects, selectRepresentativeCandidates } from '@/widgets/equipment-guide/loadouts';
 
-const CANDIDATE_FETCH_LIMIT = 150;
+const CANDIDATE_FETCH_LIMIT = 90;
 const SET_EFFECT_CANDIDATE_LIMIT = 20;
 const LOADOUT_LIMIT = 5;
 
@@ -62,25 +62,11 @@ async function selectCandidates(job: string, power: number, sourceDate: string) 
     .slice(0, CANDIDATE_FETCH_LIMIT);
 }
 
-async function nexonEquipment(ocid: string, date: string) {
+async function nexonCharacter(path: 'stat' | 'item-equipment' | 'set-effect', ocid: string) {
   const key = process.env.NEXON_API_KEY || process.env.NEXT_PUBLIC_MAPLE_API_KEY;
   if (!key) throw new Error('NEXON_API_KEY가 필요합니다.');
   for (let attempt = 0; attempt < 3; attempt++) {
-    const response = await fetch(`https://open.api.nexon.com/maplestory/v1/character/item-equipment?${new URLSearchParams({ ocid, date })}`, {
-      headers: { 'x-nxopen-api-key': key }, signal: AbortSignal.timeout(15_000), cache: 'no-store',
-    });
-    if (response.ok) return response.json() as Promise<Record<string, unknown>>;
-    if (response.status !== 429 && response.status < 500) return null;
-    await new Promise(resolve => setTimeout(resolve, 1_000 * (attempt + 1)));
-  }
-  return null;
-}
-
-async function nexonSetEffect(ocid: string, date: string) {
-  const key = process.env.NEXON_API_KEY || process.env.NEXT_PUBLIC_MAPLE_API_KEY;
-  if (!key) throw new Error('NEXON_API_KEY가 필요합니다.');
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const response = await fetch(`https://open.api.nexon.com/maplestory/v1/character/set-effect?${new URLSearchParams({ ocid, date })}`, {
+    const response = await fetch(`https://open.api.nexon.com/maplestory/v1/character/${path}?${new URLSearchParams({ ocid })}`, {
       headers: { 'x-nxopen-api-key': key }, signal: AbortSignal.timeout(15_000), cache: 'no-store',
     });
     if (response.ok) return response.json() as Promise<Record<string, unknown>>;
@@ -95,7 +81,7 @@ async function representativeLoadouts(sample: EquipmentObservation[], targetPowe
   const candidates = sample.slice(0, SET_EFFECT_CANDIDATE_LIMIT);
   for (let offset = 0; offset < candidates.length; offset += 5) {
     const rows = await Promise.all(candidates.slice(offset, offset + 5).map(async observation => {
-      const payload = await nexonSetEffect(observation.ocid, observation.date).catch(() => null);
+      const payload = await nexonCharacter('set-effect', observation.ocid).catch(() => null);
       const setEffects = payload ? normalizeEquipmentSetEffects(payload) : [];
       const itemSignature = observation.items.map(item => `${item.item_equipment_slot}:${item.item_name}`).sort().join('|');
       return { ...observation, setEffects, itemSignature };
@@ -124,18 +110,29 @@ export async function collectAndStoreEquipmentGuide(cacheKey: string, job: strin
   const observations: EquipmentObservation[] = [];
   try {
     const candidates = await selectCandidates(job, power, sourceDate);
-    for (let offset = 0; offset < candidates.length && observations.length < COHORT_TARGET_SIZE; offset += 8) {
+    const observationDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+    for (let offset = 0; offset < candidates.length; offset += 8) {
       const results = await Promise.all(candidates.slice(offset, offset + 8).map(async candidate => {
-        const equipment = await nexonEquipment(candidate.ocid, sourceDate);
-        if (!equipment) return null;
+        const [stat, equipment] = await Promise.all([
+          nexonCharacter('stat', candidate.ocid),
+          nexonCharacter('item-equipment', candidate.ocid),
+        ]);
+        if (!stat || !equipment || stat.character_class !== job) return null;
+        const currentPower = Number((stat.final_stat as Array<{ stat_name?: string; stat_value?: string }> | undefined)?.find(value => value.stat_name === '전투력')?.stat_value);
+        if (!Number.isFinite(currentPower) || currentPower <= 0) return null;
         const appliedItems = equipment.item_equipment;
         if (!Array.isArray(appliedItems) || !appliedItems.length || itemsHaveFarmingPotential(appliedItems as ObservedEquipment[])) return null;
         const items = (appliedItems as ObservedEquipment[]).map(item => Object.fromEntries(ITEM_FIELDS.map(field => [field, item[field] ?? null])));
-        return { ...candidate, date: sourceDate, items } satisfies EquipmentObservation;
+        return { ...candidate, power: currentPower, date: observationDate, items } satisfies EquipmentObservation;
       }));
-      for (const observation of results) if (observation) observations.push(observation);
+      for (const observation of results) {
+        if (observation && isWithinEquipmentGuidePowerRange(observation.power, power)) observations.push(observation);
+      }
+      if (observations.length >= COHORT_TARGET_SIZE) break;
     }
-    const sample = observations.slice(0, COHORT_TARGET_SIZE);
+    const sample = observations
+      .sort((a, b) => Math.abs(a.power - power) - Math.abs(b.power - power) || a.power - b.power)
+      .slice(0, COHORT_TARGET_SIZE);
     const enoughSamples = sample.length >= MIN_SAMPLE_COUNT;
     const stats = enoughSamples
       ? aggregateEquipment(sample, EQUIPMENT_SLOTS, { targets: [power], size: COHORT_TARGET_SIZE, minPower: COMBAT_BUCKETS[0].min, maxPower: COMBAT_BUCKETS.at(-1)!.max })

@@ -29,7 +29,7 @@ export function rankingIndexPages(explicitPages) {
 // combat-power distance.
 export function rankingJobIndexPages(explicitPages) {
   if (explicitPages) return [...rankingPages(explicitPages)];
-  return [1, 20, 200, 1_000];
+  return [1, 5, 20, 50, 100, 200, 500, 1_000, 2_000, 5_000];
 }
 
 export function rankingClassFilters() {
