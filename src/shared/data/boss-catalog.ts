@@ -97,16 +97,6 @@ export const BOSS_CATALOG: BossCatalogGroup[] = [
         difficulties: { normal: 1560000000, hard: 4845000000 },
         dropItems: [{ id: 'estella_earring', name: '에스텔라 이어링' }],
       },
-      {
-        id: 'meirin',
-        name: '메이린',
-        category: 'grandis',
-        maxPartySize: 1,
-        rewardKind: 'fixed',
-        accountWide: true,
-        seasonal: true,
-        difficulties: { normal: 300000000, hard: 600000000 },
-      },
     ],
   },
   {
