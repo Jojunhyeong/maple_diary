@@ -1,14 +1,20 @@
 import nextEnv from '@next/env';
 import { mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { rankingIndexPages, selectRankingRows, isUnavailableRankingObservation } from './equipment-guide-plan.mjs';
+import { rankingClassFilters, rankingIndexPages, rankingJobIndexPages, selectRankingRows, isUnavailableRankingObservation } from './equipment-guide-plan.mjs';
 import { COMBAT_BUCKETS } from '../src/widgets/equipment-guide/model.ts';
 
 nextEnv.loadEnvConfig(process.cwd());
 const key = process.env.NEXON_API_KEY || process.env.NEXT_PUBLIC_MAPLE_API_KEY;
 if (!key) throw new Error('NEXON_API_KEY가 필요합니다.');
 const date = process.env.GUIDE_DATE || new Date(Date.now() - 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
-const pages = rankingIndexPages(process.env.GUIDE_PAGES);
-const take = Number(process.env.GUIDE_PER_PAGE || 200);
+let rankingClasses = rankingClassFilters();
+if (process.env.GUIDE_RANKING_CLASSES) {
+  const parsedClasses = JSON.parse(process.env.GUIDE_RANKING_CLASSES);
+  if (!Array.isArray(parsedClasses) || parsedClasses.some(value => typeof value !== 'string' || !value.trim())) throw new Error('잘못된 랭킹 직업군 목록');
+  rankingClasses = [...new Set(parsedClasses.map(value => value.trim()))].sort((a, b) => a.localeCompare(b, 'ko'));
+}
+const pages = rankingClasses.length ? rankingJobIndexPages(process.env.GUIDE_PAGES) : rankingIndexPages(process.env.GUIDE_PAGES);
+const take = Number(process.env.GUIDE_PER_PAGE || (rankingClasses.length ? 50 : 200));
 const maxRequests = Number(process.env.GUIDE_MAX_REQUESTS || 25_000);
 if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date))) throw new Error('잘못된 기준일');
 if (!Number.isInteger(take) || take < 1 || take > 200) throw new Error('잘못된 페이지당 수집 인원');
@@ -36,7 +42,8 @@ catch (error) {
 await lock.writeFile(String(process.pid));
 
 const cache = await readJson(cachePath, {});
-const progress = await readJson(progressPath, { pages: {} });
+const progress = await readJson(progressPath, { pages: {}, invalidScopes: {} });
+progress.invalidScopes ??= {};
 let requests = 0;
 let lastRequestAt = 0;
 
@@ -79,7 +86,9 @@ async function save() {
     date,
     collectedAt: new Date().toISOString(),
     sampleCount: entries.length,
-    method: '종합 랭킹의 상위 및 심층 페이지를 나눠 조회해 직업·전투력 색인을 만들었습니다. 장비는 사용자가 검색한 구간만 별도로 수집합니다.',
+    method: rankingClasses.length
+      ? '공식 랭킹 직업군별로 상위·중간·심층 페이지를 균형 있게 조회해 전투력 색인을 만들었습니다. 장비는 사용자가 검색한 구간만 별도로 수집합니다.'
+      : '종합 랭킹의 상위 및 심층 페이지를 나눠 조회해 직업·전투력 색인을 만들었습니다. 장비는 사용자가 검색한 구간만 별도로 수집합니다.',
     entries,
   };
   if (entries.length >= 100) {
@@ -89,12 +98,27 @@ async function save() {
 }
 
 try {
-  for (const page of pages) {
-    if (progress.pages[page]?.done) continue;
-    const ranking = await api('ranking/overall', { date, page: String(page) });
+  const rankingScopes = rankingClasses.length ? rankingClasses : [null];
+  for (const rankingClass of rankingScopes) for (const page of pages) {
+    if (rankingClass && progress.invalidScopes[rankingClass]) break;
+    const pageKey = `${rankingClass ?? 'all'}:${page}`;
+    if (progress.pages[pageKey]?.done) continue;
+    const params = { date, page: String(page) };
+    if (rankingClass) params.class = rankingClass;
+    let ranking;
+    try {
+      ranking = await api('ranking/overall', params);
+    } catch (error) {
+      if (rankingClass && error.status === 400 && error.code === 'OPENAPI00004') {
+        progress.invalidScopes[rankingClass] = true;
+        await save();
+        break;
+      }
+      throw error;
+    }
     if (!Array.isArray(ranking.ranking)) throw new Error('랭킹 응답 형식 오류');
     const rows = selectRankingRows(ranking.ranking, take);
-    let nextRow = progress.pages[page]?.nextRow || 0;
+    let nextRow = progress.pages[pageKey]?.nextRow || 0;
     for (; nextRow < rows.length; nextRow++) {
       const row = rows[nextRow];
       let completed = true;
@@ -111,18 +135,18 @@ try {
         if (!isUnavailableRankingObservation(error)) { completed = false; throw error; }
       } finally {
         if (completed) {
-          progress.pages[page] = { nextRow: nextRow + 1, done: false };
+          progress.pages[pageKey] = { nextRow: nextRow + 1, done: false };
           if ((nextRow + 1) % 20 === 0) await save();
         }
       }
     }
-    progress.pages[page] = { nextRow: rows.length, done: true };
+    progress.pages[pageKey] = { nextRow: rows.length, done: true };
     await save();
-    console.log(JSON.stringify({ event: 'page', page, indexed: Object.keys(cache).length, requests }));
+    console.log(JSON.stringify({ event: 'page', rankingClass: rankingClass ?? 'all', page, indexed: Object.keys(cache).length, requests }));
   }
 } finally {
   try { await save(); }
   finally { await lock.close(); await unlink(lockPath); }
 }
 
-console.log(JSON.stringify({ date, pages: pages.length, indexed: Object.keys(cache).length, requests }));
+console.log(JSON.stringify({ date, rankingClasses: rankingClasses.length || 'all', pages: pages.length, indexed: Object.keys(cache).length, requests }));

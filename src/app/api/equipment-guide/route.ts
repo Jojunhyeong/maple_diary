@@ -4,7 +4,7 @@ import snapshot from '@/shared/data/equipment-guide-snapshot.json';
 import { supabaseAdmin } from '@/shared/lib/supabase';
 import { isUuidLike } from '@/shared/lib/character-storage';
 import { EQUIPMENT_GUIDE_ENABLED } from '@/shared/lib/equipment-guide-feature';
-import { COMBAT_BUCKETS, type EquipmentGuideStat } from '@/widgets/equipment-guide/model';
+import { COMBAT_BUCKETS, MIN_SAMPLE_COUNT, type EquipmentGuideStat } from '@/widgets/equipment-guide/model';
 import { equipmentGuideBucket } from '@/widgets/equipment-guide/cohort';
 import {
   claimEquipmentGuideCache,
@@ -21,7 +21,8 @@ type LegacyEquipmentGuideStat = Omit<EquipmentGuideStat, 'cohortPower' | 'powerM
 function fallbackDataset(job: string, targetPower: number) {
   const date = snapshot.date as string | null;
   const stale = !date || Date.now() - Date.parse(date + 'T00:00:00+09:00') >= 30 * 86_400_000;
-  const allStats = stale ? [] : snapshot.stats as unknown as Array<EquipmentGuideStat | LegacyEquipmentGuideStat>;
+  const allStats = stale ? [] : (snapshot.stats as unknown as Array<EquipmentGuideStat | LegacyEquipmentGuideStat>)
+    .filter(stat => stat.sampleCount >= MIN_SAMPLE_COUNT);
   const jobStats = allStats.filter((stat): stat is EquipmentGuideStat => stat.job === job && 'cohortPower' in stat && Number.isFinite(stat.cohortPower));
   const cohortPower = jobStats.reduce<number | undefined>((nearest, stat) => nearest === undefined || Math.abs(stat.cohortPower - targetPower) < Math.abs(nearest - targetPower) ? stat.cohortPower : nearest, undefined);
   let stats: Array<EquipmentGuideStat | LegacyEquipmentGuideStat> = cohortPower === undefined ? [] : jobStats.filter(stat => stat.cohortPower === cohortPower);

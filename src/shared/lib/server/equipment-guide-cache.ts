@@ -1,7 +1,7 @@
 import { supabaseAdmin } from '@/shared/lib/supabase';
-import { aggregateEquipment, itemsHaveFarmingPotential, type EquipmentObservation, type ObservedEquipment } from '@/widgets/equipment-guide/aggregate';
-import { COHORT_TARGET_SIZE, COMBAT_BUCKETS, EQUIPMENT_SLOTS, type EquipmentCharacterIndexEntry, type EquipmentGuideDataset } from '@/widgets/equipment-guide/model';
-import { EQUIPMENT_GUIDE_BUCKET_SIZE, EQUIPMENT_GUIDE_CACHE_DAYS, EQUIPMENT_GUIDE_MAX_POWER_DISTANCE_RATIO, equipmentGuideCacheKey } from '@/widgets/equipment-guide/cohort';
+import { aggregateEquipment, selectNonFarmingEquipmentPreset, type EquipmentObservation } from '@/widgets/equipment-guide/aggregate';
+import { COHORT_TARGET_SIZE, COMBAT_BUCKETS, EQUIPMENT_SLOTS, MIN_SAMPLE_COUNT, type EquipmentCharacterIndexEntry, type EquipmentGuideDataset } from '@/widgets/equipment-guide/model';
+import { EQUIPMENT_GUIDE_CACHE_DAYS, equipmentGuideCacheKey } from '@/widgets/equipment-guide/cohort';
 import { normalizeEquipmentSetEffects, selectRepresentativeCandidates } from '@/widgets/equipment-guide/loadouts';
 
 const CANDIDATE_FETCH_LIMIT = 150;
@@ -51,11 +51,10 @@ export async function claimEquipmentGuideCache(cacheKey: string, job: string, po
 
 async function selectCandidates(job: string, power: number, sourceDate: string) {
   const db = supabaseAdmin();
-  const distance = Math.max(EQUIPMENT_GUIDE_BUCKET_SIZE, power * EQUIPMENT_GUIDE_MAX_POWER_DISTANCE_RATIO);
   const fields = 'ocid, job, power';
   const [below, above] = await Promise.all([
-    db.from('equipment_guide_characters').select(fields).eq('source_date', sourceDate).eq('job', job).lte('power', power).gte('power', Math.floor(power - distance)).order('power', { ascending: false }).limit(CANDIDATE_FETCH_LIMIT),
-    db.from('equipment_guide_characters').select(fields).eq('source_date', sourceDate).eq('job', job).gt('power', power).lte('power', Math.ceil(power + distance)).order('power', { ascending: true }).limit(CANDIDATE_FETCH_LIMIT),
+    db.from('equipment_guide_characters').select(fields).eq('source_date', sourceDate).eq('job', job).lte('power', power).order('power', { ascending: false }).limit(CANDIDATE_FETCH_LIMIT),
+    db.from('equipment_guide_characters').select(fields).eq('source_date', sourceDate).eq('job', job).gt('power', power).order('power', { ascending: true }).limit(CANDIDATE_FETCH_LIMIT),
   ]);
   if (below.error || above.error) throw new Error('장비 가이드 색인을 조회하지 못했습니다.');
   return ([...(below.data ?? []), ...(above.data ?? [])] as EquipmentCharacterIndexEntry[])
@@ -129,19 +128,23 @@ export async function collectAndStoreEquipmentGuide(cacheKey: string, job: strin
       const results = await Promise.all(candidates.slice(offset, offset + 8).map(async candidate => {
         const equipment = await nexonEquipment(candidate.ocid, sourceDate);
         if (!equipment) return null;
-        const appliedItems = equipment.item_equipment;
-        if (!Array.isArray(appliedItems) || !appliedItems.length || itemsHaveFarmingPotential(appliedItems as ObservedEquipment[])) return null;
-        const items = (appliedItems as ObservedEquipment[]).map(item => Object.fromEntries(ITEM_FIELDS.map(field => [field, item[field] ?? null])));
+        const bossPreset = selectNonFarmingEquipmentPreset(equipment);
+        if (!bossPreset) return null;
+        const items = bossPreset.items.map(item => Object.fromEntries(ITEM_FIELDS.map(field => [field, item[field] ?? null])));
         return { ...candidate, date: sourceDate, items } satisfies EquipmentObservation;
       }));
       for (const observation of results) if (observation) observations.push(observation);
     }
     const sample = observations.slice(0, COHORT_TARGET_SIZE);
-    const stats = aggregateEquipment(sample, EQUIPMENT_SLOTS, { targets: [power], size: COHORT_TARGET_SIZE, minPower: COMBAT_BUCKETS[0].min, maxPower: COMBAT_BUCKETS.at(-1)!.max });
-    const loadouts = sample.length ? await representativeLoadouts(sample, power) : [];
+    const enoughSamples = sample.length >= MIN_SAMPLE_COUNT;
+    const stats = enoughSamples
+      ? aggregateEquipment(sample, EQUIPMENT_SLOTS, { targets: [power], size: COHORT_TARGET_SIZE, minPower: COMBAT_BUCKETS[0].min, maxPower: COMBAT_BUCKETS.at(-1)!.max })
+        .filter(stat => stat.sampleCount >= MIN_SAMPLE_COUNT)
+      : [];
+    const loadouts = enoughSamples ? await representativeLoadouts(sample, power) : [];
     const dataset: EquipmentGuideDataset = {
-      source: 'api', stats, loadouts, cacheStatus: stats.length ? 'ready' : 'unavailable',
-      cohort: sample.length ? { targetPower: power, powerMin: Math.min(...sample.map(row => row.power)), powerMax: Math.max(...sample.map(row => row.power)), characterCount: sample.length } : undefined,
+      source: 'api', stats, loadouts, cacheStatus: enoughSamples && stats.length ? 'ready' : 'unavailable',
+      cohort: enoughSamples ? { targetPower: power, powerMin: Math.min(...sample.map(row => row.power)), powerMax: Math.max(...sample.map(row => row.power)), characterCount: sample.length } : undefined,
     };
     const db = supabaseAdmin();
     await db.from('equipment_guide_cache').update({ status: 'ready', dataset, source_date: sourceDate, expires_at: new Date(Date.now() + EQUIPMENT_GUIDE_CACHE_DAYS * 86_400_000).toISOString(), updated_at: new Date().toISOString() }).eq('cache_key', cacheKey);

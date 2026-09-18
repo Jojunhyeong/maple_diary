@@ -8,6 +8,7 @@ import { EQUIPMENT_SLOTS, type EquipmentSlotId, type EquipmentGuideDataset } fro
 import { ItemIcon, Statistics } from './statistics';
 import { Compare } from './compare';
 import { LoadoutCarousel } from './loadout-carousel';
+import { equipmentGuideBucket } from './cohort';
 import styles from './styles.module.css';
 
 export function EquipmentGuide() {
@@ -31,15 +32,18 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
   const [historyMessage, setHistoryMessage] = useState('');
   const loadoutDialog = useRef<HTMLDialogElement>(null);
   const compareDialog = useRef<HTMLDialogElement>(null);
+  const requestPower = equipmentGuideBucket(comparisonPower);
   const query = useQuery({
-    queryKey: ['equipment-guide', job, comparisonPower],
+    queryKey: ['equipment-guide', job, requestPower],
     enabled: searchStarted && !!job && comparisonPower >= 50_000_000 && comparisonPower <= 1_400_000_000,
     queryFn: async ({ signal }) => {
       const response = await fetch('/api/equipment-guide?' + new URLSearchParams({ characterId: profile.id ?? '', power: String(comparisonPower) }), { signal });
       if (!response.ok) throw new Error('장비 통계를 불러오지 못했어요.');
       return response.json() as Promise<EquipmentGuideDataset & { stale: boolean }>;
     },
-    staleTime: 300_000,
+    staleTime: 60 * 60_000,
+    gcTime: 24 * 60 * 60_000,
+    refetchOnWindowFocus: false,
     refetchInterval: query => query.state.data?.cacheStatus === 'collecting'
       ? query.state.data.retryAfterMs ?? 2_000
       : false,
@@ -58,8 +62,8 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
   function search() {
     const next = Math.round(draftPowerEok * 100_000_000);
     if (next < 50_000_000 || next > 1_400_000_000) return;
-    if (searchStarted && next === comparisonPower) query.refetch();
-    else setComparisonPower(next);
+    if (next !== comparisonPower) setComparisonPower(next);
+    else if (query.isError || query.data?.cacheStatus === 'collecting') void query.refetch();
     setSearchStarted(true);
   }
   function resetToNexonPower() {
@@ -106,7 +110,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
     {query.isPending && query.isFetching && <p role="status">캐시를 확인하는 중이에요.</p>}
     {query.data?.cacheStatus === 'collecting' && <p role="status" className={styles.notice}>같은 직업·비슷한 전투력 캐릭터의 장비를 처음 수집하고 있어요. 완료되면 자동으로 표시됩니다.</p>}
     {query.isError && <p role="alert">장비 통계를 불러오지 못했어요. <button onClick={() => query.refetch()}>다시 시도</button></p>}
-    {query.isFetched && !query.isError && !data.stats.length && query.data?.cacheStatus !== 'collecting' && !query.data?.stale && <p role="status" className={styles.notice}>{job}의 ±10% 범위에서 비교 표본을 확보하지 못했어요. 아래에서 내 장비는 확인할 수 있어요.</p>}
+    {query.isFetched && !query.isError && !data.stats.length && query.data?.cacheStatus !== 'collecting' && !query.data?.stale && <p role="status" className={styles.notice}>{job}의 가까운 보스 세팅 표본을 30명 이상 확보하지 못했어요. 아래에서 내 장비는 확인할 수 있어요.</p>}
     {query.data?.stale && <p role="status">통계 갱신이 필요합니다. 오래된 데이터는 표시하지 않아요.</p>}
     <div className={styles.workspace}>
       <section className={styles.inventory} aria-label="부위별 장비 통계">
@@ -134,7 +138,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
       </section>
       <aside className={styles.statistics} aria-label="선택한 장비 상세 통계">{!query.isPending && !query.isError && <Statistics stat={stat} label={slot.label} comparison={comparison} />}</aside>
     </div>
-    <section className={styles.info}><h2>통계 안내</h2><p>검색 전투력의 ±10% 안에서 같은 직업 캐릭터를 최대 50명까지 수집합니다. 표본 캐릭터의 전투력과 장비는 반드시 같은 날짜의 실제 적용 세팅을 사용합니다.</p><p>해당 적용 세팅에 아이템 드롭률·메소 획득량 잠재가 있으면 제외합니다. 같은 직업·전투력 구간의 결과는 7일 동안 공유합니다.</p><p>Data based on NEXON Open API</p></section>
+    <section className={styles.info}><h2>통계 안내</h2><p>같은 직업에서 검색 전투력과 가장 가까운 유효 캐릭터 30명을 사용합니다. 부위별 착용자도 30명 이상일 때만 통계를 표시합니다.</p><p>프리셋 1~3 중 아이템 드롭률·메소 획득량 잠재가 없는 가장 강한 장비 세팅을 사용합니다. 같은 직업·전투력 구간의 결과는 7일 동안 공유합니다.</p><p>Data based on NEXON Open API</p></section>
     <dialog ref={loadoutDialog} className={styles.modalDialog} aria-label="전체 장비 세팅" onClick={event => { if (event.target === event.currentTarget) loadoutDialog.current?.close(); }}>
       <div className={styles.modalBody}><button autoFocus className={styles.close} aria-label="전체 장비 세팅 닫기" onClick={() => loadoutDialog.current?.close()}>닫기 ✕</button><LoadoutCarousel loadouts={data.loadouts} /></div>
     </dialog>
