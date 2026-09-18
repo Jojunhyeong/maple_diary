@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/shared/lib/supabase';
-import { aggregateEquipment, selectNonFarmingEquipmentPreset, type EquipmentObservation } from '@/widgets/equipment-guide/aggregate';
+import { aggregateEquipment, itemsHaveFarmingPotential, type EquipmentObservation, type ObservedEquipment } from '@/widgets/equipment-guide/aggregate';
 import { COHORT_TARGET_SIZE, COMBAT_BUCKETS, EQUIPMENT_SLOTS, MIN_SAMPLE_COUNT, type EquipmentCharacterIndexEntry, type EquipmentGuideDataset } from '@/widgets/equipment-guide/model';
 import { EQUIPMENT_GUIDE_CACHE_DAYS, equipmentGuideCacheKey } from '@/widgets/equipment-guide/cohort';
 import { normalizeEquipmentSetEffects, selectRepresentativeCandidates } from '@/widgets/equipment-guide/loadouts';
@@ -128,9 +128,9 @@ export async function collectAndStoreEquipmentGuide(cacheKey: string, job: strin
       const results = await Promise.all(candidates.slice(offset, offset + 8).map(async candidate => {
         const equipment = await nexonEquipment(candidate.ocid, sourceDate);
         if (!equipment) return null;
-        const bossPreset = selectNonFarmingEquipmentPreset(equipment);
-        if (!bossPreset) return null;
-        const items = bossPreset.items.map(item => Object.fromEntries(ITEM_FIELDS.map(field => [field, item[field] ?? null])));
+        const appliedItems = equipment.item_equipment;
+        if (!Array.isArray(appliedItems) || !appliedItems.length || itemsHaveFarmingPotential(appliedItems as ObservedEquipment[])) return null;
+        const items = (appliedItems as ObservedEquipment[]).map(item => Object.fromEntries(ITEM_FIELDS.map(field => [field, item[field] ?? null])));
         return { ...candidate, date: sourceDate, items } satisfies EquipmentObservation;
       }));
       for (const observation of results) if (observation) observations.push(observation);
