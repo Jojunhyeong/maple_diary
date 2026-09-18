@@ -99,6 +99,14 @@ export function writeLocalCharacters(characters: LocalCharacterProfile[], active
   window.dispatchEvent(new Event(CHARACTER_CHANGE_EVENT));
 }
 
+export function activateLocalCharacter(activeId: string) {
+  const characters = readLocalCharacters();
+  writeLocalCharacters(characters.map((character) => ({
+    ...character,
+    is_active: character.id === activeId,
+  })), activeId);
+}
+
 export function clearCharacterSelection() {
   if (typeof window === "undefined") return;
 

@@ -18,7 +18,9 @@ import {
   getBossMonthKey,
   getBossWeekKey,
   calculateBossRevenue,
+  extractWeeklyBossPlan,
   filterBossChecklistStateByCycle,
+  getRecurringBossPlan,
   isBossSelected,
   removeBossChecklistStatesByCycles,
   mergeBossChecklistStates,
@@ -31,6 +33,8 @@ import {
   useBossRevenueMutations,
   useBossRevenuesQuery,
 } from '@/shared/lib/queries/useBossRevenuesQuery';
+import { useCharacterMutations, useCharactersQuery } from '@/shared/lib/queries/useCharactersQuery';
+import { activateLocalCharacter } from '@/shared/lib/character-storage';
 
 const LOOT_PRICE_UNIT = 10_000_000;
 
@@ -60,6 +64,14 @@ export default function BossPage() {
     weekKey,
     cycleType: 'weekly',
   });
+  const previousWeeklyQuery = useBossRevenuesQuery({
+    userId: session?.user?.id,
+    isLoggedIn,
+    characterId: activeCharacterId ?? '',
+    cycleType: 'weekly',
+  });
+  const charactersQuery = useCharactersQuery({ userId: session?.user?.id, isLoggedIn });
+  const { activateCharacter, isActivating } = useCharacterMutations({ isLoggedIn });
   const { saveBossRevenue, deleteBossRevenue } = useBossRevenueMutations({ isLoggedIn });
   const [activeCategory, setActiveCategory] = useState<BossCategoryKey>('grandis');
   const [state, setState] = useState<ChecklistState>({});
@@ -71,9 +83,13 @@ export default function BossPage() {
   const [isMonthlyLocked, setIsMonthlyLocked] = useState(false);
   const [isEditingSavedCycles, setIsEditingSavedCycles] = useState(false);
   const [expandedBossId, setExpandedBossId] = useState<string | null>(null);
+  const [isRecordMode, setIsRecordMode] = useState(false);
+  const [recurringPlan, setRecurringPlan] = useState(() => extractWeeklyBossPlan(undefined));
+  const [switchingCharacterId, setSwitchingCharacterId] = useState<string | null>(null);
 
   useEffect(() => {
     setIsHydrated(true);
+    setIsRecordMode(new URLSearchParams(window.location.search).get('mode') === 'record');
   }, []);
 
   useEffect(() => {
@@ -87,6 +103,7 @@ export default function BossPage() {
       setIsMonthlyLocked(false);
       setIsEditingSavedCycles(false);
       setState({});
+      setRecurringPlan({});
 
       if (!activeCharacterId) {
         if (!cancelled) {
@@ -103,10 +120,10 @@ export default function BossPage() {
         return;
       }
 
-      if (weeklyQuery.isLoading || monthlyQuery.isLoading) return;
+      if (weeklyQuery.isLoading || monthlyQuery.isLoading || previousWeeklyQuery.isLoading) return;
 
       try {
-        if (weeklyQuery.error || monthlyQuery.error) throw weeklyQuery.error ?? monthlyQuery.error;
+        if (weeklyQuery.error || monthlyQuery.error || previousWeeklyQuery.error) throw weeklyQuery.error ?? monthlyQuery.error ?? previousWeeklyQuery.error;
         const weeklyRows = weeklyQuery.data ?? [];
         const monthlyRows = monthlyQuery.data ?? [];
 
@@ -116,10 +133,20 @@ export default function BossPage() {
         const monthlyRow = monthlyRows[0];
 
         if (weeklyRow?.state) {
+          setRecurringPlan(getRecurringBossPlan(weeklyRow.state));
           setState((prev) => mergeBossChecklistStates(prev, weeklyRow.state));
           setIsWeeklyLocked(true);
         } else {
           setIsWeeklyLocked(false);
+          const previousRow = (previousWeeklyQuery.data ?? []).find((row) => row.week_key < weekKey);
+          const previousPlan = getRecurringBossPlan(previousRow?.state);
+          setRecurringPlan(previousPlan);
+          if (Object.keys(previousPlan).length > 0) {
+            setState((prev) => mergeBossChecklistStates(prev, previousPlan as ChecklistState));
+            setSaveMessage(isRecordMode
+              ? '기본 보스 설정을 불러왔어요. 이번 주 못 잡은 보스만 빼고 저장하세요'
+              : '지난 보스 설정을 이번 주 초안으로 불러왔어요');
+          }
         }
 
         if (monthlyRow?.state) {
@@ -161,6 +188,10 @@ export default function BossPage() {
     monthlyQuery.data,
     monthlyQuery.error,
     monthlyQuery.isLoading,
+    isRecordMode,
+    previousWeeklyQuery.data,
+    previousWeeklyQuery.error,
+    previousWeeklyQuery.isLoading,
     weekKey,
     weeklyQuery.data,
     weeklyQuery.error,
@@ -417,11 +448,15 @@ export default function BossPage() {
       return;
     }
 
+    const bossPlan = isRecordMode && Object.keys(recurringPlan).length > 0
+      ? recurringPlan
+      : extractWeeklyBossPlan(state);
+    const stateWithPlan = { ...state, __bossPlan: bossPlan } as ChecklistState;
     const stateToSave = isWeeklyLocked && !isMonthlyLocked
-      ? filterBossChecklistStateByCycle(state, 'monthly')
+      ? filterBossChecklistStateByCycle(stateWithPlan, 'monthly')
       : !isWeeklyLocked && isMonthlyLocked
-        ? filterBossChecklistStateByCycle(state, 'weekly')
-        : state;
+        ? filterBossChecklistStateByCycle(stateWithPlan, 'weekly')
+        : stateWithPlan;
 
     setIsSaving(true);
     setSaveMessage('');
@@ -435,6 +470,7 @@ export default function BossPage() {
       const savedCycles = new Set(data.savedCycles ?? []);
       if (savedCycles.has('weekly')) setIsWeeklyLocked(true);
       if (savedCycles.has('monthly')) setIsMonthlyLocked(true);
+      setRecurringPlan(bossPlan);
       setIsEditingSavedCycles(false);
 
       if (savedCycles.has('weekly') && savedCycles.has('monthly')) {
@@ -450,6 +486,20 @@ export default function BossPage() {
       setSaveMessage(error instanceof Error ? error.message : '저장에 실패했어요');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleCharacterSwitch = async (characterId: string) => {
+    if (!isLoggedIn || characterId === activeCharacterId || isActivating) return;
+    setSwitchingCharacterId(characterId);
+    setSaveMessage('캐릭터를 변경하는 중이에요');
+    try {
+      await activateCharacter(characterId);
+      activateLocalCharacter(characterId);
+    } catch (error) {
+      setSaveMessage(error instanceof Error ? error.message : '캐릭터 변경에 실패했어요');
+    } finally {
+      setSwitchingCharacterId(null);
     }
   };
 
@@ -512,10 +562,11 @@ export default function BossPage() {
         <>
         <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="maple-title text-2xl font-bold text-t1">보스 수익</h1>
+          <h1 className="maple-title text-2xl font-bold text-t1">{isRecordMode ? '보스 기록 추가' : '보스 수익'}</h1>
           <p className="mt-1 text-xs text-t3">체크한 보스와 보스별 드랍템을 기준으로 주간(목~수)과 월간 검마 수익을 합산해요</p>
           <p className="mt-1 text-[11px] text-t3">로그인 후 서버에 주간/월간 수익을 저장할 수 있어요</p>
           <p className="mt-2 text-[11px] text-t3">주간 기준 · {weekLabel}</p>
+          {isRecordMode && <p className="mt-2 text-[11px] font-semibold text-amber-600">이번 주에 못 잡은 보스를 제외해도 다음 주 기본 설정에는 영향을 주지 않아요</p>}
         </div>
         <div className="flex flex-col items-end gap-2">
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1038,6 +1089,24 @@ export default function BossPage() {
             ))}
           </div>
         )}
+      </Card>
+
+      <Card>
+        <div className="mb-3">
+          <p className="text-sm font-semibold text-t1">캐릭터 바로 전환</p>
+          <p className="mt-1 text-[11px] text-t3">다른 캐릭터의 보스 설정과 이번 주 기록을 바로 확인할 수 있어요</p>
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {(charactersQuery.data?.characters ?? []).map((character) => {
+            const characterId = character.id ?? '';
+            const active = characterId === activeCharacterId;
+            return <button key={characterId || character.character_name} type="button" disabled={!characterId || isActivating} onClick={() => void handleCharacterSwitch(characterId)}
+              className={`flex min-w-[150px] items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${active ? 'border-amber-500 bg-amber-500/10' : 'border-line bg-surface/40 hover:border-amber-500/40'} disabled:opacity-60`}>
+              {character.image_url ? <Image src={character.image_url} alt="" width={36} height={36} className="h-9 w-9 shrink-0 object-contain" unoptimized /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface text-xs">◇</span>}
+              <span className="min-w-0"><strong className="block truncate text-xs text-t1">{character.character_name ?? '이름 없음'}</strong><small className="block truncate text-[10px] text-t3">{active ? '현재 캐릭터' : switchingCharacterId === characterId ? '변경 중…' : '선택하기'}</small></span>
+            </button>;
+          })}
+        </div>
       </Card>
         </>
       )}

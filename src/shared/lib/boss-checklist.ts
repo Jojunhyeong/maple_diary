@@ -21,8 +21,11 @@ export type BossSelection = {
   difficulties: Partial<Record<BossDifficultyKey, { checked: boolean; partySize: number }>>;
 };
 
+export type BossPlanState = Record<string, BossSelection>;
+
 export type ChecklistState = Record<string, BossSelection> & {
   __lootItems?: BossLootItem[];
+  __bossPlan?: BossPlanState;
 };
 
 export type BossRevenueEntry = {
@@ -137,7 +140,24 @@ export function splitBossChecklistState(state: ChecklistState) {
     }
   }
 
-  return { weekly, monthly, lootItems: state.__lootItems ?? [] };
+  return { weekly, monthly, lootItems: state.__lootItems ?? [], bossPlan: state.__bossPlan };
+}
+
+export function extractWeeklyBossPlan(state: ChecklistState | undefined): BossPlanState {
+  const plan: BossPlanState = {};
+  if (!state) return plan;
+  for (const group of BOSS_CATALOG) for (const boss of group.bosses) {
+    if ((boss.resetCycle ?? 'weekly') !== 'weekly') continue;
+    const selection = state[boss.id];
+    if (selection) plan[boss.id] = selection;
+  }
+  return plan;
+}
+
+export function getRecurringBossPlan(state: ChecklistState | undefined) {
+  return state?.__bossPlan && Object.keys(state.__bossPlan).length > 0
+    ? state.__bossPlan
+    : extractWeeklyBossPlan(state);
 }
 
 function createEmptyBossRevenueCharacterSummary(characterId: string | null): BossRevenueCharacterSummary {
@@ -257,14 +277,14 @@ export function buildBossRevenueSnapshot(
 }
 
 export function buildBossRevenueSnapshots(state: ChecklistState, weekKey: string, monthKey: string, characterId: string | null) {
-  const { weekly, monthly, lootItems } = splitBossChecklistState(state);
+  const { weekly, monthly, lootItems, bossPlan } = splitBossChecklistState(state);
   const snapshots: BossRevenueSnapshot[] = [];
   const hasCheckedLoot = lootItems.some((item) => item.checked);
 
   if (Object.keys(weekly).length > 0 || hasCheckedLoot) {
     snapshots.push(
       buildBossRevenueSnapshot(
-        { ...weekly, __lootItems: lootItems } as ChecklistState,
+        { ...weekly, __lootItems: lootItems, ...(bossPlan ? { __bossPlan: bossPlan } : {}) } as ChecklistState,
         weekKey,
         'weekly',
         characterId,
@@ -299,6 +319,9 @@ export function filterBossChecklistStateByCycle(state: ChecklistState, cycleType
 
   if (state.__lootItems) {
     filtered.__lootItems = state.__lootItems;
+  }
+  if (cycleType === 'weekly' && state.__bossPlan) {
+    filtered.__bossPlan = state.__bossPlan;
   }
 
   return filtered;

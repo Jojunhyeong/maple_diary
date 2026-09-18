@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useRecordMutations, useRecordsQuery } from '@/shared/lib/queries/useRecordsQuery';
 import { useAuthStore } from '@/shared/lib/stores/useAuthStore';
@@ -109,7 +110,10 @@ export default function RecordsPage() {
     <main className="maple-fade-up flex flex-col gap-4 px-4 pt-6 pb-4">
       <div className="diary-record-toolbar">
         <div><h2>사냥 기록</h2><p>기간별 기록과 순수익을 확인해 보세요.</p></div>
-        <button type="button" className="diary-secondary-action" onClick={openRecordModal}>＋ 기록 추가</button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Link href="/boss?mode=record" className="diary-secondary-action">＋ 보스 기록</Link>
+          <button type="button" className="diary-secondary-action" onClick={openRecordModal}>＋ 사냥 기록</button>
+        </div>
       </div>
 
       {/* 필터 탭 */}

@@ -2,6 +2,24 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/../auth';
 import { supabaseAdmin } from '@/shared/lib/supabase';
 
+export async function PATCH(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { id } = await params;
+  const db = supabaseAdmin();
+  const { data: owned, error: lookupError } = await db.from('characters').select('id').eq('user_id', session.user.id).eq('id', id).maybeSingle();
+  if (lookupError) return NextResponse.json({ error: lookupError.message }, { status: 500 });
+  if (!owned) return NextResponse.json({ error: '캐릭터를 찾지 못했습니다' }, { status: 404 });
+  const { error: clearError } = await db.from('characters').update({ is_active: false }).eq('user_id', session.user.id);
+  if (clearError) return NextResponse.json({ error: clearError.message }, { status: 500 });
+  const { error } = await db.from('characters').update({ is_active: true, updated_at: new Date().toISOString() }).eq('user_id', session.user.id).eq('id', id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },

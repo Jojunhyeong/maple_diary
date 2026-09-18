@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { recordQueryKeys } from '@/shared/lib/queries/useRecordsQuery';
 import type { LocalCharacterProfile } from '@/shared/lib/character-storage';
 
-type CharacterApiItem = Partial<LocalCharacterProfile> & {
+export type CharacterApiItem = Partial<LocalCharacterProfile> & {
   id?: string;
   character_name?: string;
   is_active?: boolean;
@@ -93,11 +93,22 @@ export function useCharacterMutations({ isLoggedIn = false }: { isLoggedIn?: boo
     onSuccess: invalidateCharacters,
   });
 
+  const activateMutation = useMutation({
+    mutationFn: async (characterId: string) => {
+      if (!isLoggedIn) return;
+      const response = await fetch(`/api/characters/${encodeURIComponent(characterId)}`, { method: 'PATCH' });
+      if (!response.ok) throw new Error(await readApiError(response, '캐릭터 변경에 실패했습니다'));
+    },
+    onSuccess: invalidateCharacters,
+  });
+
   return {
     saveCharacter: saveMutation.mutateAsync,
     deleteCharacter: deleteMutation.mutateAsync,
+    activateCharacter: activateMutation.mutateAsync,
     isSaving: saveMutation.isPending,
     isDeleting: deleteMutation.isPending,
-    error: saveMutation.error ?? deleteMutation.error,
+    isActivating: activateMutation.isPending,
+    error: saveMutation.error ?? deleteMutation.error ?? activateMutation.error,
   };
 }
