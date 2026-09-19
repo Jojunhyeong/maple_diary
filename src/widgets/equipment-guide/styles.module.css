@@ -150,11 +150,6 @@
 .compare th,.compare td { padding:12px; border-bottom:1px solid var(--border); }
 .compare th { font-weight:500; color:var(--text-secondary); }
 .compare a { color:var(--brand-primary); }
-.compareHeader { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:12px; }
-.compareHeader h2 { margin:3px 0 5px; font-size:20px; }
-.compareHeader p:not(.eyebrow) { font-size:12px; color:var(--text-secondary); }
-.starDifference { flex:none; padding:7px 10px; border-radius:999px; background:var(--brand-soft); color:var(--brand-primary); font-size:11px; font-weight:700; }
-.presetNotice { margin-bottom:16px; padding:9px 12px; border-radius:9px; background:var(--surface-subtle); color:var(--text-secondary)!important; font-size:11px!important; }
 .tooltipCompareGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:start; }
 .mapleTooltip { position:relative; min-width:0; overflow:hidden; padding:18px 20px 22px; border:1px solid #252a32; border-radius:16px; background:#050607; color:#f8fafc; box-shadow:0 18px 42px rgba(0,0,0,.36); }
 .mapleTooltip::before { content:""; position:absolute; inset:0; pointer-events:none; background:linear-gradient(120deg,rgba(255,255,255,.045),transparent 28%); }
@@ -218,10 +213,8 @@
 .modalDialog[open],.compareDialog[open] { animation:modalIn .32s cubic-bezier(.22,1,.36,1); }
 .modalDialog[open]::backdrop,.compareDialog[open]::backdrop { animation:backdropIn .22s ease-out; }
 .compareDialog { width:min(1020px,calc(100% - 32px)); border:0; background:transparent; box-shadow:none; }
-.compareDialog .modalBody { background:transparent; }
-.compareDialog .close { position:relative; z-index:2; margin-bottom:10px; padding:7px 10px; border:1px solid rgba(255,255,255,.18); border-radius:999px; background:rgba(5,6,7,.86); color:#fff; }
-.compareDialog .compareHeader h2 { color:#fff; }
-.compareDialog .compareHeader p:not(.eyebrow) { color:#c2c7d0; }
+.compareDialog .modalBody { padding:0; background:transparent; }
+.compareDialog .close { position:fixed; z-index:2; top:18px; right:18px; margin:0; padding:7px 10px; border:1px solid rgba(255,255,255,.18); border-radius:999px; background:rgba(5,6,7,.86); color:#fff; }
 .modalBody { max-height:90dvh; padding:20px; overflow-y:auto; overscroll-behavior:contain; }
 .modalBody .loadouts,.modalBody .compare { border:0; padding:0; }
 @keyframes modalIn { from { opacity:0; transform:translateY(18px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
@@ -252,7 +245,6 @@
  .recommendedSlot img { width:27px; height:27px; }
  .recommendedSlot strong { display:none; }
  .loadoutMeta small { display:none; }
- .compareHeader { flex-direction:column; }
  .tooltipCompareGrid { grid-template-columns:1fr; }
  .mapleTooltip { padding:18px; }
  .tooltipIconStage { min-height:140px; }

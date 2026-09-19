@@ -44,15 +44,9 @@ export function Compare({ characterName, selectedSlot, recommended }: { characte
   const own = query.data?.items.find(item => item.slot === slot?.apiSlot);
   const ownStarforce = readNumber(own?.raw, 'starforce');
   const recommendedStarforce = recommended.item.starforce;
-  const difference = ownStarforce !== undefined && recommendedStarforce !== undefined ? ownStarforce - recommendedStarforce : null;
   const goalParams = new URLSearchParams({ guideItem: recommended.item.itemName, guidePart: part });
 
   return <section className={styles.compare}>
-    <div className={styles.compareHeader}>
-      <div><p className={styles.eyebrow}>장비 비교</p><h2>{slot?.label}</h2><p>{characterName}의 장비와 전투력 {formatPower(recommended.loadout.power)} 추천 세팅을 비교해요.</p></div>
-      {difference !== null && <span className={styles.starDifference}>{difference === 0 ? '스타포스 동일' : `내 장비가 ${Math.abs(difference)}성 ${difference > 0 ? '높음' : '낮음'}`}</span>}
-    </div>
-    {query.data?.equipment_preset_no && <p className={styles.presetNotice}>드롭률·메소 획득량 잠재가 없는 장비 프리셋 {query.data.equipment_preset_no}번 기준</p>}
     {!characterName ? <p>캐릭터를 선택하면 내 장비를 함께 확인할 수 있어요. <Link href="/settings">캐릭터 선택 →</Link></p>
       : query.isPending ? <CompareSkeleton />
       : query.isError ? <p role="alert">{query.error.message} <button onClick={() => void query.refetch()}>다시 시도</button></p>
