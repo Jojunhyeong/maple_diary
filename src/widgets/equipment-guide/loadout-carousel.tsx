@@ -4,7 +4,7 @@ import { EQUIPMENT_SLOTS, type EquipmentGuideLoadout, type EquipmentGuideLoadout
 import { ItemIcon } from './statistics';
 import styles from './styles.module.css';
 
-export function LoadoutCarousel({ loadouts, onSelectItem }: { loadouts?: EquipmentGuideLoadout[]; onSelectItem?: (loadout: EquipmentGuideLoadout, item: EquipmentGuideLoadoutItem) => void }) {
+export function LoadoutCarousel({ loadouts, characterImage, characterName, onSelectItem }: { loadouts?: EquipmentGuideLoadout[]; characterImage?: string; characterName?: string; onSelectItem?: (loadout: EquipmentGuideLoadout, item: EquipmentGuideLoadoutItem) => void }) {
   const [active, setActive] = useState(0);
   const touchStart = useRef<number | null>(null);
   if (!loadouts?.length) return null;
@@ -25,11 +25,18 @@ export function LoadoutCarousel({ loadouts, onSelectItem }: { loadouts?: Equipme
         {loadouts.map((loadout, index) => <article key={loadout.id} className={styles.loadoutSlide} aria-hidden={index !== active} inert={index !== active}>
           <div className={styles.loadoutMeta}><div><strong>추천 세팅 {index + 1}</strong><span>전투력 {formatPower(loadout.power)} · {loadout.date} 기준</span></div><small>캐릭터명 비공개</small></div>
           <div className={styles.setBadges}>{loadout.setEffects.length ? loadout.setEffects.map(effect => <span key={effect.name}>{effect.name} {effect.count}세트</span>) : <span>주요 세트 효과 없음</span>}</div>
-          <div className={styles.loadoutGrid}>{EQUIPMENT_SLOTS.map(slot => {
+          <div className={styles.recommendedEquipmentGrid}>
+            <div className={styles.recommendedPortrait}>
+              {characterImage
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={characterImage} alt={characterName ? `${characterName} 캐릭터` : '내 캐릭터'} />
+                : <svg viewBox="0 0 120 160" aria-hidden="true"><circle cx="60" cy="48" r="25" /><path d="M24 136v-32a36 36 0 0172 0v32Z" /></svg>}
+              <strong>{characterName || '내 캐릭터'}</strong><small>추천 세팅 {index + 1} 미리보기</small>
+            </div>
+            {EQUIPMENT_SLOTS.map(slot => {
             const item = loadout.items.find(value => value.slot === slot.id);
-            return <button type="button" key={slot.id} className={styles.loadoutItem} title={item?.itemName} disabled={!item} onClick={() => { if (item) onSelectItem?.(loadout, item); }}>
+            return <button type="button" key={slot.id} style={{ gridColumn: slot.col, gridRow: slot.row }} className={styles.recommendedSlot} title={item?.itemName} disabled={!item} onClick={() => { if (item) onSelectItem?.(loadout, item); }}>
               <ItemIcon src={item?.itemIcon} /><span>{slot.label}</span><strong>{item?.itemName ?? '미착용'}</strong>
-              {item && <small>{item.starforce !== undefined ? `${item.starforce}성` : '스타포스 없음'}{item.potentialGrade ? ` · ${item.potentialGrade}` : ''}{item.additionalPotentialGrade ? ` / 에디 ${item.additionalPotentialGrade}` : ''}</small>}
             </button>;
           })}</div>
         </article>)}

@@ -104,7 +104,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
     {query.isError && <p role="alert">장비 통계를 불러오지 못했어요. <button onClick={() => query.refetch()}>다시 시도</button></p>}
     {query.isFetched && !query.isError && !data.loadouts?.length && query.data?.cacheStatus !== 'collecting' && !query.data?.stale && <p role="status" className={styles.notice}>{job}의 유효한 보스 세팅을 불러오지 못했어요. 잠시 후 다시 검색해 주세요.</p>}
     {query.data?.stale && <p role="status">통계 갱신이 필요합니다. 오래된 데이터는 표시하지 않아요.</p>}
-    {!!data.loadouts?.length && <LoadoutCarousel loadouts={data.loadouts} onSelectItem={compareItem} />}
+    {!!data.loadouts?.length && <LoadoutCarousel loadouts={data.loadouts} characterImage={profile.image_url ?? undefined} characterName={profile.character_name} onSelectItem={compareItem} />}
     <section className={styles.info}><h2>추천 안내</h2><p>추천 세팅은 실제 한 캐릭터가 함께 착용한 전체 장비 조합입니다. 서로 다른 주요 세트 구성을 우선해 최대 3개를 보여주며, 여러 캐릭터의 인기 부위를 섞지 않습니다.</p><p>같은 직업에서 검색 전투력의 ±15%를 먼저 찾고 유효 표본이 10명보다 적으면 가까운 순서로 범위를 넓힙니다. 드메 잠재 캐릭터는 제외하며 결과는 7일 동안 공유합니다.</p><p>Data based on NEXON Open API</p></section>
     <dialog ref={compareDialog} className={styles.compareDialog} aria-label="내 장비와 비교" onClick={event => { if (event.target === event.currentTarget) compareDialog.current?.close(); }}>
       <div className={styles.modalBody}><button autoFocus className={styles.close} aria-label="내 장비 비교 닫기" onClick={() => compareDialog.current?.close()}>닫기 ✕</button>{comparison && <Compare selectedSlot={comparison.item.slot} characterName={profile?.character_name} recommended={comparison} />}</div>
