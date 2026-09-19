@@ -22,7 +22,9 @@
 .filters button,.compare button { font-size:12px; color:var(--brand-primary); padding:10px 0; cursor:pointer; }
 .filters button { min-height:44px; padding:10px 14px; border:1px solid var(--brand-primary); border-radius:8px; background:var(--brand-soft); font-weight:650; }
 .filters button:disabled { cursor:default; opacity:.55; }
-.filterActions { display:flex; align-items:stretch; justify-content:flex-end; gap:10px; margin-left:auto; }
+.powerEditor { display:flex; align-items:flex-start; gap:8px; }
+.powerEditor>button { flex:none; margin-top:20px; }
+.filterActions { display:flex; align-self:flex-start; align-items:stretch; justify-content:flex-end; gap:10px; margin:20px 0 0 auto; }
 .filterActions button { display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; }
 .filterActions .searchButton { gap:7px; min-width:164px; padding-inline:20px; border-color:var(--brand-primary); background:var(--brand-primary); color:white; box-shadow:0 8px 20px color-mix(in srgb,var(--brand-primary) 28%,transparent); transition:transform .2s cubic-bezier(.22,1,.36,1),box-shadow .2s ease,opacity .2s ease; }
 .filterActions .searchButton svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; }
@@ -170,9 +172,9 @@
  .headerControls { align-items:stretch; width:100%; }
  .demoBadge { display:none; }
  .quickActions button { flex:1; padding:9px 11px; white-space:nowrap; }
- .filterActions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; margin-left:0; }
+ .filterActions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; margin:0; }
  .filterActions button { min-width:0; padding-inline:10px; }
- .filterActions .searchButton { grid-column:1 / -1; min-width:0; }
+ .filterActions .searchButton { min-width:0; }
  .page { gap:18px; }
  .portrait img { height:130px; }
  .loadouts { padding:16px; }

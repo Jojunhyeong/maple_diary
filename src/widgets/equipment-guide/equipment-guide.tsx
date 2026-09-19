@@ -86,12 +86,14 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
     <div className={styles.filters}>
       <div><strong>{profile.character_name}</strong><p className={styles.sample}>{job} · 현재 설정된 내 캐릭터</p></div>
       <div><strong>넥슨 조회 전투력 {typeof power === 'number' ? formatPower(power) : '정보 없음'}</strong><p className={styles.sample}>현재 장착 중인 세팅 기준</p></div>
-      <label>비교 전투력
-        <span className={styles.powerInput}><input aria-label="비교 전투력" type="number" min="0.5" max="14" step="0.1" value={draftPowerEok || ''} disabled={powerMode !== 'manual'} onChange={event => setDraftPowerEok(Number(event.target.value))} /><b>억</b></span>
-        <small>{powerMode === 'manual' ? '직접 입력한 값' : powerMode === 'history' ? '최근 보스 세팅 기록' : '넥슨 조회값'}</small>
-      </label>
-      <div className={styles.filterActions}>
+      <div className={styles.powerEditor}>
+        <label>비교 전투력
+          <span className={styles.powerInput}><input aria-label="비교 전투력" type="number" min="0.5" max="14" step="0.1" value={draftPowerEok || ''} disabled={powerMode !== 'manual'} onChange={event => setDraftPowerEok(Number(event.target.value))} /><b>억</b></span>
+          <small>{powerMode === 'manual' ? '직접 입력한 값' : powerMode === 'history' ? '최근 보스 세팅 기록' : '넥슨 조회값'}</small>
+        </label>
         <button type="button" onClick={() => powerMode === 'manual' ? resetToNexonPower() : setPowerMode('manual')}>{powerMode === 'manual' ? '넥슨 값 사용' : '직접 입력'}</button>
+      </div>
+      <div className={styles.filterActions}>
         <button type="button" disabled={historyStatus === 'loading' || !profile.id} onClick={() => void findBossPower()}>{historyStatus === 'loading' ? '기록 확인 중…' : '최근 보스 세팅 찾기'}</button>
         <button type="button" className={styles.searchButton} disabled={query.isFetching || draftPowerEok < 0.5 || draftPowerEok > 14} onClick={search}>
           <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>{query.data?.cacheStatus === 'collecting' ? '장비 수집 중…' : query.data?.loadouts?.length ? '다시 검색' : '비슷한 장비 검색'}
