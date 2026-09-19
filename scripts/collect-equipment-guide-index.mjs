@@ -16,9 +16,11 @@ if (process.env.GUIDE_RANKING_CLASSES) {
 const pages = rankingClasses.length ? rankingJobIndexPages(process.env.GUIDE_PAGES) : rankingIndexPages(process.env.GUIDE_PAGES);
 const take = Number(process.env.GUIDE_PER_PAGE || (rankingClasses.length ? 20 : 200));
 const maxRequests = Number(process.env.GUIDE_MAX_REQUESTS || 25_000);
+const rowConcurrency = Number(process.env.GUIDE_ROW_CONCURRENCY || 20);
 if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date))) throw new Error('잘못된 기준일');
 if (!Number.isInteger(take) || take < 1 || take > 200) throw new Error('잘못된 페이지당 수집 인원');
 if (!Number.isSafeInteger(maxRequests) || maxRequests < 1) throw new Error('잘못된 API 요청 한도');
+if (!Number.isInteger(rowConcurrency) || rowConcurrency < 1 || rowConcurrency > 20) throw new Error('잘못된 동시 수집 인원');
 
 const cacheDirectory = '.cache/equipment-guide-index';
 const cachePath = `${cacheDirectory}/${date}.json`;
@@ -45,13 +47,10 @@ const cache = await readJson(cachePath, {});
 const progress = await readJson(progressPath, { pages: {}, invalidScopes: {} });
 progress.invalidScopes ??= {};
 let requests = 0;
-let lastRequestAt = 0;
 
 async function api(path, params) {
   for (let attempt = 0; attempt < 4; attempt++) {
     if (requests >= maxRequests) throw new Error('설정한 API 요청 한도에 도달했습니다.');
-    await new Promise(resolve => setTimeout(resolve, Math.max(0, 220 - (Date.now() - lastRequestAt))));
-    lastRequestAt = Date.now();
     requests++;
     const response = await fetch(`https://open.api.nexon.com/maplestory/v1/${path}?${new URLSearchParams(params)}`, {
       headers: { 'x-nxopen-api-key': key }, signal: AbortSignal.timeout(20_000),
@@ -119,26 +118,24 @@ try {
     if (!Array.isArray(ranking.ranking)) throw new Error('랭킹 응답 형식 오류');
     const rows = selectRankingRows(ranking.ranking, take);
     let nextRow = progress.pages[pageKey]?.nextRow || 0;
-    for (; nextRow < rows.length; nextRow++) {
-      const row = rows[nextRow];
-      let completed = true;
-      try {
-        const id = await api('id', { character_name: row.character_name });
-        if (!id.ocid || cache[id.ocid]) continue;
-        const stat = await api('character/stat', { ocid: id.ocid, date });
-        const power = Number(stat.final_stat?.find(value => value.stat_name === '전투력')?.stat_value);
-        const job = stat.character_class;
-        if (Number.isFinite(power) && power >= COMBAT_BUCKETS[0].min && power <= COMBAT_BUCKETS.at(-1).max && typeof job === 'string' && job.trim()) {
-          cache[id.ocid] = { ocid: id.ocid, job, power };
+    for (; nextRow < rows.length; nextRow += rowConcurrency) {
+      const endRow = Math.min(nextRow + rowConcurrency, rows.length);
+      await Promise.all(rows.slice(nextRow, endRow).map(async row => {
+        try {
+          const id = await api('id', { character_name: row.character_name });
+          if (!id.ocid || cache[id.ocid]) return;
+          const stat = await api('character/stat', { ocid: id.ocid, date });
+          const power = Number(stat.final_stat?.find(value => value.stat_name === '전투력')?.stat_value);
+          const job = stat.character_class;
+          if (Number.isFinite(power) && power >= COMBAT_BUCKETS[0].min && power <= COMBAT_BUCKETS.at(-1).max && typeof job === 'string' && job.trim()) {
+            cache[id.ocid] = { ocid: id.ocid, job, power };
+          }
+        } catch (error) {
+          if (!isUnavailableRankingObservation(error)) throw error;
         }
-      } catch (error) {
-        if (!isUnavailableRankingObservation(error)) { completed = false; throw error; }
-      } finally {
-        if (completed) {
-          progress.pages[pageKey] = { nextRow: nextRow + 1, done: false };
-          if ((nextRow + 1) % 20 === 0) await save();
-        }
-      }
+      }));
+      progress.pages[pageKey] = { nextRow: endRow, done: false };
+      await save();
     }
     progress.pages[pageKey] = { nextRow: rows.length, done: true };
     await save();

@@ -6,6 +6,8 @@ import { normalizeEquipmentSetEffects, selectRepresentativeCandidates } from '@/
 
 const CANDIDATE_FETCH_LIMIT = 90;
 const SET_EFFECT_CANDIDATE_LIMIT = 20;
+const CANDIDATE_BATCH_SIZE = 15;
+const SET_EFFECT_BATCH_SIZE = 10;
 const LOADOUT_LIMIT = 5;
 
 const ITEM_FIELDS = [
@@ -79,8 +81,8 @@ async function nexonCharacter(path: 'stat' | 'item-equipment' | 'set-effect', oc
 async function representativeLoadouts(sample: EquipmentObservation[], targetPower: number) {
   const enriched = [];
   const candidates = sample.slice(0, SET_EFFECT_CANDIDATE_LIMIT);
-  for (let offset = 0; offset < candidates.length; offset += 5) {
-    const rows = await Promise.all(candidates.slice(offset, offset + 5).map(async observation => {
+  for (let offset = 0; offset < candidates.length; offset += SET_EFFECT_BATCH_SIZE) {
+    const rows = await Promise.all(candidates.slice(offset, offset + SET_EFFECT_BATCH_SIZE).map(async observation => {
       const payload = await nexonCharacter('set-effect', observation.ocid).catch(() => null);
       const setEffects = payload ? normalizeEquipmentSetEffects(payload) : [];
       const itemSignature = observation.items.map(item => `${item.item_equipment_slot}:${item.item_name}`).sort().join('|');
@@ -111,8 +113,8 @@ export async function collectAndStoreEquipmentGuide(cacheKey: string, job: strin
   try {
     const candidates = await selectCandidates(job, power, sourceDate);
     const observationDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
-    for (let offset = 0; offset < candidates.length; offset += 8) {
-      const results = await Promise.all(candidates.slice(offset, offset + 8).map(async candidate => {
+    for (let offset = 0; offset < candidates.length; offset += CANDIDATE_BATCH_SIZE) {
+      const results = await Promise.all(candidates.slice(offset, offset + CANDIDATE_BATCH_SIZE).map(async candidate => {
         const [stat, equipment] = await Promise.all([
           nexonCharacter('stat', candidate.ocid),
           nexonCharacter('item-equipment', candidate.ocid),
