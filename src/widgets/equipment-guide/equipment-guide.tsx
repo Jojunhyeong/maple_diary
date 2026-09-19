@@ -55,7 +55,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
     const next = Math.round(draftPowerEok * 100_000_000);
     if (next < 50_000_000 || next > 1_400_000_000) return;
     if (next !== comparisonPower) setComparisonPower(next);
-    else if (query.isError || query.data?.cacheStatus === 'collecting') void query.refetch();
+    else if (searchStarted) void query.refetch();
     setSearchStarted(true);
   }
   function resetToNexonPower() {
