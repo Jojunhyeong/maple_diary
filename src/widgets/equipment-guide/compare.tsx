@@ -3,8 +3,29 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import type { EquipmentGuideLoadout, EquipmentGuideLoadoutItem, EquipmentSlotId, OwnEquipment } from './model';
 import { EQUIPMENT_SLOTS } from './model';
-import { optionLabel } from './aggregate';
 import styles from './styles.module.css';
+
+type RawEquipment = Record<string, unknown>;
+type TooltipCardProps = {
+  badge: string;
+  name: string;
+  icon?: string | null;
+  part: string;
+  starforce?: number;
+  potentialGrade?: string;
+  potentialLines: string[];
+  additionalGrade?: string;
+  additionalLines: string[];
+  stats?: Array<{ label: string; value: string }>;
+  footer?: string;
+  goalHref?: string;
+};
+
+const STAT_FIELDS = [
+  ['str', 'STR'], ['dex', 'DEX'], ['int', 'INT'], ['luk', 'LUK'],
+  ['max_hp', '최대 HP'], ['max_mp', '최대 MP'], ['attack_power', '공격력'], ['magic_power', '마력'],
+  ['boss_damage', '보스 몬스터 데미지'], ['ignore_monster_armor', '몬스터 방어율 무시'], ['all_stat', '올스탯'],
+] as const;
 
 export function Compare({ characterName, selectedSlot, recommended }: { characterName?: string; selectedSlot: EquipmentSlotId; recommended: { loadout: EquipmentGuideLoadout; item: EquipmentGuideLoadoutItem } }) {
   const query = useQuery({
@@ -17,26 +38,116 @@ export function Compare({ characterName, selectedSlot, recommended }: { characte
     },
   });
   const slot = EQUIPMENT_SLOTS.find(item => item.id === selectedSlot);
+  const part = slot?.part ?? '장비';
   const own = query.data?.items.find(item => item.slot === slot?.apiSlot);
-  const star = own?.raw?.starforce;
-  const comparisonStar = recommended.item.starforce;
-  const difference = star != null && star !== '' && Number.isFinite(Number(star)) && comparisonStar !== undefined ? Number(star) - comparisonStar : null;
-  return <section className={styles.compare}><h2>{slot?.label} · 내 장비와 비교</h2>
-    {query.data?.equipment_preset_no && <p className={styles.sample}>드롭률·메소 획득량 잠재가 없는 장비 프리셋 {query.data.equipment_preset_no}번을 사용합니다.</p>}
+  const ownStarforce = readNumber(own?.raw, 'starforce');
+  const recommendedStarforce = recommended.item.starforce;
+  const difference = ownStarforce !== undefined && recommendedStarforce !== undefined ? ownStarforce - recommendedStarforce : null;
+  const goalParams = new URLSearchParams({ guideItem: recommended.item.itemName, guidePart: part });
+
+  return <section className={styles.compare}>
+    <div className={styles.compareHeader}>
+      <div><p className={styles.eyebrow}>장비 비교</p><h2>{slot?.label}</h2><p>{characterName}의 장비와 전투력 {formatPower(recommended.loadout.power)} 추천 세팅을 비교해요.</p></div>
+      {difference !== null && <span className={styles.starDifference}>{difference === 0 ? '스타포스 동일' : `내 장비가 ${Math.abs(difference)}성 ${difference > 0 ? '높음' : '낮음'}`}</span>}
+    </div>
+    {query.data?.equipment_preset_no && <p className={styles.presetNotice}>드롭률·메소 획득량 잠재가 없는 장비 프리셋 {query.data.equipment_preset_no}번 기준</p>}
     {!characterName ? <p>캐릭터를 선택하면 내 장비를 함께 확인할 수 있어요. <Link href="/settings">캐릭터 선택 →</Link></p>
-      : query.isPending ? <p role="status">내 장비를 불러오는 중이에요.</p>
+      : query.isPending ? <CompareSkeleton />
       : query.isError ? <p role="alert">{query.error.message} <button onClick={() => void query.refetch()}>다시 시도</button></p>
       : !own ? <p>{characterName}의 해당 부위 장비 정보가 없어요.</p>
-      : <><p>{characterName} · {own.name}</p><p className={styles.sample}>추천 세팅 장비: {recommended.item.itemName} · 전투력 {formatPower(recommended.loadout.power)} 캐릭터의 실제 조합</p>
-        <div className={styles.tableWrap}><table><thead><tr><th>항목</th><th>내 장비</th><th>추천 세팅</th></tr></thead><tbody>
-          <tr><th>장비</th><td>{own.name}</td><td>{recommended.item.itemName}</td></tr>
-          <tr><th>스타포스</th><td>{star != null && star !== '' ? star + '성' : '정보 없음'}</td><td>{recommended.item.starforce !== undefined ? recommended.item.starforce + '성' : '정보 없음'}</td></tr>
-          <tr><th>잠재능력</th><td>{own.raw?.potential_option_grade || '정보 없음'}<br />{optionLabel(own.raw ?? {})}</td><td>{recommended.item.potentialGrade || '정보 없음'}<br />{recommended.item.potentialOption || '옵션 없음'}</td></tr>
-          <tr><th>에디셔널</th><td>{own.raw?.additional_potential_option_grade || '정보 없음'}<br />{optionLabel(own.raw ?? {}, true)}</td><td>{recommended.item.additionalPotentialGrade || '정보 없음'}<br />{recommended.item.additionalPotentialOption || '옵션 없음'}</td></tr>
-        </tbody></table></div>
-        {difference !== null && <p>스타포스는 추천 세팅 장비{difference === 0 ? '와 같아요.' : '보다 ' + Math.abs(difference) + '성 ' + (difference > 0 ? '높아요.' : '낮아요.')}</p>}
-      </>}
+      : <div className={styles.tooltipCompareGrid}>
+        <EquipmentTooltipCard badge="내 장비" name={own.name} icon={own.icon_url} part={part} starforce={ownStarforce}
+          potentialGrade={readText(own.raw, 'potential_option_grade')} potentialLines={potentialLines(own.raw)}
+          additionalGrade={readText(own.raw, 'additional_potential_option_grade')} additionalLines={potentialLines(own.raw, true)}
+          stats={totalStats(own.raw)} footer={`${characterName} · 현재 장착 장비`} />
+        <EquipmentTooltipCard badge="추천 세팅" name={recommended.item.itemName} icon={recommended.item.itemIcon} part={part} starforce={recommendedStarforce}
+          potentialGrade={recommended.item.potentialGrade} potentialLines={splitOptions(recommended.item.potentialOption)}
+          additionalGrade={recommended.item.additionalPotentialGrade} additionalLines={splitOptions(recommended.item.additionalPotentialOption)}
+          footer={`전투력 ${formatPower(recommended.loadout.power)} 실제 캐릭터 장비`} goalHref={`/goals?${goalParams.toString()}`} />
+      </div>}
   </section>;
+}
+
+function EquipmentTooltipCard({ badge, name, icon, part, starforce, potentialGrade, potentialLines, additionalGrade, additionalLines, stats = [], footer, goalHref }: TooltipCardProps) {
+  const grade = gradeKey(potentialGrade);
+  return <article className={styles.mapleTooltip}>
+    <span className={styles.tooltipBadge}>{badge}</span>
+    <Starforce value={starforce} />
+    <h3>{name}</h3>
+    <p className={styles.itemGrade} data-grade={grade}>({potentialGrade ? `${potentialGrade} 아이템` : '잠재등급 정보 없음'})</p>
+    <div className={styles.tooltipDivider} />
+    <div className={styles.tooltipIdentity}>
+      <div className={styles.tooltipIcon} data-grade={grade}>{icon
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <img src={icon} alt="" /> : <span aria-hidden="true">◇</span>}</div>
+      <p>장비분류 · <strong>{part}</strong></p>
+    </div>
+    {stats.length > 0 && <section className={styles.tooltipStats}>{stats.map(stat => <p key={stat.label}><span>{stat.label}</span><strong>{stat.value}</strong></p>)}</section>}
+    <PotentialSection title="잠재옵션" grade={potentialGrade} lines={potentialLines} />
+    <PotentialSection title="에디셔널 잠재옵션" grade={additionalGrade} lines={additionalLines} additional />
+    <p className={styles.tooltipFooter}>{footer}</p>
+    {goalHref && <Link className={styles.tooltipGoal} href={goalHref}>이 장비를 목표로 추가</Link>}
+  </article>;
+}
+
+function Starforce({ value }: { value?: number }) {
+  if (value === undefined) return <p className={styles.noStarforce}>스타포스 정보 없음</p>;
+  const active = Math.max(0, Math.min(25, Math.round(value)));
+  return <div className={styles.tooltipStars} aria-label={`스타포스 ${value}성`}>{Array.from({ length: 25 }, (_, index) => <span key={index} data-active={index < active}>★</span>)}</div>;
+}
+
+function PotentialSection({ title, grade, lines, additional = false }: { title: string; grade?: string; lines: string[]; additional?: boolean }) {
+  const key = gradeKey(grade);
+  return <section className={styles.tooltipPotential} data-additional={additional || undefined}>
+    <h4 data-grade={key}><span aria-hidden="true">{additional ? 'A' : 'P'}</span>{title}{grade ? ` · ${grade}` : ''}</h4>
+    {lines.length ? lines.map((line, index) => <p key={`${line}-${index}`}>{line}</p>) : <p className={styles.tooltipMuted}>옵션 정보 없음</p>}
+  </section>;
+}
+
+function CompareSkeleton() {
+  return <div className={styles.tooltipCompareGrid} aria-label="내 장비 불러오는 중"><div className={styles.tooltipSkeleton} /><div className={styles.tooltipSkeleton} /></div>;
+}
+
+function readText(raw: RawEquipment | undefined, key: string) {
+  const value = raw?.[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function readNumber(raw: RawEquipment | undefined, key: string) {
+  const value = Number(raw?.[key]);
+  return Number.isFinite(value) && raw?.[key] !== '' && raw?.[key] !== null && raw?.[key] !== undefined ? value : undefined;
+}
+
+function potentialLines(raw: RawEquipment | undefined, additional = false) {
+  const prefix = additional ? 'additional_potential_option_' : 'potential_option_';
+  return [1, 2, 3].flatMap(index => {
+    const value = readText(raw, `${prefix}${index}`);
+    return value ? [value] : [];
+  });
+}
+
+function splitOptions(value?: string) {
+  return value && value !== '옵션 없음' ? value.split(' · ').map(line => line.trim()).filter(Boolean) : [];
+}
+
+function totalStats(raw: RawEquipment | undefined) {
+  const total = raw?.item_total_option;
+  if (!total || typeof total !== 'object' || Array.isArray(total)) return [];
+  const options = total as Record<string, unknown>;
+  return STAT_FIELDS.flatMap(([key, label]) => {
+    const value = Number(options[key]);
+    if (!Number.isFinite(value) || value === 0) return [];
+    const suffix = key === 'boss_damage' || key === 'ignore_monster_armor' || key === 'all_stat' ? '%' : '';
+    return [{ label, value: `${value > 0 ? '+' : ''}${value}${suffix}` }];
+  });
+}
+
+function gradeKey(grade?: string) {
+  if (grade?.includes('레전드리')) return 'legendary';
+  if (grade?.includes('유니크')) return 'unique';
+  if (grade?.includes('에픽')) return 'epic';
+  if (grade?.includes('레어')) return 'rare';
+  return 'normal';
 }
 
 function formatPower(value: number) {

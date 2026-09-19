@@ -100,4 +100,4 @@ export type EquipmentCharacterIndex = {
   sampleCount: number;
   entries: EquipmentCharacterIndexEntry[];
 };
-export type OwnEquipment = { slot: string; name: string; raw?: Record<string, string | null | undefined> };
+export type OwnEquipment = { slot: string; name: string; icon_url?: string | null; raw?: Record<string, unknown> };

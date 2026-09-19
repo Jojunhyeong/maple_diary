@@ -150,12 +150,64 @@
 .compare th,.compare td { padding:12px; border-bottom:1px solid var(--border); }
 .compare th { font-weight:500; color:var(--text-secondary); }
 .compare a { color:var(--brand-primary); }
+.compareHeader { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:12px; }
+.compareHeader h2 { margin:3px 0 5px; font-size:20px; }
+.compareHeader p:not(.eyebrow) { font-size:12px; color:var(--text-secondary); }
+.starDifference { flex:none; padding:7px 10px; border-radius:999px; background:var(--brand-soft); color:var(--brand-primary); font-size:11px; font-weight:700; }
+.presetNotice { margin-bottom:16px; padding:9px 12px; border-radius:9px; background:var(--surface-subtle); color:var(--text-secondary)!important; font-size:11px!important; }
+.tooltipCompareGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:start; }
+.mapleTooltip { position:relative; min-width:0; overflow:hidden; padding:22px; border:1px solid #343a46; border-radius:16px; background:linear-gradient(155deg,#141820,#090b10 72%); color:#f8fafc; box-shadow:inset 0 0 0 1px rgba(255,255,255,.03),0 16px 34px rgba(0,0,0,.18); }
+.mapleTooltip::before { content:""; position:absolute; inset:0; pointer-events:none; background:linear-gradient(120deg,rgba(255,255,255,.045),transparent 28%); }
+.tooltipBadge { position:relative; display:inline-flex; margin-bottom:12px; padding:5px 9px; border:1px solid rgba(255,255,255,.12); border-radius:999px; background:rgba(255,255,255,.06); color:#d6dbe5; font-size:10px; font-weight:700; }
+.tooltipStars { position:relative; display:grid; grid-template-columns:repeat(15,16px); justify-content:center; gap:1px 3px; min-height:35px; margin:0 auto 10px; }
+.tooltipStars span { color:#444a55; font-size:17px; line-height:17px; text-align:center; text-shadow:0 1px 2px #000; }
+.tooltipStars span[data-active=true] { color:#ffd44f; text-shadow:0 0 6px rgba(255,194,40,.22); }
+.noStarforce { position:relative; margin:4px 0 12px; color:#727986!important; font-size:10px!important; text-align:center; }
+.mapleTooltip h3 { position:relative; margin:0; color:#fff; font-size:18px; font-weight:750; line-height:1.35; text-align:center; word-break:keep-all; }
+.itemGrade { position:relative; margin-top:5px; color:#8d95a3!important; font-size:11px!important; text-align:center; }
+.itemGrade[data-grade=legendary] { color:#6de72c!important; }
+.itemGrade[data-grade=unique] { color:#ffd928!important; }
+.itemGrade[data-grade=epic] { color:#b384ff!important; }
+.itemGrade[data-grade=rare] { color:#58b8ff!important; }
+.tooltipDivider { position:relative; margin:16px 0; border-top:1px dashed #4a505b; }
+.tooltipIdentity { position:relative; display:grid; grid-template-columns:108px minmax(0,1fr); align-items:center; gap:16px; }
+.tooltipIdentity>p { color:#cbd0d9!important; font-size:12px!important; line-height:1.6; }
+.tooltipIdentity strong { color:#fff; font-weight:700; }
+.tooltipIcon { display:flex; width:108px; height:108px; align-items:center; justify-content:center; border:4px solid #68717e; border-radius:15px; background:#f7f7f7; color:#77808c; font-size:34px; box-shadow:0 5px 16px rgba(0,0,0,.28); }
+.tooltipIcon[data-grade=legendary] { border-color:#59e600; }
+.tooltipIcon[data-grade=unique] { border-color:#ffd900; }
+.tooltipIcon[data-grade=epic] { border-color:#9e62ff; }
+.tooltipIcon[data-grade=rare] { border-color:#36a8ff; }
+.tooltipIcon img { width:76px; height:76px; object-fit:contain; image-rendering:pixelated; }
+.tooltipStats { position:relative; margin-top:17px; padding:14px 0; border-top:1px dashed #444b56; border-bottom:1px dashed #444b56; }
+.tooltipStats p { display:flex; align-items:baseline; justify-content:space-between; gap:12px; color:#5bf0f2!important; font-size:12px!important; line-height:1.75; }
+.tooltipStats strong { color:#fff; font-size:13px; font-weight:650; }
+.tooltipPotential { position:relative; margin-top:16px; padding-top:15px; border-top:1px dashed #444b56; }
+.tooltipStats+.tooltipPotential { border-top:0; }
+.tooltipPotential h4 { display:flex; align-items:center; gap:7px; margin-bottom:9px; color:#aeb5c0; font-size:12px; font-weight:750; }
+.tooltipPotential h4 span { display:inline-flex; width:18px; height:18px; align-items:center; justify-content:center; border-radius:4px; background:#727986; color:#0b0d11; font-size:10px; font-weight:900; }
+.tooltipPotential h4[data-grade=legendary] { color:#78ec35; }
+.tooltipPotential h4[data-grade=legendary] span { background:#78ec35; }
+.tooltipPotential h4[data-grade=unique] { color:#ffe13b; }
+.tooltipPotential h4[data-grade=unique] span { background:#ffe13b; }
+.tooltipPotential h4[data-grade=epic] { color:#bd8cff; }
+.tooltipPotential h4[data-grade=epic] span { background:#bd8cff; }
+.tooltipPotential h4[data-grade=rare] { color:#66c1ff; }
+.tooltipPotential h4[data-grade=rare] span { background:#66c1ff; }
+.tooltipPotential[data-additional] h4 span { color:#fff; background:#7358b4; }
+.tooltipPotential p { color:#fff!important; font-size:12px!important; line-height:1.75; word-break:keep-all; }
+.tooltipPotential .tooltipMuted { color:#777f8c!important; }
+.tooltipFooter { position:relative; margin-top:17px; color:#7f8794!important; font-size:10px!important; }
+.tooltipGoal { position:relative; display:block; margin-top:12px; padding:11px 12px; border-radius:9px; background:var(--brand-primary); color:#fff!important; font-size:12px; font-weight:750; text-align:center; transition:transform .2s cubic-bezier(.22,1,.36,1),filter .2s ease; }
+.tooltipGoal:hover { transform:translateY(-2px); filter:brightness(1.06); }
+.tooltipSkeleton { min-height:540px; border-radius:16px; background:linear-gradient(100deg,#eef0f3 25%,#f8f9fa 38%,#eef0f3 52%); background-size:200% 100%; animation:tooltipSkeleton 1.2s ease-in-out infinite; }
+@keyframes tooltipSkeleton { to { background-position:-200% 0; } }
 .modalDialog::backdrop,.compareDialog::backdrop { background:color-mix(in srgb,var(--text-primary) 42%,transparent); backdrop-filter:blur(3px); }
 .close { display:block; margin:0 0 18px auto; font-size:13px; padding:8px; cursor:pointer; }
 .modalDialog,.compareDialog { position:fixed; inset:0; width:min(1120px,calc(100% - 32px)); max-width:none; max-height:90dvh; margin:auto; padding:0; border:1px solid var(--border); border-radius:16px; background:var(--surface); color:var(--text-primary); box-shadow:0 24px 70px color-mix(in srgb,var(--text-primary) 25%,transparent); }
 .modalDialog[open],.compareDialog[open] { animation:modalIn .32s cubic-bezier(.22,1,.36,1); }
 .modalDialog[open]::backdrop,.compareDialog[open]::backdrop { animation:backdropIn .22s ease-out; }
-.compareDialog { width:min(760px,calc(100% - 32px)); }
+.compareDialog { width:min(1020px,calc(100% - 32px)); }
 .modalBody { max-height:90dvh; padding:20px; overflow-y:auto; overscroll-behavior:contain; }
 .modalBody .loadouts,.modalBody .compare { border:0; padding:0; }
 @keyframes modalIn { from { opacity:0; transform:translateY(18px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
@@ -186,11 +238,18 @@
  .recommendedSlot img { width:27px; height:27px; }
  .recommendedSlot strong { display:none; }
  .loadoutMeta small { display:none; }
+ .compareHeader { flex-direction:column; }
+ .tooltipCompareGrid { grid-template-columns:1fr; }
+ .mapleTooltip { padding:18px; }
+ .tooltipIdentity { grid-template-columns:92px minmax(0,1fr); }
+ .tooltipIcon { width:92px; height:92px; }
+ .tooltipIcon img { width:66px; height:66px; }
  .modalDialog,.compareDialog { width:100%; max-height:92dvh; margin:auto 0 0; border-radius:16px 16px 0 0; }
  .modalBody { max-height:92dvh; padding:16px 16px max(20px,env(safe-area-inset-bottom)); }
 }
 @media(prefers-reduced-motion:reduce) {
  .detailTrack,.detailSlide,.detailCarouselActions button,.detailDots button,.loadoutTrack,.loadoutNav button,.quickActions button { transition:none; }
  .loadoutSkeletonLoading .loadoutViewport { animation:none; }
+ .tooltipSkeleton { animation:none; }
  .modalDialog[open],.compareDialog[open],.modalDialog[open]::backdrop,.compareDialog[open]::backdrop { animation:none; }
 }
