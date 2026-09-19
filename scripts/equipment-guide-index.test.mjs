@@ -25,10 +25,10 @@ test('ranking class probes include explorer, resistance and new class families',
   assert.equal(new Set(filters).size, filters.length);
 });
 
-test('nearby searches share a 25m cache bucket', () => {
-  assert.equal(equipmentGuideBucket(104_000_000), 100_000_000);
-  assert.equal(equipmentGuideCacheKey('히어로', 111_000_000), 'v11:히어로:100000000');
-  assert.equal(equipmentGuideCacheKey('히어로', 111_000_000, '2026-09-18'), 'v11:히어로:100000000:2026-09-18');
+test('nearby searches share a narrow 100k cache bucket', () => {
+  assert.equal(equipmentGuideBucket(104_040_000), 104_000_000);
+  assert.equal(equipmentGuideCacheKey('히어로', 111_040_000), 'v12:히어로:111000000');
+  assert.equal(equipmentGuideCacheKey('히어로', 111_040_000, '2026-09-18'), 'v12:히어로:111000000:2026-09-18');
 });
 
 test('candidate selection keeps the nearest same-job rows without a fixed distance cutoff', () => {
@@ -41,21 +41,21 @@ test('candidate selection keeps the nearest same-job rows without a fixed distan
   assert.deepEqual(selectEquipmentCandidates(entries, '히어로', 100_000_000).map(row => row.ocid), ['near', 'edge', 'far']);
 });
 
-test('live samples reject power outside the 15 percent range', () => {
-  assert.equal(isWithinEquipmentGuidePowerRange(125_000_000, 100_000_000), true);
-  assert.equal(isWithinEquipmentGuidePowerRange(125_000_001, 100_000_000), false);
-  assert.equal(isWithinEquipmentGuidePowerRange(255_000_000, 300_000_000), true);
-  assert.equal(isWithinEquipmentGuidePowerRange(254_999_999, 300_000_000), false);
+test('live samples stay within exactly 20m of the requested power', () => {
+  assert.equal(isWithinEquipmentGuidePowerRange(120_000_000, 100_000_000), true);
+  assert.equal(isWithinEquipmentGuidePowerRange(120_000_001, 100_000_000), false);
+  assert.equal(isWithinEquipmentGuidePowerRange(280_000_000, 300_000_000), true);
+  assert.equal(isWithinEquipmentGuidePowerRange(279_999_999, 300_000_000), false);
 });
 
-test('power cohort expands to the nearest same-job samples when the preferred range has fewer than ten', () => {
+test('power cohort never expands beyond 20m even when fewer than ten samples remain', () => {
   const rows = [98, 101, 110, 70, 130, 140, 150, 160, 170, 180, 190, 200].map((power, index) => ({ id: index, power: power * 1_000_000 }));
   const selected = selectEquipmentPowerCohort(rows, 100_000_000);
-  assert.equal(selected.length, 12);
+  assert.equal(selected.length, 3);
   assert.deepEqual(selected.slice(0, 3).map(row => row.power), [101_000_000, 98_000_000, 110_000_000]);
 });
 
-test('power cohort stays in the preferred range once ten samples are available', () => {
-  const rows = [...Array.from({ length: 10 }, (_, index) => ({ power: (96 + index) * 1_000_000 })), { power: 200_000_000 }];
-  assert.equal(selectEquipmentPowerCohort(rows, 100_000_000).length, 10);
+test('power cohort caps matching samples at thirty', () => {
+  const rows = Array.from({ length: 40 }, (_, index) => ({ power: (90 + index / 2) * 1_000_000 }));
+  assert.equal(selectEquipmentPowerCohort(rows, 100_000_000).length, 30);
 });

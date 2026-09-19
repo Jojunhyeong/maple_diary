@@ -131,7 +131,7 @@ export async function collectAndStoreEquipmentGuide(cacheKey: string, job: strin
       }));
       for (const observation of results) if (observation) observations.push(observation);
     }
-    const sample = selectEquipmentPowerCohort(observations, power, MIN_SAMPLE_COUNT, COHORT_TARGET_SIZE);
+    const sample = selectEquipmentPowerCohort(observations, power, COHORT_TARGET_SIZE);
     const enoughSamples = sample.length >= MIN_SAMPLE_COUNT;
     const stats = enoughSamples
       ? aggregateEquipment(sample, EQUIPMENT_SLOTS, { targets: [power], size: COHORT_TARGET_SIZE, minPower: COMBAT_BUCKETS[0].min, maxPower: COMBAT_BUCKETS.at(-1)!.max })

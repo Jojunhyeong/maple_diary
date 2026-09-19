@@ -5,7 +5,6 @@ import { supabaseAdmin } from '@/shared/lib/supabase';
 import { isUuidLike } from '@/shared/lib/character-storage';
 import { EQUIPMENT_GUIDE_ENABLED } from '@/shared/lib/equipment-guide-feature';
 import { COMBAT_BUCKETS, MIN_SAMPLE_COUNT, type EquipmentGuideStat } from '@/widgets/equipment-guide/model';
-import { equipmentGuideBucket } from '@/widgets/equipment-guide/cohort';
 import {
   claimEquipmentGuideCache,
   collectAndStoreEquipmentGuide,
@@ -62,7 +61,7 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: '등록 캐릭터의 직업과 전투력을 확인해 주세요.' }, { status: 400 });
   }
 
-  const targetPower = equipmentGuideBucket(requestedPower);
+  const targetPower = requestedPower;
   const sourceDate = await equipmentGuideIndexDate();
   if (!sourceDate) return Response.json(fallbackDataset(job, requestedPower));
   const cached = await readEquipmentGuideCache(job, targetPower, sourceDate);
