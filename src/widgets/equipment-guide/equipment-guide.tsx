@@ -90,11 +90,13 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
         <span className={styles.powerInput}><input aria-label="비교 전투력" type="number" min="0.5" max="14" step="0.1" value={draftPowerEok || ''} disabled={powerMode !== 'manual'} onChange={event => setDraftPowerEok(Number(event.target.value))} /><b>억</b></span>
         <small>{powerMode === 'manual' ? '직접 입력한 값' : powerMode === 'history' ? '최근 보스 세팅 기록' : '넥슨 조회값'}</small>
       </label>
-      <button type="button" onClick={() => powerMode === 'manual' ? resetToNexonPower() : setPowerMode('manual')}>{powerMode === 'manual' ? '넥슨 값 사용' : '직접 입력'}</button>
-      <button type="button" disabled={historyStatus === 'loading' || !profile.id} onClick={() => void findBossPower()}>{historyStatus === 'loading' ? '기록 확인 중…' : '최근 보스 세팅 찾기'}</button>
-      <button type="button" disabled={query.isFetching || draftPowerEok < 0.5 || draftPowerEok > 14} onClick={search}>
-        {query.data?.cacheStatus === 'collecting' ? '장비 수집 중…' : query.data?.loadouts?.length ? '다시 검색' : '비슷한 장비 검색'}
-      </button>
+      <div className={styles.filterActions}>
+        <button type="button" onClick={() => powerMode === 'manual' ? resetToNexonPower() : setPowerMode('manual')}>{powerMode === 'manual' ? '넥슨 값 사용' : '직접 입력'}</button>
+        <button type="button" disabled={historyStatus === 'loading' || !profile.id} onClick={() => void findBossPower()}>{historyStatus === 'loading' ? '기록 확인 중…' : '최근 보스 세팅 찾기'}</button>
+        <button type="button" className={styles.searchButton} disabled={query.isFetching || draftPowerEok < 0.5 || draftPowerEok > 14} onClick={search}>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>{query.data?.cacheStatus === 'collecting' ? '장비 수집 중…' : query.data?.loadouts?.length ? '다시 검색' : '비슷한 장비 검색'}
+        </button>
+      </div>
     </div>
     <p className={styles.notice}>종합 랭킹에서 찾은 후보의 최신 전투력과 현재 적용 장비를 함께 조회합니다. 아이템 드롭률·메소 획득량 잠재가 있으면 캐릭터 전체를 표본에서 제외합니다.</p>
     <p className={styles.notice}>새로고침하면 넥슨 조회 전투력으로 돌아갑니다. 직접 입력은 현재 화면에서만 유지되며, 최근 14일 중 드메 잠재가 없는 적용 세팅의 가장 높은 전투력도 찾을 수 있어요.</p>

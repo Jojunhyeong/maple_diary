@@ -11,7 +11,7 @@
 .quickActions button:first-child { background:var(--brand-primary); color:var(--surface); }
 .quickActions button:hover:not(:disabled) { transform:translateY(-2px); }
 .quickActions button:disabled { opacity:.38; cursor:default; }
-.filters { display:flex; align-items:end; flex-wrap:wrap; gap:16px; }
+.filters { display:flex; align-items:flex-end; flex-wrap:wrap; gap:16px; }
 .filters label { font-size:12px; color:var(--text-secondary); display:grid; gap:6px; }
 .filters select { min-width:150px; padding:10px 32px 10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text-primary); }
 .powerInput { display:flex; align-items:center; gap:6px; }
@@ -20,8 +20,13 @@
 .powerInput b { color:var(--text-primary); font-size:12px; }
 .filters label small { color:var(--text-muted); font-size:10px; }
 .filters button,.compare button { font-size:12px; color:var(--brand-primary); padding:10px 0; cursor:pointer; }
-.filters button { padding:10px 14px; border:1px solid var(--brand-primary); border-radius:8px; background:var(--brand-soft); font-weight:650; }
+.filters button { min-height:44px; padding:10px 14px; border:1px solid var(--brand-primary); border-radius:8px; background:var(--brand-soft); font-weight:650; }
 .filters button:disabled { cursor:default; opacity:.55; }
+.filterActions { display:flex; align-items:stretch; justify-content:flex-end; gap:10px; margin-left:auto; }
+.filterActions button { display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; }
+.filterActions .searchButton { gap:7px; min-width:164px; padding-inline:20px; border-color:var(--brand-primary); background:var(--brand-primary); color:white; box-shadow:0 8px 20px color-mix(in srgb,var(--brand-primary) 28%,transparent); transition:transform .2s cubic-bezier(.22,1,.36,1),box-shadow .2s ease,opacity .2s ease; }
+.filterActions .searchButton svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; }
+.filterActions .searchButton:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 11px 24px color-mix(in srgb,var(--brand-primary) 36%,transparent); }
 .workspace { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(300px,1fr); align-items:start; gap:24px; }
 .inventory,.statistics,.compare { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; }
 .panelTitle h2,.compare h2,.info h2 { font-size:16px; font-weight:650; }
@@ -165,6 +170,9 @@
  .headerControls { align-items:stretch; width:100%; }
  .demoBadge { display:none; }
  .quickActions button { flex:1; padding:9px 11px; white-space:nowrap; }
+ .filterActions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; margin-left:0; }
+ .filterActions button { min-width:0; padding-inline:10px; }
+ .filterActions .searchButton { grid-column:1 / -1; min-width:0; }
  .page { gap:18px; }
  .portrait img { height:130px; }
  .loadouts { padding:16px; }
