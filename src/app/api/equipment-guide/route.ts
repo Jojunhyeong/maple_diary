@@ -13,7 +13,7 @@ import {
 } from '@/shared/lib/server/equipment-guide-cache';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type LegacyEquipmentGuideStat = Omit<EquipmentGuideStat, 'cohortPower' | 'powerMin' | 'powerMax'> & { combatPowerBucket: string };
 
@@ -71,14 +71,14 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, no-store' },
     });
   }
-  if (cached.row?.status === 'collecting' && Date.now() - Date.parse(cached.row.updated_at) < 120_000) {
-    return Response.json({ source: 'api', stats: [], date: sourceDate, cacheStatus: 'collecting', retryAfterMs: 2_000 }, { status: 202 });
+  if (cached.row?.status === 'collecting' && Date.now() - Date.parse(cached.row.updated_at) < 600_000) {
+    return Response.json({ source: 'api', stats: [], date: sourceDate, cacheStatus: 'collecting', retryAfterMs: 5_000 }, { status: 202 });
   }
 
   const claimed = await claimEquipmentGuideCache(cached.cacheKey, job, targetPower, sourceDate);
   if (!claimed) {
-    return Response.json({ source: 'api', stats: [], date: sourceDate, cacheStatus: 'collecting', retryAfterMs: 2_000 }, { status: 202 });
+    return Response.json({ source: 'api', stats: [], date: sourceDate, cacheStatus: 'collecting', retryAfterMs: 5_000 }, { status: 202 });
   }
   after(() => collectAndStoreEquipmentGuide(cached.cacheKey, job, targetPower, sourceDate));
-  return Response.json({ source: 'api', stats: [], date: sourceDate, cacheStatus: 'collecting', retryAfterMs: 2_000 }, { status: 202 });
+  return Response.json({ source: 'api', stats: [], date: sourceDate, cacheStatus: 'collecting', retryAfterMs: 5_000 }, { status: 202 });
 }

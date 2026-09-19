@@ -1,12 +1,12 @@
 import { supabaseAdmin } from '@/shared/lib/supabase';
 import { aggregateEquipment, itemsHaveFarmingPotential, optionLabel, type EquipmentObservation, type ObservedEquipment } from '@/widgets/equipment-guide/aggregate';
 import { COHORT_TARGET_SIZE, COMBAT_BUCKETS, EQUIPMENT_SLOTS, MIN_SAMPLE_COUNT, type EquipmentCharacterIndexEntry, type EquipmentGuideDataset } from '@/widgets/equipment-guide/model';
-import { EQUIPMENT_GUIDE_CACHE_DAYS, equipmentGuideCacheKey, selectEquipmentPowerCohort } from '@/widgets/equipment-guide/cohort';
+import { EQUIPMENT_GUIDE_CACHE_DAYS, equipmentGuideCacheKey, isWithinEquipmentGuidePowerRange, selectEquipmentPowerCohort } from '@/widgets/equipment-guide/cohort';
 import { normalizeEquipmentSetEffects, selectRepresentativeCandidates } from '@/widgets/equipment-guide/loadouts';
 
-const CANDIDATE_FETCH_LIMIT = 90;
+const CANDIDATE_FETCH_LIMIT = 500;
 const SET_EFFECT_CANDIDATE_LIMIT = 20;
-const CANDIDATE_BATCH_SIZE = 15;
+const CANDIDATE_BATCH_SIZE = 20;
 const SET_EFFECT_BATCH_SIZE = 10;
 const LOADOUT_LIMIT = 3;
 
@@ -117,30 +117,29 @@ export async function collectAndStoreEquipmentGuide(cacheKey: string, job: strin
     const observationDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
     for (let offset = 0; offset < candidates.length; offset += CANDIDATE_BATCH_SIZE) {
       const results = await Promise.all(candidates.slice(offset, offset + CANDIDATE_BATCH_SIZE).map(async candidate => {
-        const [stat, equipment] = await Promise.all([
-          nexonCharacter('stat', candidate.ocid),
-          nexonCharacter('item-equipment', candidate.ocid),
-        ]);
-        if (!stat || !equipment || stat.character_class !== job) return null;
+        const stat = await nexonCharacter('stat', candidate.ocid);
+        if (!stat || stat.character_class !== job) return null;
         const currentPower = Number((stat.final_stat as Array<{ stat_name?: string; stat_value?: string }> | undefined)?.find(value => value.stat_name === '전투력')?.stat_value);
-        if (!Number.isFinite(currentPower) || currentPower <= 0) return null;
+        if (!Number.isFinite(currentPower) || !isWithinEquipmentGuidePowerRange(currentPower, power)) return null;
+        const equipment = await nexonCharacter('item-equipment', candidate.ocid);
+        if (!equipment) return null;
         const appliedItems = equipment.item_equipment;
         if (!Array.isArray(appliedItems) || !appliedItems.length || itemsHaveFarmingPotential(appliedItems as ObservedEquipment[])) return null;
         const items = (appliedItems as ObservedEquipment[]).map(item => Object.fromEntries(ITEM_FIELDS.map(field => [field, item[field] ?? null])));
         return { ...candidate, power: currentPower, date: observationDate, items } satisfies EquipmentObservation;
       }));
       for (const observation of results) if (observation) observations.push(observation);
+      if (observations.length >= COHORT_TARGET_SIZE) break;
     }
     const sample = selectEquipmentPowerCohort(observations, power, COHORT_TARGET_SIZE);
-    const enoughSamples = sample.length >= MIN_SAMPLE_COUNT;
-    const stats = enoughSamples
+    const stats = sample.length
       ? aggregateEquipment(sample, EQUIPMENT_SLOTS, { targets: [power], size: COHORT_TARGET_SIZE, minPower: COMBAT_BUCKETS[0].min, maxPower: COMBAT_BUCKETS.at(-1)!.max })
-        .filter(stat => stat.sampleCount >= MIN_SAMPLE_COUNT)
+        .filter(stat => stat.sampleCount >= Math.min(MIN_SAMPLE_COUNT, sample.length))
       : [];
-    const loadouts = enoughSamples ? await representativeLoadouts(sample, power) : [];
+    const loadouts = sample.length ? await representativeLoadouts(sample, power) : [];
     const dataset: EquipmentGuideDataset = {
-      source: 'api', stats, loadouts, cacheStatus: enoughSamples && stats.length ? 'ready' : 'unavailable',
-      cohort: enoughSamples ? { targetPower: power, powerMin: Math.min(...sample.map(row => row.power)), powerMax: Math.max(...sample.map(row => row.power)), characterCount: sample.length } : undefined,
+      source: 'api', stats, loadouts, cacheStatus: loadouts.length ? 'ready' : 'unavailable',
+      cohort: sample.length ? { targetPower: power, powerMin: Math.min(...sample.map(row => row.power)), powerMax: Math.max(...sample.map(row => row.power)), characterCount: sample.length } : undefined,
     };
     const db = supabaseAdmin();
     await db.from('equipment_guide_cache').update({ status: 'ready', dataset, source_date: sourceDate, expires_at: new Date(Date.now() + EQUIPMENT_GUIDE_CACHE_DAYS * 86_400_000).toISOString(), updated_at: new Date().toISOString() }).eq('cache_key', cacheKey);
