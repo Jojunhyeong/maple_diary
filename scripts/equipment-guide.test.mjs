@@ -4,6 +4,7 @@ import { aggregateEquipment, hasFarmingPotential, optionLabel, selectNonFarmingE
 import { COMBAT_BUCKETS, COMBAT_POWER_COHORTS, EQUIPMENT_SLOTS } from '../src/widgets/equipment-guide/model.ts';
 import { selectActiveCharacterProfile } from '../src/shared/lib/character-storage.ts';
 import { normalizeEquipmentSetEffects, selectRepresentativeCandidates } from '../src/widgets/equipment-guide/loadouts.ts';
+import { assignDistinctSlotItems } from '../src/widgets/equipment-guide/recommendations.ts';
 
 test('switching registered characters selects the new job and power instead of the first profile', () => {
   const bishop = { id: 'bishop', character_name: '첫캐릭터', character_class: '비숍', character_combat_power: 100_000_000 };
@@ -65,6 +66,20 @@ test('keeps starforce and potential statistics for each ranked item', () => {
   assert.equal(stat.items[1].itemName, 'B');
   assert.equal(stat.items[1].starforce.median, 12);
   assert.equal(stat.items[1].potentialOptions[0].label, 'INT +18%');
+});
+test('assigns different popular items to interchangeable ring and pendant slots', () => {
+  const guideItem = itemName => ({ itemName, count: 1, ratio: 10 });
+  const stat = (slot, names) => ({ slot, items: names.map(guideItem) });
+  const assigned = assignDistinctSlotItems([
+    stat('ring1', ['A', 'B', 'C', 'D']), stat('ring2', ['A', 'B', 'C', 'D']),
+    stat('ring3', ['B', 'C', 'D', 'A']), stat('ring4', ['A', 'D', 'C', 'B']),
+    stat('pendant1', ['P', 'Q']), stat('pendant2', ['P', 'Q']),
+    stat('hat', ['H']),
+  ]);
+  const top = slot => assigned.find(value => value.slot === slot)?.items[0]?.itemName;
+  assert.deepEqual(['ring1', 'ring2', 'ring3', 'ring4'].map(top), ['A', 'B', 'C', 'D']);
+  assert.deepEqual(['pendant1', 'pendant2'].map(top), ['P', 'Q']);
+  assert.equal(top('hat'), 'H');
 });
 test('builds each comparison from the nearest same-job characters and caps it at 50', () => {
   const rows = Array.from({ length: 60 }, (_, index) => observation(String(index), 50_000_000 + index * 1_000_000, [item(index < 10 ? 'A' : 'B', 17)]));

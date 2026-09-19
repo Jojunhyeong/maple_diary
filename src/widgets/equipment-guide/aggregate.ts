@@ -123,7 +123,7 @@ export function aggregateEquipment(observations: EquipmentObservation[], slots: 
     }
     const rankedItems = [...counts].map(([itemName, value]) => ({ itemName, itemIcon: value.icon, count: value.count, ratio: percent(value.count, group.rows.length) }))
       .sort((a, b) => b.count - a.count || a.itemName.localeCompare(b.itemName))
-      .slice(0, 3);
+      .slice(0, 10);
     const items = rankedItems.map(item => {
       const { itemName } = item;
       const representative = group.rows.filter(row => row.item_name === itemName);

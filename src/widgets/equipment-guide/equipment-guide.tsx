@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { LocalCharacterProfile } from '@/shared/lib/character-storage';
 import { useQuery } from '@tanstack/react-query';
@@ -9,6 +9,7 @@ import { ItemIcon, Statistics } from './statistics';
 import { Compare } from './compare';
 import { LoadoutCarousel } from './loadout-carousel';
 import { equipmentGuideBucket } from './cohort';
+import { assignDistinctSlotItems } from './recommendations';
 import styles from './styles.module.css';
 
 export function EquipmentGuide() {
@@ -49,8 +50,9 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
       : false,
   });
   const data: EquipmentGuideDataset = query.data ?? { source: 'api', stats: [] };
+  const displayedStats = useMemo(() => assignDistinctSlotItems(data.stats), [data.stats]);
   const slot = EQUIPMENT_SLOTS.find(item => item.id === selected)!;
-  const stat = data.stats.find(item => item.slot === selected);
+  const stat = displayedStats.find(item => item.slot === selected);
   const comparison = query.data?.cohort ? `${formatPower(query.data.cohort.powerMin)} ~ ${formatPower(query.data.cohort.powerMax)}` : '가까운 전투력 표본';
   function selectSlot(id: EquipmentSlotId) {
     setSelected(id);
@@ -124,7 +126,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
             <strong>{profile?.character_name || '나의 캐릭터'}</strong><small>{profile ? '내 캐릭터 미리보기' : '캐릭터를 연결해 보세요'}</small>
           </div>
           {EQUIPMENT_SLOTS.map(item => {
-            const itemStat = data.stats.find(value => value.slot === item.id);
+            const itemStat = displayedStats.find(value => value.slot === item.id);
             return <button key={item.id} style={{ gridColumn: item.col, gridRow: item.row }}
               className={styles.slot} aria-label={item.label + (itemStat ? ' 내 장비와 비교' : ' · 데이터 없음')} aria-pressed={selected === item.id}
               onMouseEnter={() => { if (window.matchMedia('(hover: hover) and (min-width: 768px)').matches) selectSlot(item.id); }}
