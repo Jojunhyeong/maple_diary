@@ -89,6 +89,7 @@ type GoalDraft = {
   equipmentSlot: string;
   equipmentIconUrl: string | null;
   equipmentShapeIconUrl: string | null;
+  guidePreset?: boolean;
 };
 
 type TargetView = GoalTarget & {
@@ -105,6 +106,10 @@ const EMPTY_GOALS: Goal[] = [];
 
 function catalogItemKey(item: Pick<EquipmentCatalogItem, 'id' | 'slug'>) {
   return item.slug || item.id;
+}
+
+function normalizedEquipmentName(value: string) {
+  return value.replace(/\s+/g, '').toLocaleLowerCase('ko-KR');
 }
 
 function CatalogThumb({ src, className }: { src: string | null; className: string }) {
@@ -355,6 +360,31 @@ function EquipmentCatalogPicker({
     [catalogParts],
   );
 
+  const guideCatalogItem = useMemo(() => {
+    if (!draft.guidePreset || !draft.equipmentName) return null;
+    const guideName = normalizedEquipmentName(draft.equipmentName);
+    return catalogItems.find((item) => normalizedEquipmentName(item.name) === guideName) ?? null;
+  }, [catalogItems, draft.equipmentName, draft.guidePreset]);
+
+  useEffect(() => {
+    if (!guideCatalogItem) return;
+    const nextKey = catalogItemKey(guideCatalogItem);
+    if (
+      draft.equipmentKey === nextKey &&
+      draft.equipmentName === guideCatalogItem.name &&
+      draft.equipmentSlot === guideCatalogItem.slot &&
+      draft.equipmentIconUrl === guideCatalogItem.icon_url
+    ) return;
+    onUpdate({
+      equipmentPart: guideCatalogItem.part || guideCatalogItem.slot || selectedPart,
+      equipmentKey: nextKey,
+      equipmentName: guideCatalogItem.name,
+      equipmentSlot: guideCatalogItem.slot,
+      equipmentIconUrl: guideCatalogItem.icon_url,
+      equipmentShapeIconUrl: null,
+    });
+  }, [draft.equipmentIconUrl, draft.equipmentKey, draft.equipmentName, draft.equipmentSlot, guideCatalogItem, onUpdate, selectedPart]);
+
   useEffect(() => {
     if (draft.kind !== 'equipment') return;
     if (draft.equipmentPart) return;
@@ -413,6 +443,22 @@ function EquipmentCatalogPicker({
     <div>
       {draft.kind === 'equipment' ? (
         <div className={compact ? 'mt-2 space-y-2.5' : 'mt-3 space-y-3'}>
+          {draft.guidePreset && selectedCatalogItem && (
+            <div className="rounded-[10px] border border-brand/35 bg-brand-soft/55 px-3 py-3">
+              <p className="mb-2 text-[10px] font-semibold text-brand">장비 가이드에서 선택한 장비</p>
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 flex-none items-center justify-center overflow-hidden rounded-[9px] bg-card">
+                  <CatalogThumb key={selectedCatalogItem.icon_url || selectedCatalogItem.id} src={selectedCatalogItem.icon_url} className="h-11 w-11 object-contain" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-t1">{selectedCatalogItem.name}</p>
+                  <p className="mt-0.5 text-[11px] text-t3">{selectedCatalogItem.slot}{selectedCatalogItem.part ? ` · ${selectedCatalogItem.part}` : ''}</p>
+                </div>
+                <button type="button" className="flex-none text-[11px] font-semibold text-brand" onClick={() => onUpdate({ guidePreset: false, equipmentKey: '', equipmentName: '', equipmentSlot: '', equipmentIconUrl: null, equipmentShapeIconUrl: null })}>다른 장비 선택</button>
+              </div>
+            </div>
+          )}
+          <div className={draft.guidePreset ? 'hidden' : 'contents'}>
           <div>
             <label className={labelClass}>부위</label>
             <select
@@ -554,6 +600,7 @@ function EquipmentCatalogPicker({
               </div>
             </div>
           )}
+          </div>
         </div>
       ) : (
         <div className={compact ? 'mt-3 rounded-[10px] border border-dashed border-line px-3 py-3 text-sm text-t3' : 'mt-3 rounded-[10px] border border-dashed border-line px-3 py-4 text-sm text-t3'}>
@@ -698,6 +745,8 @@ export default function GoalsPage() {
     const name = params.get('guideItem')?.trim();
     const part = params.get('guidePart')?.trim();
     const slug = params.get('guideSlug')?.trim();
+    const icon = params.get('guideIcon')?.trim();
+    const safeIcon = icon && icon.length <= 500 && (icon.startsWith('https://open.api.nexon.com/') || icon.startsWith('/api/equipment-catalog/icon?')) ? icon : null;
     if (name && name.length <= 100 && part && part.length <= 30) {
       setCreatingGoalDraft({
         ...createDraft('equipment'),
@@ -705,11 +754,13 @@ export default function GoalsPage() {
         equipmentKey: slug || part + '::' + name,
         equipmentName: name,
         equipmentSlot: part,
-        equipmentIconUrl: slug ? '/api/equipment-catalog/icon?slug=' + encodeURIComponent(slug) : null,
+        equipmentIconUrl: safeIcon || (slug ? '/api/equipment-catalog/icon?slug=' + encodeURIComponent(slug) : null),
+        guidePreset: true,
       });
       params.delete('guideItem');
       params.delete('guidePart');
       params.delete('guideSlug');
+      params.delete('guideIcon');
       window.history.replaceState(window.history.state, '', window.location.pathname + (params.size ? '?' + params.toString() : ''));
     }
   }, []);

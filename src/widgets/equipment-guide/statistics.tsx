@@ -12,6 +12,7 @@ export function ItemIcon({ src }: { src?: string }) {
 }
 export function goalLink(item: EquipmentGuideItem, part: string) {
   const params = new URLSearchParams({ guideItem: item.itemName, guidePart: part });
+  if (item.itemIcon) params.set('guideIcon', item.itemIcon);
   if (item.catalogSlug) params.set('guideSlug', item.catalogSlug);
   return '/goals?' + params.toString();
 }
@@ -86,6 +87,6 @@ function ItemStatistics({ item, rank, stat, label, comparison }: { item: Equipme
     {item.potentialSupported === false || stat.potentialSupported === false ? <p className={styles.sample}>이 장비에는 잠재능력·에디셔널 잠재능력이 적용되지 않아요.</p> : <>
     <Distribution title="잠재능력" values={potential} options={potentialOptions} />
     <Distribution title="에디셔널 잠재능력" values={additionalPotential} options={additionalPotentialOptions} /></>}
-    <Link className={styles.goalAction} href={goalLink(item, part)}>이 장비를 목표로 추가 →</Link><p className={styles.sample}>목표 화면에서 금액을 직접 입력해 주세요.</p>
+    <Link className={styles.goalAction} href={goalLink(item, part)}>이 장비를 목표로 설정 →</Link><p className={styles.sample}>장비 정보는 자동으로 입력되며 목표 금액만 정하면 돼요.</p>
   </div>;
 }

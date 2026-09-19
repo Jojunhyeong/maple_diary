@@ -47,6 +47,7 @@ export function Compare({ characterName, selectedSlot, recommended }: { characte
   const ownStarforce = readNumber(own?.raw, 'starforce');
   const recommendedStarforce = recommended.item.starforce;
   const goalParams = new URLSearchParams({ guideItem: recommended.item.itemName, guidePart: part });
+  if (recommended.item.itemIcon) goalParams.set('guideIcon', recommended.item.itemIcon);
 
   useLayoutEffect(() => {
     const element = fitRef.current;
@@ -110,7 +111,7 @@ function EquipmentTooltipCard({ badge, name, icon, part, starforce, potentialGra
     <PotentialSection title="잠재옵션" grade={potentialGrade} lines={potentialLines} />
     <PotentialSection title="에디셔널 잠재옵션" grade={additionalGrade} lines={additionalLines} additional />
     <p className={styles.tooltipFooter}>{footer}</p>
-    {goalHref && <Link className={styles.tooltipGoal} href={goalHref}>이 장비를 목표로 추가</Link>}
+    {goalHref && <Link className={styles.tooltipGoal} href={goalHref}>이 장비를 목표로 설정</Link>}
   </article>;
 }
 
