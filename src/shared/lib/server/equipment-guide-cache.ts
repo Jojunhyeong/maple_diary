@@ -12,6 +12,9 @@ const LOADOUT_LIMIT = 3;
 
 const ITEM_FIELDS = [
   'item_equipment_slot', 'item_name', 'item_icon', 'starforce',
+  'scroll_upgrade', 'cuttable_count',
+  'item_total_option', 'item_base_option', 'item_add_option', 'item_etc_option',
+  'item_starforce_option', 'item_exceptional_option',
   'potential_option_grade', 'additional_potential_option_grade',
   'potential_option_1', 'potential_option_2', 'potential_option_3',
   'additional_potential_option_1', 'additional_potential_option_2', 'additional_potential_option_3',
@@ -105,6 +108,7 @@ async function representativeLoadouts(sample: EquipmentObservation[], targetPowe
         additionalPotentialGrade: item.additional_potential_option_grade || undefined,
         potentialOption: optionLabel(item),
         additionalPotentialOption: optionLabel(item, true),
+        raw: item as unknown as Record<string, unknown>,
       }];
     }),
   }));

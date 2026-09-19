@@ -62,9 +62,10 @@ export function Compare({ characterName, selectedSlot, recommended }: { characte
           potentialGrade={readText(own.raw, 'potential_option_grade')} potentialLines={potentialLines(own.raw)}
           additionalGrade={readText(own.raw, 'additional_potential_option_grade')} additionalLines={potentialLines(own.raw, true)}
           stats={totalStats(own.raw)} cuttableCount={readNumber(own.raw, 'cuttable_count')} footer={`${characterName} · 현재 장착 장비`} />
-        <EquipmentTooltipCard badge="추천 세팅" name={recommended.item.itemName} icon={recommended.item.itemIcon} part={part} starforce={recommendedStarforce}
-          potentialGrade={recommended.item.potentialGrade} potentialLines={splitOptions(recommended.item.potentialOption)}
-          additionalGrade={recommended.item.additionalPotentialGrade} additionalLines={splitOptions(recommended.item.additionalPotentialOption)}
+        <EquipmentTooltipCard badge="추천 세팅" name={itemDisplayName(recommended.item.itemName, recommended.item.raw)} icon={recommended.item.itemIcon} part={part} starforce={recommendedStarforce}
+          potentialGrade={recommended.item.potentialGrade} potentialLines={recommended.item.raw ? potentialLines(recommended.item.raw) : splitOptions(recommended.item.potentialOption)}
+          additionalGrade={recommended.item.additionalPotentialGrade} additionalLines={recommended.item.raw ? potentialLines(recommended.item.raw, true) : splitOptions(recommended.item.additionalPotentialOption)}
+          stats={totalStats(recommended.item.raw)} cuttableCount={readNumber(recommended.item.raw, 'cuttable_count')}
           footer={`전투력 ${formatPower(recommended.loadout.power)} 실제 캐릭터 장비`} goalHref={`/goals?${goalParams.toString()}`} />
       </div>}
   </section>;

@@ -75,6 +75,7 @@ export type EquipmentGuideLoadoutItem = {
   additionalPotentialGrade?: string;
   potentialOption?: string;
   additionalPotentialOption?: string;
+  raw?: Record<string, unknown>;
 };
 export type EquipmentGuideSetEffect = { name: string; count: number };
 export type EquipmentGuideLoadout = {
