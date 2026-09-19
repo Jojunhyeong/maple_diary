@@ -36,7 +36,7 @@ export async function equipmentGuideIndexDate() {
 
 export async function readEquipmentGuideCache(job: string, power: number, sourceDate: string) {
   const db = supabaseAdmin();
-  const cacheKey = equipmentGuideCacheKey(job, power);
+  const cacheKey = equipmentGuideCacheKey(job, power, sourceDate);
   const { data, error } = await db.from('equipment_guide_cache').select('*').eq('cache_key', cacheKey).maybeSingle<CacheRow>();
   if (error) return { cacheKey, row: null, databaseAvailable: false };
   const row = data && data.source_date === sourceDate && Date.parse(data.expires_at) > Date.now() ? data : null;

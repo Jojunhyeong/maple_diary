@@ -63,6 +63,7 @@ begin
     expires_at = excluded.expires_at,
     updated_at = now()
   where equipment_guide_cache.expires_at <= now()
+     or equipment_guide_cache.source_date <> excluded.source_date
      or equipment_guide_cache.status = 'failed'
      or (equipment_guide_cache.status = 'collecting' and equipment_guide_cache.updated_at < now() - interval '2 minutes');
   get diagnostics affected = row_count;

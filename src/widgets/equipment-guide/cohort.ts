@@ -9,8 +9,9 @@ export function equipmentGuideBucket(power: number) {
   return Math.max(EQUIPMENT_GUIDE_BUCKET_SIZE, Math.round(power / EQUIPMENT_GUIDE_BUCKET_SIZE) * EQUIPMENT_GUIDE_BUCKET_SIZE);
 }
 
-export function equipmentGuideCacheKey(job: string, power: number) {
-  return `${EQUIPMENT_GUIDE_CACHE_VERSION}:${job.trim()}:${equipmentGuideBucket(power)}`;
+export function equipmentGuideCacheKey(job: string, power: number, sourceDate?: string) {
+  const base = `${EQUIPMENT_GUIDE_CACHE_VERSION}:${job.trim()}:${equipmentGuideBucket(power)}`;
+  return sourceDate ? `${base}:${sourceDate}` : base;
 }
 
 export function selectEquipmentCandidates(
