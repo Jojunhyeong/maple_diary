@@ -4,6 +4,24 @@ import { EQUIPMENT_SLOTS, type EquipmentGuideLoadout, type EquipmentGuideLoadout
 import { ItemIcon } from './statistics';
 import styles from './styles.module.css';
 
+export function LoadoutSkeleton({ loading = false }: { loading?: boolean }) {
+  return <section className={`${styles.loadouts} ${styles.loadoutSkeleton} ${loading ? styles.loadoutSkeletonLoading : ''}`} aria-label={loading ? '추천 세팅 불러오는 중' : '추천 세팅 미리보기'}>
+    <div className={styles.loadoutTitle}>
+      <div><p className={styles.eyebrow}>실제 캐릭터 조합</p><h2>추천 세팅</h2><p>{loading ? '같은 직업·비슷한 전투력의 장비 조합을 찾고 있어요.' : '비슷한 장비 검색을 누르면 실제 장비 조합이 여기에 표시돼요.'}</p></div>
+      <div className={styles.loadoutNav} aria-hidden="true"><span>1 / 3</span><button type="button" disabled>‹</button><button type="button" disabled>›</button></div>
+    </div>
+    <div className={styles.loadoutViewport} aria-hidden="true">
+      <div className={styles.loadoutMeta}><div className={styles.skeletonMeta}><i /><i /></div><i className={styles.skeletonPrivate} /></div>
+      <div className={styles.skeletonBadges}><i /><i /><i /></div>
+      <div className={styles.recommendedEquipmentGrid}>
+        <div className={`${styles.recommendedPortrait} ${styles.skeletonPortrait}`}><i /><i /></div>
+        {EQUIPMENT_SLOTS.map(slot => <div key={slot.id} style={{ gridColumn: slot.col, gridRow: slot.row }} className={`${styles.recommendedSlot} ${styles.skeletonSlot}`}><i /><span>{slot.label}</span><b /></div>)}
+      </div>
+    </div>
+    <div className={styles.skeletonDots} aria-hidden="true"><i /><i /><i /></div>
+  </section>;
+}
+
 export function LoadoutCarousel({ loadouts, characterImage, characterName, onSelectItem }: { loadouts?: EquipmentGuideLoadout[]; characterImage?: string; characterName?: string; onSelectItem?: (loadout: EquipmentGuideLoadout, item: EquipmentGuideLoadoutItem) => void }) {
   const [active, setActive] = useState(0);
   const touchStart = useRef<number | null>(null);

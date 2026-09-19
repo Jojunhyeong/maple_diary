@@ -110,6 +110,28 @@
 .recommendedSlot img { width:34px; height:34px; object-fit:contain; image-rendering:pixelated; }
 .recommendedSlot>span { color:var(--text-muted); font-size:9px; margin-top:4px; }
 .recommendedSlot strong { width:100%; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9px; font-weight:600; }
+.loadoutSkeleton { color:var(--text-primary); }
+.loadoutSkeleton .loadoutViewport { opacity:.72; }
+.skeletonMeta { display:flex!important; align-items:center!important; gap:10px!important; }
+.skeletonMeta i,.skeletonPrivate,.skeletonBadges i,.skeletonPortrait i,.skeletonSlot i,.skeletonSlot b,.skeletonDots i { display:block; border-radius:999px; background:var(--border); }
+.skeletonMeta i:first-child { width:92px; height:13px; }
+.skeletonMeta i:last-child { width:180px; height:10px; }
+.skeletonPrivate { width:74px; height:9px; }
+.skeletonBadges { display:flex; gap:7px; margin:14px 0; }
+.skeletonBadges i { width:76px; height:26px; }
+.skeletonBadges i:nth-child(2) { width:92px; }
+.skeletonBadges i:nth-child(3) { width:68px; }
+.skeletonPortrait { gap:12px; }
+.skeletonPortrait i:first-child { width:76px; height:108px; border-radius:40px 40px 28px 28px; }
+.skeletonPortrait i:last-child { width:88px; height:10px; }
+.skeletonSlot { cursor:default; }
+.skeletonSlot i { width:34px; height:34px; border-radius:9px; }
+.skeletonSlot b { width:70%; height:7px; margin-top:3px; }
+.skeletonDots { display:flex; justify-content:center; gap:6px; padding-top:14px; }
+.skeletonDots i { width:6px; height:6px; }
+.skeletonDots i:first-child { width:20px; background:color-mix(in srgb,var(--brand-primary) 35%,var(--border)); }
+.loadoutSkeletonLoading .loadoutViewport { animation:skeletonPulse 1.35s ease-in-out infinite; }
+@keyframes skeletonPulse { 0%,100% { opacity:.42; } 50% { opacity:.82; } }
 .info { padding:0 4px; }
 .info h2 { font-size:13px; margin-bottom:6px; }
 .empty { padding:50px 0; text-align:center; color:var(--text-muted); font-size:12px; }
@@ -159,5 +181,6 @@
 }
 @media(prefers-reduced-motion:reduce) {
  .detailTrack,.detailSlide,.detailCarouselActions button,.detailDots button,.loadoutTrack,.loadoutNav button,.quickActions button { transition:none; }
+ .loadoutSkeletonLoading .loadoutViewport { animation:none; }
  .modalDialog[open],.compareDialog[open],.modalDialog[open]::backdrop,.compareDialog[open]::backdrop { animation:none; }
 }
