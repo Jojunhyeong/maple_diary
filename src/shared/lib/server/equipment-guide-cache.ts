@@ -1,7 +1,7 @@
 import { supabaseAdmin } from '@/shared/lib/supabase';
 import { aggregateEquipment, itemsHaveFarmingPotential, type EquipmentObservation, type ObservedEquipment } from '@/widgets/equipment-guide/aggregate';
 import { COHORT_TARGET_SIZE, COMBAT_BUCKETS, EQUIPMENT_SLOTS, MIN_SAMPLE_COUNT, type EquipmentCharacterIndexEntry, type EquipmentGuideDataset } from '@/widgets/equipment-guide/model';
-import { EQUIPMENT_GUIDE_CACHE_DAYS, equipmentGuideCacheKey, isWithinEquipmentGuidePowerRange } from '@/widgets/equipment-guide/cohort';
+import { EQUIPMENT_GUIDE_CACHE_DAYS, equipmentGuideCacheKey, selectEquipmentPowerCohort } from '@/widgets/equipment-guide/cohort';
 import { normalizeEquipmentSetEffects, selectRepresentativeCandidates } from '@/widgets/equipment-guide/loadouts';
 
 const CANDIDATE_FETCH_LIMIT = 90;
@@ -127,14 +127,9 @@ export async function collectAndStoreEquipmentGuide(cacheKey: string, job: strin
         const items = (appliedItems as ObservedEquipment[]).map(item => Object.fromEntries(ITEM_FIELDS.map(field => [field, item[field] ?? null])));
         return { ...candidate, power: currentPower, date: observationDate, items } satisfies EquipmentObservation;
       }));
-      for (const observation of results) {
-        if (observation && isWithinEquipmentGuidePowerRange(observation.power, power)) observations.push(observation);
-      }
-      if (observations.length >= COHORT_TARGET_SIZE) break;
+      for (const observation of results) if (observation) observations.push(observation);
     }
-    const sample = observations
-      .sort((a, b) => Math.abs(a.power - power) - Math.abs(b.power - power) || a.power - b.power)
-      .slice(0, COHORT_TARGET_SIZE);
+    const sample = selectEquipmentPowerCohort(observations, power, MIN_SAMPLE_COUNT, COHORT_TARGET_SIZE);
     const enoughSamples = sample.length >= MIN_SAMPLE_COUNT;
     const stats = enoughSamples
       ? aggregateEquipment(sample, EQUIPMENT_SLOTS, { targets: [power], size: COHORT_TARGET_SIZE, minPower: COMBAT_BUCKETS[0].min, maxPower: COMBAT_BUCKETS.at(-1)!.max })

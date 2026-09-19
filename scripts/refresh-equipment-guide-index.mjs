@@ -15,7 +15,7 @@ await mkdir('.cache/equipment-guide-index', { recursive: true });
 
 const child = spawn(process.execPath, ['--experimental-strip-types', 'scripts/collect-equipment-guide-index.mjs'], {
   stdio: 'inherit',
-  env: { ...process.env, GUIDE_DATE: date, GUIDE_INDEX_OUTPUT: candidate, GUIDE_MAX_REQUESTS: process.env.GUIDE_MAX_REQUESTS || '25000' },
+  env: { ...process.env, GUIDE_DATE: date, GUIDE_INDEX_OUTPUT: candidate, GUIDE_MAX_REQUESTS: process.env.GUIDE_MAX_REQUESTS || '60000' },
 });
 const exitCode = await new Promise((resolve, reject) => {
   child.on('error', reject);

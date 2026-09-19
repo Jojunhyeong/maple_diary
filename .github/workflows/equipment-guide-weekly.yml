@@ -42,5 +42,5 @@ jobs:
           NEXON_API_KEY: ${{ secrets.NEXON_API_KEY }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GUIDE_MAX_REQUESTS: ${{ vars.EQUIPMENT_GUIDE_MAX_REQUESTS || '25000' }}
+          GUIDE_MAX_REQUESTS: ${{ vars.EQUIPMENT_GUIDE_MAX_REQUESTS || '60000' }}
         run: node scripts/refresh-equipment-guide-index.mjs

@@ -3,7 +3,7 @@ export const COMBAT_BUCKETS = Array.from({ length: 27 }, (_, index) => {
   const max = min + 50_000_000;
   return { id: `${min / 1_000_000}m-${max / 1_000_000}m`, label: `${min === 50_000_000 ? '5천만' : min / 100_000_000 + '억'} ~ ${max / 100_000_000}억`, min, max };
 });
-export const MIN_SAMPLE_COUNT = 30;
+export const MIN_SAMPLE_COUNT = 10;
 export const COHORT_TARGET_SIZE = 30;
 export const COMBAT_POWER_COHORTS = Array.from({ length: 28 }, (_, index) => (index + 1) * 50_000_000);
 // Grid coordinates and Nexon equipment slot names are kept together.

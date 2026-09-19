@@ -110,7 +110,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
     {query.isPending && query.isFetching && <p role="status">캐시를 확인하는 중이에요.</p>}
     {query.data?.cacheStatus === 'collecting' && <p role="status" className={styles.notice}>같은 직업·비슷한 전투력 캐릭터의 장비를 처음 수집하고 있어요. 완료되면 자동으로 표시됩니다.</p>}
     {query.isError && <p role="alert">장비 통계를 불러오지 못했어요. <button onClick={() => query.refetch()}>다시 시도</button></p>}
-    {query.isFetched && !query.isError && !data.stats.length && query.data?.cacheStatus !== 'collecting' && !query.data?.stale && <p role="status" className={styles.notice}>{job}의 가까운 보스 세팅 표본을 30명 이상 확보하지 못했어요. 아래에서 내 장비는 확인할 수 있어요.</p>}
+    {query.isFetched && !query.isError && !data.stats.length && query.data?.cacheStatus !== 'collecting' && !query.data?.stale && <p role="status" className={styles.notice}>{job}의 유효한 보스 세팅을 불러오지 못했어요. 잠시 후 다시 검색해 주세요.</p>}
     {query.data?.stale && <p role="status">통계 갱신이 필요합니다. 오래된 데이터는 표시하지 않아요.</p>}
     <div className={styles.workspace}>
       <section className={styles.inventory} aria-label="부위별 장비 통계">
@@ -138,7 +138,7 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
       </section>
       <aside className={styles.statistics} aria-label="선택한 장비 상세 통계">{!query.isPending && !query.isError && <Statistics stat={stat} label={slot.label} comparison={comparison} />}</aside>
     </div>
-    <section className={styles.info}><h2>통계 안내</h2><p>같은 직업에서 검색 전투력의 ±15% 안에 있는 가장 가까운 유효 캐릭터 30명을 사용합니다. 저전투력 구간은 최소 ±2,500만 범위를 적용하며, 부위별 착용자도 30명 이상일 때만 통계를 표시합니다.</p><p>후보는 랭킹 깊이 10곳에 분산해 수집하고, 검색 시 최신 전투력과 현재 적용 장비를 함께 확인합니다. 드메 잠재 캐릭터는 제외하며 같은 직업·2,500만 전투력 구간의 결과를 7일 동안 공유합니다.</p><p>Data based on NEXON Open API</p></section>
+    <section className={styles.info}><h2>통계 안내</h2><p>같은 직업에서 검색 전투력의 ±15%를 먼저 찾고, 유효 표본이 10명보다 적으면 가까운 순서로 검색 범위를 넓힙니다. 최대 30명을 사용하며 실제 표본 전투력 범위를 함께 표시합니다.</p><p>후보는 랭킹 깊이 10곳에 분산해 수집하고, 검색 시 최신 전투력과 현재 적용 장비를 함께 확인합니다. 드메 잠재 캐릭터는 제외하며 같은 직업·2,500만 전투력 구간의 결과를 7일 동안 공유합니다.</p><p>Data based on NEXON Open API</p></section>
     <dialog ref={loadoutDialog} className={styles.modalDialog} aria-label="전체 장비 세팅" onClick={event => { if (event.target === event.currentTarget) loadoutDialog.current?.close(); }}>
       <div className={styles.modalBody}><button autoFocus className={styles.close} aria-label="전체 장비 세팅 닫기" onClick={() => loadoutDialog.current?.close()}>닫기 ✕</button><LoadoutCarousel loadouts={data.loadouts} /></div>
     </dialog>
