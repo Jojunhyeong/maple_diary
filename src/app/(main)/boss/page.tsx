@@ -20,7 +20,6 @@ import {
   calculateBossRevenue,
   extractWeeklyBossPlan,
   filterBossChecklistStateByCycle,
-  getRecurringBossPlan,
   isBossSelected,
   removeBossChecklistStatesByCycles,
   mergeBossChecklistStates,
@@ -84,7 +83,6 @@ export default function BossPage() {
   const [isEditingSavedCycles, setIsEditingSavedCycles] = useState(false);
   const [expandedBossId, setExpandedBossId] = useState<string | null>(null);
   const [isRecordMode, setIsRecordMode] = useState(false);
-  const [recurringPlan, setRecurringPlan] = useState(() => extractWeeklyBossPlan(undefined));
   const [switchingCharacterId, setSwitchingCharacterId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -103,7 +101,6 @@ export default function BossPage() {
       setIsMonthlyLocked(false);
       setIsEditingSavedCycles(false);
       setState({});
-      setRecurringPlan({});
 
       if (!activeCharacterId) {
         if (!cancelled) {
@@ -133,19 +130,17 @@ export default function BossPage() {
         const monthlyRow = monthlyRows[0];
 
         if (weeklyRow?.state) {
-          setRecurringPlan(getRecurringBossPlan(weeklyRow.state));
           setState((prev) => mergeBossChecklistStates(prev, weeklyRow.state));
           setIsWeeklyLocked(true);
         } else {
           setIsWeeklyLocked(false);
           const previousRow = (previousWeeklyQuery.data ?? []).find((row) => row.week_key < weekKey);
-          const previousPlan = getRecurringBossPlan(previousRow?.state);
-          setRecurringPlan(previousPlan);
-          if (Object.keys(previousPlan).length > 0) {
-            setState((prev) => mergeBossChecklistStates(prev, previousPlan as ChecklistState));
+          const previousWeekSelection = extractWeeklyBossPlan(previousRow?.state);
+          if (Object.keys(previousWeekSelection).length > 0) {
+            setState((prev) => mergeBossChecklistStates(prev, previousWeekSelection as ChecklistState));
             setSaveMessage(isRecordMode
-              ? '기본 보스 설정을 불러왔어요. 이번 주 못 잡은 보스만 빼고 저장하세요'
-              : '지난 보스 설정을 이번 주 초안으로 불러왔어요');
+              ? '지난주 마지막 기록을 불러왔어요. 이번 주에 잡을 보스에 맞게 바꿔서 저장하세요'
+              : '지난주 마지막 저장 내용을 이번 주 초안으로 불러왔어요');
           }
         }
 
@@ -448,15 +443,13 @@ export default function BossPage() {
       return;
     }
 
-    const bossPlan = isRecordMode && Object.keys(recurringPlan).length > 0
-      ? recurringPlan
-      : extractWeeklyBossPlan(state);
-    const stateWithPlan = { ...state, __bossPlan: bossPlan } as ChecklistState;
+    const stateWithoutLegacyPlan = { ...state };
+    delete stateWithoutLegacyPlan.__bossPlan;
     const stateToSave = isWeeklyLocked && !isMonthlyLocked
-      ? filterBossChecklistStateByCycle(stateWithPlan, 'monthly')
+      ? filterBossChecklistStateByCycle(stateWithoutLegacyPlan, 'monthly')
       : !isWeeklyLocked && isMonthlyLocked
-        ? filterBossChecklistStateByCycle(stateWithPlan, 'weekly')
-        : stateWithPlan;
+        ? filterBossChecklistStateByCycle(stateWithoutLegacyPlan, 'weekly')
+        : stateWithoutLegacyPlan;
 
     setIsSaving(true);
     setSaveMessage('');
@@ -470,11 +463,10 @@ export default function BossPage() {
       const savedCycles = new Set(data.savedCycles ?? []);
       if (savedCycles.has('weekly')) setIsWeeklyLocked(true);
       if (savedCycles.has('monthly')) setIsMonthlyLocked(true);
-      setRecurringPlan(bossPlan);
       setIsEditingSavedCycles(false);
 
       if (isRecordMode && savedCycles.has('weekly')) {
-        setSaveMessage('이번 주 기록을 저장했어요. 수요일까지 이어서 기록할 수 있어요');
+        setSaveMessage('이번 주 기록을 저장했어요. 마지막 저장 상태가 다음 주에도 이어져요');
       } else if (savedCycles.has('weekly') && savedCycles.has('monthly')) {
         setSaveMessage('이번 주와 이번 달 저장 완료');
       } else if (savedCycles.has('weekly')) {
@@ -570,7 +562,7 @@ export default function BossPage() {
           <p className="mt-1 text-xs text-t3">{isRecordMode ? '이번 주에 잡은 보스를 여러 날에 걸쳐 이어서 기록할 수 있어요' : '체크한 보스와 보스별 드랍템을 기준으로 주간(목~수)과 월간 검마 수익을 합산해요'}</p>
           <p className="mt-1 text-[11px] text-t3">로그인 후 서버에 주간/월간 수익을 저장할 수 있어요</p>
           <p className="mt-2 text-[11px] text-t3">주간 기준 · {weekLabel}</p>
-          {isRecordMode && <p className="mt-2 text-[11px] font-semibold text-amber-600">오늘 잡은 보스만 먼저 저장해도 괜찮아요. 수요일까지 이어서 추가할 수 있고, 다음 주 기본 설정에는 영향을 주지 않아요.</p>}
+          {isRecordMode && <p className="mt-2 text-[11px] font-semibold text-amber-600">오늘 잡은 보스만 먼저 저장해도 괜찮아요. 이번 주의 마지막 저장 상태가 다음 주에도 선택되며, 다시 잡는 보스는 다음 주에 추가하면 계속 유지돼요.</p>}
         </div>
         <div className="flex flex-col items-end gap-2">
         <div className="flex flex-wrap items-center justify-end gap-2">
