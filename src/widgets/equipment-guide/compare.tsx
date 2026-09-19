@@ -6,6 +6,7 @@ import { EQUIPMENT_SLOTS } from './model';
 import styles from './styles.module.css';
 
 type RawEquipment = Record<string, unknown>;
+type TooltipStat = { label: string; total: string; parts: Array<{ value: string; tone: 'base' | 'add' | 'etc' | 'star' | 'exceptional' }> };
 type TooltipCardProps = {
   badge: string;
   name: string;
@@ -16,7 +17,8 @@ type TooltipCardProps = {
   potentialLines: string[];
   additionalGrade?: string;
   additionalLines: string[];
-  stats?: Array<{ label: string; value: string }>;
+  stats?: TooltipStat[];
+  cuttableCount?: number;
   footer?: string;
   goalHref?: string;
 };
@@ -56,10 +58,10 @@ export function Compare({ characterName, selectedSlot, recommended }: { characte
       : query.isError ? <p role="alert">{query.error.message} <button onClick={() => void query.refetch()}>다시 시도</button></p>
       : !own ? <p>{characterName}의 해당 부위 장비 정보가 없어요.</p>
       : <div className={styles.tooltipCompareGrid}>
-        <EquipmentTooltipCard badge="내 장비" name={own.name} icon={own.icon_url} part={part} starforce={ownStarforce}
+        <EquipmentTooltipCard badge="내 장비" name={itemDisplayName(own.name, own.raw)} icon={own.icon_url} part={part} starforce={ownStarforce}
           potentialGrade={readText(own.raw, 'potential_option_grade')} potentialLines={potentialLines(own.raw)}
           additionalGrade={readText(own.raw, 'additional_potential_option_grade')} additionalLines={potentialLines(own.raw, true)}
-          stats={totalStats(own.raw)} footer={`${characterName} · 현재 장착 장비`} />
+          stats={totalStats(own.raw)} cuttableCount={readNumber(own.raw, 'cuttable_count')} footer={`${characterName} · 현재 장착 장비`} />
         <EquipmentTooltipCard badge="추천 세팅" name={recommended.item.itemName} icon={recommended.item.itemIcon} part={part} starforce={recommendedStarforce}
           potentialGrade={recommended.item.potentialGrade} potentialLines={splitOptions(recommended.item.potentialOption)}
           additionalGrade={recommended.item.additionalPotentialGrade} additionalLines={splitOptions(recommended.item.additionalPotentialOption)}
@@ -68,21 +70,23 @@ export function Compare({ characterName, selectedSlot, recommended }: { characte
   </section>;
 }
 
-function EquipmentTooltipCard({ badge, name, icon, part, starforce, potentialGrade, potentialLines, additionalGrade, additionalLines, stats = [], footer, goalHref }: TooltipCardProps) {
+function EquipmentTooltipCard({ badge, name, icon, part, starforce, potentialGrade, potentialLines, additionalGrade, additionalLines, stats = [], cuttableCount, footer, goalHref }: TooltipCardProps) {
   const grade = gradeKey(potentialGrade);
   return <article className={styles.mapleTooltip}>
-    <span className={styles.tooltipBadge}>{badge}</span>
+    <div className={styles.tooltipTopbar}><span aria-hidden="true">☆</span><strong>{badge}</strong><span aria-hidden="true">▦</span></div>
     <Starforce value={starforce} />
     <h3>{name}</h3>
     <p className={styles.itemGrade} data-grade={grade}>({potentialGrade ? `${potentialGrade} 아이템` : '잠재등급 정보 없음'})</p>
     <div className={styles.tooltipDivider} />
-    <div className={styles.tooltipIdentity}>
+    <div className={styles.tooltipIconStage}>
       <div className={styles.tooltipIcon} data-grade={grade}>{icon
         // eslint-disable-next-line @next/next/no-img-element
         ? <img src={icon} alt="" /> : <span aria-hidden="true">◇</span>}</div>
-      <p>장비분류 · <strong>{part}</strong></p>
     </div>
-    {stats.length > 0 && <section className={styles.tooltipStats}>{stats.map(stat => <p key={stat.label}><span>{stat.label}</span><strong>{stat.value}</strong></p>)}</section>}
+    <div className={styles.tooltipDivider} />
+    <p className={styles.tooltipPart}>장비분류 : <strong>{part}</strong></p>
+    {stats.length > 0 && <section className={styles.tooltipStats}>{stats.map(stat => <p key={stat.label}><span>{stat.label} : <strong>{stat.total}</strong></span>{stat.parts.length > 0 && <small>( {stat.parts.map((part, index) => <em key={`${part.tone}-${index}`} data-tone={part.tone}>{part.value}</em>)} )</small>}</p>)}</section>}
+    {cuttableCount !== undefined && cuttableCount > 0 && <p className={styles.tooltipCuttable}>가위 사용 가능 횟수 : {cuttableCount}회</p>}
     <PotentialSection title="잠재옵션" grade={potentialGrade} lines={potentialLines} />
     <PotentialSection title="에디셔널 잠재옵션" grade={additionalGrade} lines={additionalLines} additional />
     <p className={styles.tooltipFooter}>{footer}</p>
@@ -93,7 +97,7 @@ function EquipmentTooltipCard({ badge, name, icon, part, starforce, potentialGra
 function Starforce({ value }: { value?: number }) {
   if (value === undefined) return <p className={styles.noStarforce}>스타포스 정보 없음</p>;
   const active = Math.max(0, Math.min(25, Math.round(value)));
-  return <div className={styles.tooltipStars} aria-label={`스타포스 ${value}성`}>{Array.from({ length: 25 }, (_, index) => <span key={index} data-active={index < active}>★</span>)}</div>;
+  return <div className={styles.tooltipStars} aria-label={`스타포스 ${value}성`}>{Array.from({ length: 25 }, (_, index) => <span key={index} data-active={index < active}>{index < active ? '★' : '☆'}</span>)}</div>;
 }
 
 function PotentialSection({ title, grade, lines, additional = false }: { title: string; grade?: string; lines: string[]; additional?: boolean }) {
@@ -134,12 +138,30 @@ function totalStats(raw: RawEquipment | undefined) {
   const total = raw?.item_total_option;
   if (!total || typeof total !== 'object' || Array.isArray(total)) return [];
   const options = total as Record<string, unknown>;
+  const sources = [
+    ['item_base_option', 'base', true], ['item_starforce_option', 'star', false],
+    ['item_etc_option', 'etc', false], ['item_add_option', 'add', false],
+    ['item_exceptional_option', 'exceptional', false],
+  ] as const;
   return STAT_FIELDS.flatMap(([key, label]) => {
     const value = Number(options[key]);
     if (!Number.isFinite(value) || value === 0) return [];
     const suffix = key === 'boss_damage' || key === 'ignore_monster_armor' || key === 'all_stat' ? '%' : '';
-    return [{ label, value: `${value > 0 ? '+' : ''}${value}${suffix}` }];
+    const parts = sources.flatMap(([source, tone, showZero]) => {
+      const group = raw?.[source];
+      if (!group || typeof group !== 'object' || Array.isArray(group)) return [];
+      const partValue = Number((group as Record<string, unknown>)[key]);
+      return Number.isFinite(partValue) && (showZero || partValue !== 0)
+        ? [{ value: `${partValue > 0 ? '+' : ''}${partValue}${suffix}`, tone }]
+        : [];
+    });
+    return [{ label, total: `${value > 0 ? '+' : ''}${value}${suffix}`, parts }];
   });
+}
+
+function itemDisplayName(name: string, raw: RawEquipment | undefined) {
+  const upgrade = readNumber(raw, 'scroll_upgrade');
+  return upgrade && upgrade > 0 ? `${name} (+${upgrade})` : name;
 }
 
 function gradeKey(grade?: string) {
