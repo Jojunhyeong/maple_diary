@@ -73,6 +73,8 @@ export type EquipmentGuideLoadoutItem = {
   starforce?: number;
   potentialGrade?: string;
   additionalPotentialGrade?: string;
+  potentialOption?: string;
+  additionalPotentialOption?: string;
 };
 export type EquipmentGuideSetEffect = { name: string; count: number };
 export type EquipmentGuideLoadout = {

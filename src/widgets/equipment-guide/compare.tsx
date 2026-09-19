@@ -1,12 +1,12 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import type { EquipmentGuideStat, EquipmentSlotId, OwnEquipment } from './model';
+import type { EquipmentGuideLoadout, EquipmentGuideLoadoutItem, EquipmentSlotId, OwnEquipment } from './model';
 import { EQUIPMENT_SLOTS } from './model';
 import { optionLabel } from './aggregate';
 import styles from './styles.module.css';
 
-export function Compare({ characterName, characterJob, selectedSlot, stat }: { characterName?: string; characterJob?: string; selectedSlot: EquipmentSlotId; stat?: EquipmentGuideStat }) {
+export function Compare({ characterName, selectedSlot, recommended }: { characterName?: string; selectedSlot: EquipmentSlotId; recommended: { loadout: EquipmentGuideLoadout; item: EquipmentGuideLoadoutItem } }) {
   const query = useQuery({
     queryKey: ['equipment-guide-own-equipment', characterName],
     enabled: !!characterName,
@@ -19,22 +19,26 @@ export function Compare({ characterName, characterJob, selectedSlot, stat }: { c
   const slot = EQUIPMENT_SLOTS.find(item => item.id === selectedSlot);
   const own = query.data?.items.find(item => item.slot === slot?.apiSlot);
   const star = own?.raw?.starforce;
-  const difference = star != null && star !== '' && Number.isFinite(Number(star)) && stat?.starforce.median !== undefined ? Number(star) - stat.starforce.median : null;
+  const comparisonStar = recommended.item.starforce;
+  const difference = star != null && star !== '' && Number.isFinite(Number(star)) && comparisonStar !== undefined ? Number(star) - comparisonStar : null;
   return <section className={styles.compare}><h2>{slot?.label} · 내 장비와 비교</h2>
     {query.data?.equipment_preset_no && <p className={styles.sample}>드롭률·메소 획득량 잠재가 없는 장비 프리셋 {query.data.equipment_preset_no}번을 사용합니다.</p>}
     {!characterName ? <p>캐릭터를 선택하면 내 장비를 함께 확인할 수 있어요. <Link href="/settings">캐릭터 선택 →</Link></p>
       : query.isPending ? <p role="status">내 장비를 불러오는 중이에요.</p>
       : query.isError ? <p role="alert">{query.error.message} <button onClick={() => void query.refetch()}>다시 시도</button></p>
       : !own ? <p>{characterName}의 해당 부위 장비 정보가 없어요.</p>
-      : !stat ? <><p>{characterName} · {slot?.label} · {own.name}</p><p>스타포스: {star != null && star !== '' ? star + '성' : '정보 없음'}<br />잠재능력: {optionLabel(own.raw ?? {})}<br />에디셔널: {optionLabel(own.raw ?? {}, true)}</p><p className={styles.sample}>{characterJob}의 선택 구간 표본이 확보되면 내 장비와 비교할 수 있어요.</p></>
-      : <><p>{characterName} · {own.name}</p><p className={styles.sample}>표본 대표 장비: {stat.items[0]?.itemName ?? '정보 없음'} · 수집한 실제 장비를 기준으로 비교합니다.</p>
-        {characterJob !== stat.job && <p className={styles.notice}>내 캐릭터와 선택한 통계의 직업이 달라요.</p>}
-        <div className={styles.tableWrap}><table><thead><tr><th>항목</th><th>내 장비</th><th>표본 대표 장비</th></tr></thead><tbody>
-          <tr><th>스타포스</th><td>{star != null && star !== '' ? star + '성' : '정보 없음'}</td><td>중앙값 {stat.starforce.median ?? '—'}성</td></tr>
-          <tr><th>잠재능력</th><td>{own.raw?.potential_option_grade || '정보 없음'}<br />{optionLabel(own.raw ?? {})}</td><td>{stat.potentialOptions?.[0]?.label ?? '정보 없음'}<br />{stat.potentialOptions?.[0]?.ratio ?? 0}% 사용</td></tr>
-          <tr><th>에디셔널</th><td>{own.raw?.additional_potential_option_grade || '정보 없음'}<br />{optionLabel(own.raw ?? {}, true)}</td><td>{stat.additionalPotentialOptions?.[0]?.label ?? '정보 없음'}<br />{stat.additionalPotentialOptions?.[0]?.ratio ?? 0}% 사용</td></tr>
+      : <><p>{characterName} · {own.name}</p><p className={styles.sample}>추천 세팅 장비: {recommended.item.itemName} · 전투력 {formatPower(recommended.loadout.power)} 캐릭터의 실제 조합</p>
+        <div className={styles.tableWrap}><table><thead><tr><th>항목</th><th>내 장비</th><th>추천 세팅</th></tr></thead><tbody>
+          <tr><th>장비</th><td>{own.name}</td><td>{recommended.item.itemName}</td></tr>
+          <tr><th>스타포스</th><td>{star != null && star !== '' ? star + '성' : '정보 없음'}</td><td>{recommended.item.starforce !== undefined ? recommended.item.starforce + '성' : '정보 없음'}</td></tr>
+          <tr><th>잠재능력</th><td>{own.raw?.potential_option_grade || '정보 없음'}<br />{optionLabel(own.raw ?? {})}</td><td>{recommended.item.potentialGrade || '정보 없음'}<br />{recommended.item.potentialOption || '옵션 없음'}</td></tr>
+          <tr><th>에디셔널</th><td>{own.raw?.additional_potential_option_grade || '정보 없음'}<br />{optionLabel(own.raw ?? {}, true)}</td><td>{recommended.item.additionalPotentialGrade || '정보 없음'}<br />{recommended.item.additionalPotentialOption || '옵션 없음'}</td></tr>
         </tbody></table></div>
-        {difference !== null && <p>스타포스는 비교 표본의 대표 아이템 중앙값{difference === 0 ? '과 같아요.' : '보다 ' + Math.abs(difference) + '성 ' + (difference > 0 ? '높아요.' : '낮아요.')}</p>}
+        {difference !== null && <p>스타포스는 추천 세팅 장비{difference === 0 ? '와 같아요.' : '보다 ' + Math.abs(difference) + '성 ' + (difference > 0 ? '높아요.' : '낮아요.')}</p>}
       </>}
   </section>;
+}
+
+function formatPower(value: number) {
+  return value >= 100_000_000 ? `${Math.round(value / 1_000_000) / 100}억` : `${Math.round(value / 1_000_000)}백만`;
 }

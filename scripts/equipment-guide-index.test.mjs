@@ -27,8 +27,8 @@ test('ranking class probes include explorer, resistance and new class families',
 
 test('nearby searches share a 25m cache bucket', () => {
   assert.equal(equipmentGuideBucket(104_000_000), 100_000_000);
-  assert.equal(equipmentGuideCacheKey('히어로', 111_000_000), 'v10:히어로:100000000');
-  assert.equal(equipmentGuideCacheKey('히어로', 111_000_000, '2026-09-18'), 'v10:히어로:100000000:2026-09-18');
+  assert.equal(equipmentGuideCacheKey('히어로', 111_000_000), 'v11:히어로:100000000');
+  assert.equal(equipmentGuideCacheKey('히어로', 111_000_000, '2026-09-18'), 'v11:히어로:100000000:2026-09-18');
 });
 
 test('candidate selection keeps the nearest same-job rows without a fixed distance cutoff', () => {

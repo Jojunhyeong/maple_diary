@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/shared/lib/supabase';
-import { aggregateEquipment, itemsHaveFarmingPotential, type EquipmentObservation, type ObservedEquipment } from '@/widgets/equipment-guide/aggregate';
+import { aggregateEquipment, itemsHaveFarmingPotential, optionLabel, type EquipmentObservation, type ObservedEquipment } from '@/widgets/equipment-guide/aggregate';
 import { COHORT_TARGET_SIZE, COMBAT_BUCKETS, EQUIPMENT_SLOTS, MIN_SAMPLE_COUNT, type EquipmentCharacterIndexEntry, type EquipmentGuideDataset } from '@/widgets/equipment-guide/model';
 import { EQUIPMENT_GUIDE_CACHE_DAYS, equipmentGuideCacheKey, selectEquipmentPowerCohort } from '@/widgets/equipment-guide/cohort';
 import { normalizeEquipmentSetEffects, selectRepresentativeCandidates } from '@/widgets/equipment-guide/loadouts';
@@ -8,7 +8,7 @@ const CANDIDATE_FETCH_LIMIT = 90;
 const SET_EFFECT_CANDIDATE_LIMIT = 20;
 const CANDIDATE_BATCH_SIZE = 15;
 const SET_EFFECT_BATCH_SIZE = 10;
-const LOADOUT_LIMIT = 5;
+const LOADOUT_LIMIT = 3;
 
 const ITEM_FIELDS = [
   'item_equipment_slot', 'item_name', 'item_icon', 'starforce',
@@ -103,6 +103,8 @@ async function representativeLoadouts(sample: EquipmentObservation[], targetPowe
         slot: slot.id, itemName: item.item_name, itemIcon: item.item_icon || undefined, starforce,
         potentialGrade: item.potential_option_grade || undefined,
         additionalPotentialGrade: item.additional_potential_option_grade || undefined,
+        potentialOption: optionLabel(item),
+        additionalPotentialOption: optionLabel(item, true),
       }];
     }),
   }));
