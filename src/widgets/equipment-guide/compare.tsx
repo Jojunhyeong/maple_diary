@@ -1,6 +1,7 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useLayoutEffect, useRef } from 'react';
 import type { EquipmentGuideLoadout, EquipmentGuideLoadoutItem, EquipmentSlotId, OwnEquipment } from './model';
 import { EQUIPMENT_SLOTS } from './model';
 import styles from './styles.module.css';
@@ -30,6 +31,7 @@ const STAT_FIELDS = [
 ] as const;
 
 export function Compare({ characterName, selectedSlot, recommended }: { characterName?: string; selectedSlot: EquipmentSlotId; recommended: { loadout: EquipmentGuideLoadout; item: EquipmentGuideLoadoutItem } }) {
+  const fitRef = useRef<HTMLElement>(null);
   const query = useQuery({
     queryKey: ['equipment-guide-own-equipment', characterName],
     enabled: !!characterName,
@@ -46,7 +48,30 @@ export function Compare({ characterName, selectedSlot, recommended }: { characte
   const recommendedStarforce = recommended.item.starforce;
   const goalParams = new URLSearchParams({ guideItem: recommended.item.itemName, guidePart: part });
 
-  return <section className={styles.compare}>
+  useLayoutEffect(() => {
+    const element = fitRef.current;
+    if (!element) return;
+    let frame = 0;
+    const fit = () => {
+      element.style.setProperty('zoom', '1');
+      const availableHeight = Math.max(320, window.innerHeight - 32);
+      const availableWidth = Math.max(320, window.innerWidth - 32);
+      const scale = Math.min(1, availableHeight / element.scrollHeight, availableWidth / element.scrollWidth);
+      element.style.setProperty('zoom', String(Math.max(0.55, scale)));
+    };
+    const scheduleFit = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
+    };
+    scheduleFit();
+    window.addEventListener('resize', scheduleFit);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', scheduleFit);
+    };
+  }, [query.dataUpdatedAt, query.isPending, recommended]);
+
+  return <section ref={fitRef} className={styles.compare}>
     {!characterName ? <p>캐릭터를 선택하면 내 장비를 함께 확인할 수 있어요. <Link href="/settings">캐릭터 선택 →</Link></p>
       : query.isPending ? <CompareSkeleton />
       : query.isError ? <p role="alert">{query.error.message} <button onClick={() => void query.refetch()}>다시 시도</button></p>
