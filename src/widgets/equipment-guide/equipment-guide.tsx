@@ -100,8 +100,6 @@ function CharacterEquipmentGuide({ profile }: { profile: LocalCharacterProfile }
         </button>
       </div>
     </div>
-    <p className={styles.notice}>종합 랭킹에서 찾은 후보의 최신 전투력과 현재 적용 장비를 함께 조회합니다. 아이템 드롭률·메소 획득량 잠재가 있으면 캐릭터 전체를 표본에서 제외합니다.</p>
-    <p className={styles.notice}>새로고침하면 넥슨 조회 전투력으로 돌아갑니다. 직접 입력은 현재 화면에서만 유지되며, 최근 14일 중 드메 잠재가 없는 적용 세팅의 가장 높은 전투력도 찾을 수 있어요.</p>
     {historyMessage && <p role={historyStatus === 'error' ? 'alert' : 'status'} className={styles.notice}>{historyMessage}</p>}
     {query.isPending && query.isFetching && <p role="status">캐시를 확인하는 중이에요.</p>}
     {query.data?.cacheStatus === 'collecting' && <p role="status" className={styles.notice}>같은 직업·비슷한 전투력 캐릭터의 장비를 처음 수집하고 있어요. 완료되면 자동으로 표시됩니다.</p>}
