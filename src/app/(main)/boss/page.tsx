@@ -595,6 +595,24 @@ export default function BossPage() {
         </div>
       </div>
 
+      <Card>
+        <div className="mb-3">
+          <p className="text-sm font-semibold text-t1">캐릭터 바로 전환</p>
+          <p className="mt-1 text-[11px] text-t3">다른 캐릭터의 보스 설정과 이번 주 기록을 바로 확인할 수 있어요</p>
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {(charactersQuery.data?.characters ?? []).map((character) => {
+            const characterId = character.id ?? '';
+            const active = characterId === activeCharacterId;
+            return <button key={characterId || character.character_name} type="button" disabled={!characterId || isActivating} onClick={() => void handleCharacterSwitch(characterId)}
+              className={`flex min-w-[150px] items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${active ? 'border-amber-500 bg-amber-500/10' : 'border-line bg-surface/40 hover:border-amber-500/40'} disabled:opacity-60`}>
+              {character.image_url ? <Image src={character.image_url} alt="" width={36} height={36} className="h-9 w-9 shrink-0 object-contain" unoptimized /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface text-xs">◇</span>}
+              <span className="min-w-0"><strong className="block truncate text-xs text-t1">{character.character_name ?? '이름 없음'}</strong><small className="block truncate text-[10px] text-t3">{active ? '현재 캐릭터' : switchingCharacterId === characterId ? '변경 중…' : '선택하기'}</small></span>
+            </button>;
+          })}
+        </div>
+      </Card>
+
       <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.18),rgba(245,158,11,0.05)_55%,transparent)]">
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
           <MetricCard label="보스 예상 수익" value={formatMeso(summary.totalRevenue)} highlight />
@@ -1091,23 +1109,6 @@ export default function BossPage() {
         )}
       </Card>
 
-      <Card>
-        <div className="mb-3">
-          <p className="text-sm font-semibold text-t1">캐릭터 바로 전환</p>
-          <p className="mt-1 text-[11px] text-t3">다른 캐릭터의 보스 설정과 이번 주 기록을 바로 확인할 수 있어요</p>
-        </div>
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {(charactersQuery.data?.characters ?? []).map((character) => {
-            const characterId = character.id ?? '';
-            const active = characterId === activeCharacterId;
-            return <button key={characterId || character.character_name} type="button" disabled={!characterId || isActivating} onClick={() => void handleCharacterSwitch(characterId)}
-              className={`flex min-w-[150px] items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-all ${active ? 'border-amber-500 bg-amber-500/10' : 'border-line bg-surface/40 hover:border-amber-500/40'} disabled:opacity-60`}>
-              {character.image_url ? <Image src={character.image_url} alt="" width={36} height={36} className="h-9 w-9 shrink-0 object-contain" unoptimized /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface text-xs">◇</span>}
-              <span className="min-w-0"><strong className="block truncate text-xs text-t1">{character.character_name ?? '이름 없음'}</strong><small className="block truncate text-[10px] text-t3">{active ? '현재 캐릭터' : switchingCharacterId === characterId ? '변경 중…' : '선택하기'}</small></span>
-            </button>;
-          })}
-        </div>
-      </Card>
         </>
       )}
     </main>
