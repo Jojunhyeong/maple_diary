@@ -473,7 +473,9 @@ export default function BossPage() {
       setRecurringPlan(bossPlan);
       setIsEditingSavedCycles(false);
 
-      if (savedCycles.has('weekly') && savedCycles.has('monthly')) {
+      if (isRecordMode && savedCycles.has('weekly')) {
+        setSaveMessage('이번 주 기록을 저장했어요. 수요일까지 이어서 기록할 수 있어요');
+      } else if (savedCycles.has('weekly') && savedCycles.has('monthly')) {
         setSaveMessage('이번 주와 이번 달 저장 완료');
       } else if (savedCycles.has('weekly')) {
         setSaveMessage('이번 주 저장 완료');
@@ -516,7 +518,9 @@ export default function BossPage() {
     setIsEditingSavedCycles(true);
     setIsWeeklyLocked(false);
     setIsMonthlyLocked(false);
-    setSaveMessage('저장된 보스를 수정한 뒤 다시 저장해주세요');
+    setSaveMessage(isRecordMode
+      ? '이번 주에 추가로 잡은 보스를 체크한 뒤 다시 저장해 주세요'
+      : '저장된 보스를 수정한 뒤 다시 저장해주세요');
   };
 
   const handleDeleteAll = async () => {
@@ -563,10 +567,10 @@ export default function BossPage() {
         <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="maple-title text-2xl font-bold text-t1">{isRecordMode ? '보스 기록 추가' : '보스 수익'}</h1>
-          <p className="mt-1 text-xs text-t3">체크한 보스와 보스별 드랍템을 기준으로 주간(목~수)과 월간 검마 수익을 합산해요</p>
+          <p className="mt-1 text-xs text-t3">{isRecordMode ? '이번 주에 잡은 보스를 여러 날에 걸쳐 이어서 기록할 수 있어요' : '체크한 보스와 보스별 드랍템을 기준으로 주간(목~수)과 월간 검마 수익을 합산해요'}</p>
           <p className="mt-1 text-[11px] text-t3">로그인 후 서버에 주간/월간 수익을 저장할 수 있어요</p>
           <p className="mt-2 text-[11px] text-t3">주간 기준 · {weekLabel}</p>
-          {isRecordMode && <p className="mt-2 text-[11px] font-semibold text-amber-600">이번 주에 못 잡은 보스를 제외해도 다음 주 기본 설정에는 영향을 주지 않아요</p>}
+          {isRecordMode && <p className="mt-2 text-[11px] font-semibold text-amber-600">오늘 잡은 보스만 먼저 저장해도 괜찮아요. 수요일까지 이어서 추가할 수 있고, 다음 주 기본 설정에는 영향을 주지 않아요.</p>}
         </div>
         <div className="flex flex-col items-end gap-2">
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -576,7 +580,7 @@ export default function BossPage() {
             disabled={!isLoggedIn || isSaving || (!isEditingSavedCycles && (isWeeklyLocked || isMonthlyLocked))}
             className="rounded-full border border-amber-500/30 bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSaving ? '저장 중...' : '저장'}
+            {isSaving ? '저장 중...' : isRecordMode ? '이번 주 기록 저장' : '저장'}
           </button>
           <button
             type="button"
@@ -588,7 +592,7 @@ export default function BossPage() {
                 : 'border border-amber-500/25 bg-amber-500/10 text-amber-600 hover:bg-amber-500/15'
             } disabled:cursor-not-allowed disabled:opacity-50`}
           >
-            {isEditingSavedCycles ? '삭제' : '수정'}
+            {isEditingSavedCycles ? '삭제' : isRecordMode ? '이번 주 기록 이어서 작성' : '수정'}
           </button>
         </div>
           {saveMessage && <p className="text-[11px] text-t3">{saveMessage}</p>}
@@ -616,7 +620,7 @@ export default function BossPage() {
       <Card className="border-amber-500/20 bg-[linear-gradient(130deg,rgba(245,158,11,0.18),rgba(245,158,11,0.05)_55%,transparent)]">
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
           <MetricCard label="보스 예상 수익" value={formatMeso(summary.totalRevenue)} highlight />
-          <MetricCard label="체크한 보스" value={`${summary.selectedBosses}개`} />
+          <MetricCard label={isRecordMode ? '이번 주 기록한 보스' : '체크한 보스'} value={`${summary.selectedBosses}개`} />
           <MetricCard label="드랍템 체크" value={`${summary.lootCount}개`} />
           <MetricCard label="현재 탭" value={activeGroup.label} />
         </div>
@@ -1082,8 +1086,8 @@ export default function BossPage() {
       <Card>
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
-            <p className="text-sm font-semibold text-t1">선택한 보스</p>
-            <p className="text-[11px] text-t3">체크된 항목만 아래에 모아봤어요</p>
+            <p className="text-sm font-semibold text-t1">{isRecordMode ? '이번 주 보스 기록' : '선택한 보스'}</p>
+            <p className="text-[11px] text-t3">{isRecordMode ? `${weekLabel} · 이번 주에 기록한 보스예요` : '체크된 항목만 아래에 모아봤어요'}</p>
           </div>
           <p className="text-xs text-t3">{selectedEntries.length}개 항목</p>
         </div>
