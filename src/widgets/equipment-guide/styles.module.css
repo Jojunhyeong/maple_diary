@@ -214,6 +214,7 @@
 .modalDialog[open]::backdrop,.compareDialog[open]::backdrop { animation:backdropIn .22s ease-out; }
 .compareDialog { width:min(1020px,calc(100% - 32px)); max-height:none; overflow:visible; border:0; background:transparent; box-shadow:none; }
 .compareDialog .modalBody { max-height:none; padding:0; overflow:visible; background:transparent; }
+.compareDialog .compare { border:0; border-radius:0; background:transparent; box-shadow:none; }
 .compareDialog .close { position:fixed; z-index:2; top:18px; right:18px; margin:0; padding:7px 10px; border:1px solid rgba(255,255,255,.18); border-radius:999px; background:rgba(5,6,7,.86); color:#fff; }
 .modalBody { max-height:90dvh; padding:20px; overflow-y:auto; overscroll-behavior:contain; }
 .modalBody .loadouts,.modalBody .compare { border:0; padding:0; }
