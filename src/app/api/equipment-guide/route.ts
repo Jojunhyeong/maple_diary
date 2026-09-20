@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
   const cached = await readEquipmentGuideCache(job, targetPower, sourceDate);
   if (!cached.databaseAvailable) return Response.json(fallbackDataset(job, requestedPower));
   if (cached.row?.status === 'ready' && cached.row.dataset) {
-    return Response.json({ ...cached.row.dataset, date: cached.row.source_date, cacheStatus: 'ready' }, {
+    return Response.json({ ...cached.row.dataset, date: cached.row.source_date, cacheStatus: cached.row.dataset.cacheStatus ?? 'ready' }, {
       headers: { 'Cache-Control': 'private, no-store' },
     });
   }

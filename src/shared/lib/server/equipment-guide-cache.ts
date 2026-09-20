@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/shared/lib/supabase';
-import { aggregateEquipment, itemsHaveFarmingPotential, optionLabel, type EquipmentObservation, type ObservedEquipment } from '@/widgets/equipment-guide/aggregate';
+import { aggregateEquipment, optionLabel, selectNonFarmingEquipmentPreset, type EquipmentObservation, type ObservedEquipment } from '@/widgets/equipment-guide/aggregate';
 import { COHORT_TARGET_SIZE, COMBAT_BUCKETS, EQUIPMENT_SLOTS, MIN_SAMPLE_COUNT, type EquipmentCharacterIndexEntry, type EquipmentGuideDataset } from '@/widgets/equipment-guide/model';
 import { EQUIPMENT_GUIDE_CACHE_DAYS, equipmentGuideCacheKey, isWithinEquipmentGuidePowerRange, selectEquipmentPowerCohort } from '@/widgets/equipment-guide/cohort';
 import { normalizeEquipmentSetEffects, selectRepresentativeCandidates } from '@/widgets/equipment-guide/loadouts';
@@ -9,6 +9,7 @@ const SET_EFFECT_CANDIDATE_LIMIT = 20;
 const CANDIDATE_BATCH_SIZE = 20;
 const SET_EFFECT_BATCH_SIZE = 10;
 const LOADOUT_LIMIT = 3;
+const UNAVAILABLE_CACHE_MINUTES = 10;
 
 const ITEM_FIELDS = [
   'item_equipment_slot', 'item_name', 'item_icon', 'starforce',
@@ -127,8 +128,9 @@ export async function collectAndStoreEquipmentGuide(cacheKey: string, job: strin
         if (!Number.isFinite(currentPower) || !isWithinEquipmentGuidePowerRange(currentPower, power)) return null;
         const equipment = await nexonCharacter('item-equipment', candidate.ocid);
         if (!equipment) return null;
-        const appliedItems = equipment.item_equipment;
-        if (!Array.isArray(appliedItems) || !appliedItems.length || itemsHaveFarmingPotential(appliedItems as ObservedEquipment[])) return null;
+        const selectedPreset = selectNonFarmingEquipmentPreset(equipment);
+        const appliedItems = selectedPreset?.items;
+        if (!appliedItems?.length) return null;
         const items = (appliedItems as ObservedEquipment[]).map(item => Object.fromEntries(ITEM_FIELDS.map(field => [field, item[field] ?? null])));
         return { ...candidate, power: currentPower, date: observationDate, items } satisfies EquipmentObservation;
       }));
@@ -146,7 +148,8 @@ export async function collectAndStoreEquipmentGuide(cacheKey: string, job: strin
       cohort: sample.length ? { targetPower: power, powerMin: Math.min(...sample.map(row => row.power)), powerMax: Math.max(...sample.map(row => row.power)), characterCount: sample.length } : undefined,
     };
     const db = supabaseAdmin();
-    await db.from('equipment_guide_cache').update({ status: 'ready', dataset, source_date: sourceDate, expires_at: new Date(Date.now() + EQUIPMENT_GUIDE_CACHE_DAYS * 86_400_000).toISOString(), updated_at: new Date().toISOString() }).eq('cache_key', cacheKey);
+    const cacheDuration = loadouts.length ? EQUIPMENT_GUIDE_CACHE_DAYS * 86_400_000 : UNAVAILABLE_CACHE_MINUTES * 60_000;
+    await db.from('equipment_guide_cache').update({ status: 'ready', dataset, source_date: sourceDate, expires_at: new Date(Date.now() + cacheDuration).toISOString(), updated_at: new Date().toISOString() }).eq('cache_key', cacheKey);
   } catch (error) {
     console.error('equipment guide collection failed', error instanceof Error ? error.message : 'unknown error');
     const db = supabaseAdmin();
