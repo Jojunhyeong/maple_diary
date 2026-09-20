@@ -100,13 +100,13 @@ insert into public.equipment_catalog (slug, name, slot, part, job_group, level, 
   ('eternal-thief-gloves', '에테르넬 시프 글러브', '장갑', '장갑', 'thief', 250, null, null),
   ('eternal-thief-cape', '에테르넬 시프 케이프', '망토', '망토', 'thief', 250, null, null),
   ('eternal-thief-shoulder', '에테르넬 시프 숄더', '어깨장식', '어깨장식', 'thief', 250, null, null),
-  ('eternal-pirate-hat', '에테르넬 파이럿 햇', '모자', '모자', 'pirate', 250, null, null),
-  ('eternal-pirate-coat', '에테르넬 파이럿 코트', '상의', '상의', 'pirate', 250, null, null),
-  ('eternal-pirate-pants', '에테르넬 파이럿 팬츠', '하의', '하의', 'pirate', 250, null, null),
-  ('eternal-pirate-shoes', '에테르넬 파이럿 슈즈', '신발', '신발', 'pirate', 250, null, null),
-  ('eternal-pirate-gloves', '에테르넬 파이럿 글러브', '장갑', '장갑', 'pirate', 250, null, null),
-  ('eternal-pirate-cape', '에테르넬 파이럿 케이프', '망토', '망토', 'pirate', 250, null, null),
-  ('eternal-pirate-shoulder', '에테르넬 파이럿 숄더', '어깨장식', '어깨장식', 'pirate', 250, null, null),
+  ('eternal-pirate-hat', '에테르넬 파이렛 햇', '모자', '모자', 'pirate', 250, null, null),
+  ('eternal-pirate-coat', '에테르넬 파이렛 코트', '상의', '상의', 'pirate', 250, null, null),
+  ('eternal-pirate-pants', '에테르넬 파이렛 팬츠', '하의', '하의', 'pirate', 250, null, null),
+  ('eternal-pirate-shoes', '에테르넬 파이렛 슈즈', '신발', '신발', 'pirate', 250, null, null),
+  ('eternal-pirate-gloves', '에테르넬 파이렛 글러브', '장갑', '장갑', 'pirate', 250, null, null),
+  ('eternal-pirate-cape', '에테르넬 파이렛 케이프', '망토', '망토', 'pirate', 250, null, null),
+  ('eternal-pirate-shoulder', '에테르넬 파이렛 숄더', '어깨장식', '어깨장식', 'pirate', 250, null, null),
 
   ('arcane-umbra-knight-hat', '아케인셰이드 나이트 헬름', '모자', '모자', 'warrior', 200, null, null),
   ('arcane-umbra-knight-suit', '아케인셰이드 나이트 수트', '상의', '상의', 'warrior', 200, null, null),
@@ -132,12 +132,12 @@ insert into public.equipment_catalog (slug, name, slot, part, job_group, level, 
   ('arcane-umbra-thief-gloves', '아케인셰이드 시프 글러브', '장갑', '장갑', 'thief', 200, null, null),
   ('arcane-umbra-thief-cape', '아케인셰이드 시프 케이프', '망토', '망토', 'thief', 200, null, null),
   ('arcane-umbra-thief-shoulder', '아케인셰이드 시프 숄더', '어깨장식', '어깨장식', 'thief', 200, null, null),
-  ('arcane-umbra-pirate-hat', '아케인셰이드 파이럿 햇', '모자', '모자', 'pirate', 200, null, null),
-  ('arcane-umbra-pirate-suit', '아케인셰이드 파이럿 수트', '상의', '상의', 'pirate', 200, null, null),
-  ('arcane-umbra-pirate-shoes', '아케인셰이드 파이럿 슈즈', '신발', '신발', 'pirate', 200, null, null),
-  ('arcane-umbra-pirate-gloves', '아케인셰이드 파이럿 글러브', '장갑', '장갑', 'pirate', 200, null, null),
-  ('arcane-umbra-pirate-cape', '아케인셰이드 파이럿 케이프', '망토', '망토', 'pirate', 200, null, null),
-  ('arcane-umbra-pirate-shoulder', '아케인셰이드 파이럿 숄더', '어깨장식', '어깨장식', 'pirate', 200, null, null),
+  ('arcane-umbra-pirate-hat', '아케인셰이드 파이렛 햇', '모자', '모자', 'pirate', 200, null, null),
+  ('arcane-umbra-pirate-suit', '아케인셰이드 파이렛 수트', '상의', '상의', 'pirate', 200, null, null),
+  ('arcane-umbra-pirate-shoes', '아케인셰이드 파이렛 슈즈', '신발', '신발', 'pirate', 200, null, null),
+  ('arcane-umbra-pirate-gloves', '아케인셰이드 파이렛 글러브', '장갑', '장갑', 'pirate', 200, null, null),
+  ('arcane-umbra-pirate-cape', '아케인셰이드 파이렛 케이프', '망토', '망토', 'pirate', 200, null, null),
+  ('arcane-umbra-pirate-shoulder', '아케인셰이드 파이렛 숄더', '어깨장식', '어깨장식', 'pirate', 200, null, null),
 
   ('absolab-knight-helm', '앱솔랩스 나이트 헬름', '모자', '모자', 'warrior', 160, null, null),
   ('absolab-knight-suit', '앱솔랩스 나이트 수트', '상의', '상의', 'warrior', 160, null, null),
@@ -163,12 +163,12 @@ insert into public.equipment_catalog (slug, name, slot, part, job_group, level, 
   ('absolab-bandit-gloves', '앱솔랩스 시프 글러브', '장갑', '장갑', 'thief', 160, null, null),
   ('absolab-bandit-cape', '앱솔랩스 시프 케이프', '망토', '망토', 'thief', 160, null, null),
   ('absolab-bandit-shoulder', '앱솔랩스 시프 숄더', '어깨장식', '어깨장식', 'thief', 160, null, null),
-  ('absolab-pirate-fedora', '앱솔랩스 파이럿 페도라', '모자', '모자', 'pirate', 160, null, null),
-  ('absolab-pirate-suit', '앱솔랩스 파이럿 수트', '상의', '상의', 'pirate', 160, null, null),
-  ('absolab-pirate-shoes', '앱솔랩스 파이럿 슈즈', '신발', '신발', 'pirate', 160, null, null),
-  ('absolab-pirate-gloves', '앱솔랩스 파이럿 글러브', '장갑', '장갑', 'pirate', 160, null, null),
-  ('absolab-pirate-cape', '앱솔랩스 파이럿 케이프', '망토', '망토', 'pirate', 160, null, null),
-  ('absolab-pirate-shoulder', '앱솔랩스 파이럿 숄더', '어깨장식', '어깨장식', 'pirate', 160, null, null),
+  ('absolab-pirate-fedora', '앱솔랩스 파이렛 페도라', '모자', '모자', 'pirate', 160, null, null),
+  ('absolab-pirate-suit', '앱솔랩스 파이렛 수트', '상의', '상의', 'pirate', 160, null, null),
+  ('absolab-pirate-shoes', '앱솔랩스 파이렛 슈즈', '신발', '신발', 'pirate', 160, null, null),
+  ('absolab-pirate-gloves', '앱솔랩스 파이렛 글러브', '장갑', '장갑', 'pirate', 160, null, null),
+  ('absolab-pirate-cape', '앱솔랩스 파이렛 케이프', '망토', '망토', 'pirate', 160, null, null),
+  ('absolab-pirate-shoulder', '앱솔랩스 파이렛 숄더', '어깨장식', '어깨장식', 'pirate', 160, null, null),
 
   ('royal-warrior-helm', '하이네스 워리어헬름', '모자', '모자', 'warrior', 150, null, null),
   ('eagle-eye-warrior-armor', '이글아이 워리어아머', '상의', '상의', 'warrior', 150, null, null),
@@ -286,13 +286,13 @@ update public.equipment_catalog set name = '에테르넬 시프 슈즈', wiki_ti
 update public.equipment_catalog set name = '에테르넬 시프 글러브', wiki_title = 'Eternal Thief Gloves' where slug = 'eternal-thief-gloves';
 update public.equipment_catalog set name = '에테르넬 시프 케이프', wiki_title = 'Eternal Thief Cape' where slug = 'eternal-thief-cape';
 update public.equipment_catalog set name = '에테르넬 시프 숄더', wiki_title = 'Eternal Thief Shoulder' where slug = 'eternal-thief-shoulder';
-update public.equipment_catalog set name = '에테르넬 파이럿 햇', wiki_title = 'Eternal Pirate Hat' where slug = 'eternal-pirate-hat';
-update public.equipment_catalog set name = '에테르넬 파이럿 코트', wiki_title = 'Eternal Pirate Coat' where slug = 'eternal-pirate-coat';
-update public.equipment_catalog set name = '에테르넬 파이럿 팬츠', wiki_title = 'Eternal Pirate Pants' where slug = 'eternal-pirate-pants';
-update public.equipment_catalog set name = '에테르넬 파이럿 슈즈', wiki_title = 'Eternal Pirate Shoes' where slug = 'eternal-pirate-shoes';
-update public.equipment_catalog set name = '에테르넬 파이럿 글러브', wiki_title = 'Eternal Pirate Gloves' where slug = 'eternal-pirate-gloves';
-update public.equipment_catalog set name = '에테르넬 파이럿 케이프', wiki_title = 'Eternal Pirate Cape' where slug = 'eternal-pirate-cape';
-update public.equipment_catalog set name = '에테르넬 파이럿 숄더', wiki_title = 'Eternal Pirate Shoulder' where slug = 'eternal-pirate-shoulder';
+update public.equipment_catalog set name = '에테르넬 파이렛 햇', wiki_title = 'Eternal Pirate Hat' where slug = 'eternal-pirate-hat';
+update public.equipment_catalog set name = '에테르넬 파이렛 코트', wiki_title = 'Eternal Pirate Coat' where slug = 'eternal-pirate-coat';
+update public.equipment_catalog set name = '에테르넬 파이렛 팬츠', wiki_title = 'Eternal Pirate Pants' where slug = 'eternal-pirate-pants';
+update public.equipment_catalog set name = '에테르넬 파이렛 슈즈', wiki_title = 'Eternal Pirate Shoes' where slug = 'eternal-pirate-shoes';
+update public.equipment_catalog set name = '에테르넬 파이렛 글러브', wiki_title = 'Eternal Pirate Gloves' where slug = 'eternal-pirate-gloves';
+update public.equipment_catalog set name = '에테르넬 파이렛 케이프', wiki_title = 'Eternal Pirate Cape' where slug = 'eternal-pirate-cape';
+update public.equipment_catalog set name = '에테르넬 파이렛 숄더', wiki_title = 'Eternal Pirate Shoulder' where slug = 'eternal-pirate-shoulder';
 
 update public.equipment_catalog set name = '아케인셰이드 나이트 헬름', wiki_title = 'Arcane Umbra Knight Hat' where slug = 'arcane-umbra-knight-hat';
 update public.equipment_catalog set name = '아케인셰이드 나이트 수트', wiki_title = 'Arcane Umbra Knight Suit' where slug = 'arcane-umbra-knight-suit';
@@ -318,12 +318,12 @@ update public.equipment_catalog set name = '아케인셰이드 시프 슈즈', w
 update public.equipment_catalog set name = '아케인셰이드 시프 글러브', wiki_title = 'Arcane Umbra Thief Gloves' where slug = 'arcane-umbra-thief-gloves';
 update public.equipment_catalog set name = '아케인셰이드 시프 케이프', wiki_title = 'Arcane Umbra Thief Cape' where slug = 'arcane-umbra-thief-cape';
 update public.equipment_catalog set name = '아케인셰이드 시프 숄더', wiki_title = 'Arcane Umbra Thief Shoulder' where slug = 'arcane-umbra-thief-shoulder';
-update public.equipment_catalog set name = '아케인셰이드 파이럿 햇', wiki_title = 'Arcane Umbra Pirate Hat' where slug = 'arcane-umbra-pirate-hat';
-update public.equipment_catalog set name = '아케인셰이드 파이럿 수트', wiki_title = 'Arcane Umbra Pirate Suit' where slug = 'arcane-umbra-pirate-suit';
-update public.equipment_catalog set name = '아케인셰이드 파이럿 슈즈', wiki_title = 'Arcane Umbra Pirate Shoes' where slug = 'arcane-umbra-pirate-shoes';
-update public.equipment_catalog set name = '아케인셰이드 파이럿 글러브', wiki_title = 'Arcane Umbra Pirate Gloves' where slug = 'arcane-umbra-pirate-gloves';
-update public.equipment_catalog set name = '아케인셰이드 파이럿 케이프', wiki_title = 'Arcane Umbra Pirate Cape' where slug = 'arcane-umbra-pirate-cape';
-update public.equipment_catalog set name = '아케인셰이드 파이럿 숄더', wiki_title = 'Arcane Umbra Pirate Shoulder' where slug = 'arcane-umbra-pirate-shoulder';
+update public.equipment_catalog set name = '아케인셰이드 파이렛 햇', wiki_title = 'Arcane Umbra Pirate Hat' where slug = 'arcane-umbra-pirate-hat';
+update public.equipment_catalog set name = '아케인셰이드 파이렛 수트', wiki_title = 'Arcane Umbra Pirate Suit' where slug = 'arcane-umbra-pirate-suit';
+update public.equipment_catalog set name = '아케인셰이드 파이렛 슈즈', wiki_title = 'Arcane Umbra Pirate Shoes' where slug = 'arcane-umbra-pirate-shoes';
+update public.equipment_catalog set name = '아케인셰이드 파이렛 글러브', wiki_title = 'Arcane Umbra Pirate Gloves' where slug = 'arcane-umbra-pirate-gloves';
+update public.equipment_catalog set name = '아케인셰이드 파이렛 케이프', wiki_title = 'Arcane Umbra Pirate Cape' where slug = 'arcane-umbra-pirate-cape';
+update public.equipment_catalog set name = '아케인셰이드 파이렛 숄더', wiki_title = 'Arcane Umbra Pirate Shoulder' where slug = 'arcane-umbra-pirate-shoulder';
 
 update public.equipment_catalog set name = '앱솔랩스 나이트 헬름', wiki_title = 'AbsoLab Knight Helm' where slug = 'absolab-knight-helm';
 update public.equipment_catalog set name = '앱솔랩스 나이트 수트', wiki_title = 'AbsoLab Knight Suit' where slug = 'absolab-knight-suit';
@@ -349,12 +349,12 @@ update public.equipment_catalog set name = '앱솔랩스 시프 슈즈', wiki_ti
 update public.equipment_catalog set name = '앱솔랩스 시프 글러브', wiki_title = 'AbsoLab Bandit Gloves' where slug = 'absolab-bandit-gloves';
 update public.equipment_catalog set name = '앱솔랩스 시프 케이프', wiki_title = 'AbsoLab Bandit Cape' where slug = 'absolab-bandit-cape';
 update public.equipment_catalog set name = '앱솔랩스 시프 숄더', wiki_title = 'AbsoLab Bandit Shoulder' where slug = 'absolab-bandit-shoulder';
-update public.equipment_catalog set name = '앱솔랩스 파이럿 페도라', wiki_title = 'AbsoLab Pirate Fedora' where slug = 'absolab-pirate-fedora';
-update public.equipment_catalog set name = '앱솔랩스 파이럿 수트', wiki_title = 'AbsoLab Pirate Suit' where slug = 'absolab-pirate-suit';
-update public.equipment_catalog set name = '앱솔랩스 파이럿 슈즈', wiki_title = 'AbsoLab Pirate Shoes' where slug = 'absolab-pirate-shoes';
-update public.equipment_catalog set name = '앱솔랩스 파이럿 글러브', wiki_title = 'AbsoLab Pirate Gloves' where slug = 'absolab-pirate-gloves';
-update public.equipment_catalog set name = '앱솔랩스 파이럿 케이프', wiki_title = 'AbsoLab Pirate Cape' where slug = 'absolab-pirate-cape';
-update public.equipment_catalog set name = '앱솔랩스 파이럿 숄더', wiki_title = 'AbsoLab Pirate Shoulder' where slug = 'absolab-pirate-shoulder';
+update public.equipment_catalog set name = '앱솔랩스 파이렛 페도라', wiki_title = 'AbsoLab Pirate Fedora' where slug = 'absolab-pirate-fedora';
+update public.equipment_catalog set name = '앱솔랩스 파이렛 수트', wiki_title = 'AbsoLab Pirate Suit' where slug = 'absolab-pirate-suit';
+update public.equipment_catalog set name = '앱솔랩스 파이렛 슈즈', wiki_title = 'AbsoLab Pirate Shoes' where slug = 'absolab-pirate-shoes';
+update public.equipment_catalog set name = '앱솔랩스 파이렛 글러브', wiki_title = 'AbsoLab Pirate Gloves' where slug = 'absolab-pirate-gloves';
+update public.equipment_catalog set name = '앱솔랩스 파이렛 케이프', wiki_title = 'AbsoLab Pirate Cape' where slug = 'absolab-pirate-cape';
+update public.equipment_catalog set name = '앱솔랩스 파이렛 숄더', wiki_title = 'AbsoLab Pirate Shoulder' where slug = 'absolab-pirate-shoulder';
 
 update public.equipment_catalog set name = '하이네스 워리어헬름', wiki_title = 'Royal Warrior Helm' where slug = 'royal-warrior-helm';
 update public.equipment_catalog set name = '이글아이 워리어아머', wiki_title = 'Eagle Eye Warrior Armor' where slug = 'eagle-eye-warrior-armor';
