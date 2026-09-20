@@ -10,6 +10,13 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
+        hostname: 'open.api.nexon.com',
+        port: '',
+        pathname: '/static/maplestory/item/icon/**',
+        search: '',
+      },
+      {
+        protocol: 'https',
         hostname: 'media.maplestorywiki.net',
         pathname: '/yetidb/**',
       },
